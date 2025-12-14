@@ -3,7 +3,7 @@
 This repository contains the Spring Boot backend for **Code & Conquer**, a hybrid educational board game that teaches computational thinking and programming concepts through social, puzzle-based gameplay.
 
 ## 🚀 Tech Stack
-- Java 21
+- Java 19
 - Spring Boot 4.0
 - Maven
 - H2 Database (development)
