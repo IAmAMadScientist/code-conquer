@@ -1,20 +1,21 @@
-import { useState } from 'react'
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import Home from "./pages/Home";
+import Categories from "./pages/Categories";
+import Difficulty from "./pages/Difficulty";
+import Challenge from "./pages/Challenge";
+import ScoreSubmit from "./pages/ScoreSubmit";
 
 function App() {
-  const [message, setMessage] = useState("");
-
-  async function testBackend() {
-    const res = await fetch("http://localhost:8080/api/challenges/test");
-    const text = await res.text();
-    setMessage(text);
-  }
-
   return (
-    <div style={{ padding: 20 }}>
-      <h1>Code & Conquer Frontend</h1>
-      <button onClick={testBackend}>Test Backend</button>
-      <p>{message}</p>
-    </div>
+    <Router>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/categories" element={<Categories />} />
+        <Route path="/difficulty/:category" element={<Difficulty />} />
+        <Route path="/challenge/:category/:difficulty" element={<Challenge />} />
+        <Route path="/submit-score" element={<ScoreSubmit />} />
+      </Routes>
+    </Router>
   );
 }
 
