@@ -5,36 +5,34 @@ import com.codeconquer.server.model.Challenge;
 import com.codeconquer.server.model.Difficulty;
 import org.springframework.stereotype.Service;
 
-import java.util.Random;
-
 @Service
 public class ChallengeService {
 
-    private final Random random = new Random();
+    private final ChallengeLoader loader;
+
+    public ChallengeService(ChallengeLoader loader) {
+        this.loader = loader;
+    }
 
     public Challenge getRandomChallenge(Category category, Difficulty difficulty) {
+        return loader.getRandom(category, difficulty);
+    }
 
-        // Example simple generated challenge
-        String question = switch (category) {
-            case TRACE -> "What is the output of: int x = 2 + 3 * 2;";
-            case SPOT_THE_BUG -> "Find the bug: for(int i = 0; i <= 5; i++);";
-            case BINARY_BLITZ -> "Convert 13 to binary.";
-            case CONCEPT_CLASH -> "Which data structure uses LIFO?";
-        };
+    public boolean checkAnswer(String challengeId, String guess) {
+        Challenge c = loader.getByIdOrThrow(challengeId);
 
-        String answer = switch (category) {
-            case TRACE -> "8";
-            case SPOT_THE_BUG -> "The semicolon after the for-loop prevents it from running.";
-            case BINARY_BLITZ -> "1101";
-            case CONCEPT_CLASH -> "Stack";
-        };
+        String expected = normalize(c.getAnswer());
+        String actual = normalize(guess);
 
-        return new Challenge(
-                question,
-                answer,
-                category,
-                difficulty,
-                "This is a simple auto-generated challenge."
-        );
+        return expected.equals(actual);
+    }
+
+    public Challenge getChallengeById(String challengeId) {
+        return loader.getByIdOrThrow(challengeId);
+    }
+
+    private String normalize(String s) {
+        if (s == null) return "";
+        return s.trim().replaceAll("\\s+", " ").toLowerCase();
     }
 }

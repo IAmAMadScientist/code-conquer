@@ -1,5 +1,8 @@
 package com.codeconquer.server.controller;
 
+import com.codeconquer.server.dto.ChallengeResponse;
+import com.codeconquer.server.dto.CheckAnswerRequest;
+import com.codeconquer.server.dto.CheckAnswerResponse;
 import com.codeconquer.server.model.Category;
 import com.codeconquer.server.model.Challenge;
 import com.codeconquer.server.model.Difficulty;
@@ -16,12 +19,37 @@ public class ChallengeController {
         this.challengeService = challengeService;
     }
 
+    // ✅ Returns public data only (no answer, no explanation)
     @GetMapping("/random")
-    public Challenge getRandomChallenge(
+    public ChallengeResponse getRandomChallenge(
             @RequestParam Category category,
             @RequestParam Difficulty difficulty
     ) {
-        return challengeService.getRandomChallenge(category, difficulty);
+        Challenge c = challengeService.getRandomChallenge(category, difficulty);
+
+        ChallengeResponse dto = new ChallengeResponse();
+        dto.setId(c.getId());
+        dto.setQuestion(c.getQuestion());
+        dto.setCategory(c.getCategory());
+        dto.setDifficulty(c.getDifficulty());
+
+        return dto;
+    }
+
+    // ✅ Check answer endpoint
+    @PostMapping("/check")
+    public CheckAnswerResponse checkAnswer(@RequestBody CheckAnswerRequest req) {
+        boolean correct = challengeService.checkAnswer(req.getChallengeId(), req.getGuess());
+
+        // reveal answer + explanation only now
+        Challenge c = challengeService.getChallengeById(req.getChallengeId());
+
+        CheckAnswerResponse res = new CheckAnswerResponse();
+        res.setCorrect(correct);
+        res.setExpectedAnswer(c.getAnswer());
+        res.setExplanation(c.getExplanation());
+
+        return res;
     }
 
     @GetMapping("/test")

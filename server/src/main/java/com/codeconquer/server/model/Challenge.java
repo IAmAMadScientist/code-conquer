@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class Challenge {
+    private String id;          // NEW (optional in JSON; generated if missing)
     private String question;
     private String answer;
     private Category category;

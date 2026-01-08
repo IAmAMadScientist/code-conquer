@@ -1,0 +1,42 @@
+[
+  {
+    "id": "concept-1",
+    "category": "CONCEPT_CLASH",
+    "difficulty": "EASY",
+    "question": "What is a variable?",
+    "answer": "A container for storing data",
+    "explanation": "Variables store values that can change during execution."
+  },
+  {
+    "id": "concept-2",
+    "category": "CONCEPT_CLASH",
+    "difficulty": "EASY",
+    "question": "What does if-statement do?",
+    "answer": "Executes code conditionally",
+    "explanation": "The code runs only if the condition is true."
+  },
+  {
+    "id": "concept-3",
+    "category": "CONCEPT_CLASH",
+    "difficulty": "MEDIUM",
+    "question": "What is a loop used for?",
+    "answer": "Repeating code",
+    "explanation": "Loops execute the same code multiple times."
+  },
+  {
+    "id": "concept-4",
+    "category": "CONCEPT_CLASH",
+    "difficulty": "MEDIUM",
+    "question": "What is an array?",
+    "answer": "A collection of elements",
+    "explanation": "Arrays store multiple values of the same type."
+  },
+  {
+    "id": "concept-5",
+    "category": "CONCEPT_CLASH",
+    "difficulty": "HARD",
+    "question": "What is encapsulation?",
+    "answer": "Hiding internal state",
+    "explanation": "Encapsulation restricts direct access to object data."
+  }
+]

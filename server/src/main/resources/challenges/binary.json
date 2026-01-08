@@ -1,0 +1,42 @@
+[
+  {
+    "id": "bin-1",
+    "category": "BINARY_BLITZ",
+    "difficulty": "EASY",
+    "question": "What is the binary representation of decimal 5?",
+    "answer": "101",
+    "explanation": "5 = 4 + 1, which is 101 in binary."
+  },
+  {
+    "id": "bin-2",
+    "category": "BINARY_BLITZ",
+    "difficulty": "EASY",
+    "question": "What is 1 AND 0 in binary logic?",
+    "answer": "0",
+    "explanation": "AND returns 1 only if both inputs are 1."
+  },
+  {
+    "id": "bin-3",
+    "category": "BINARY_BLITZ",
+    "difficulty": "MEDIUM",
+    "question": "What is decimal value of binary 110?",
+    "answer": "6",
+    "explanation": "110 = 4 + 2 = 6."
+  },
+  {
+    "id": "bin-4",
+    "category": "BINARY_BLITZ",
+    "difficulty": "MEDIUM",
+    "question": "What does 4 << 1 evaluate to?",
+    "answer": "8",
+    "explanation": "Left shift by 1 multiplies the value by 2."
+  },
+  {
+    "id": "bin-5",
+    "category": "BINARY_BLITZ",
+    "difficulty": "HARD",
+    "question": "What is the result of 5 & 3?",
+    "answer": "1",
+    "explanation": "5 (101) AND 3 (011) = 001."
+  }
+]
