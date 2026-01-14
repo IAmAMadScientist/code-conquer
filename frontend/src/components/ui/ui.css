@@ -1,0 +1,173 @@
+/* src/components/ui/ui.css */
+
+/* App background + typography */
+:root{
+  --bg0: #020617; /* slate-950-ish */
+  --bg1: #0b1220;
+  --card: rgba(15, 23, 42, 0.5); /* slate-900/50 */
+  --cardBorder: rgba(51, 65, 85, 0.4); /* slate-700/40 */
+  --muted: rgba(226, 232, 240, 0.75); /* slate-200/75 */
+  --muted2: rgba(226, 232, 240, 0.6);
+  --text: #f8fafc; /* slate-50 */
+  --shadow: 0 20px 45px rgba(0,0,0,0.35);
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body{
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+  color: var(--text);
+  background: linear-gradient(to bottom, var(--bg0), var(--bg0), #0f172a);
+}
+
+a{ color: inherit; text-decoration: none; }
+button, input { font: inherit; }
+
+/* Layout helpers */
+.containerShell{
+  min-height: 100vh;
+  padding: 16px;
+}
+
+@media (min-width: 768px){
+  .containerShell{ padding: 32px; }
+}
+
+.maxW{
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.gridShell{
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+@media (min-width: 1024px){
+  .gridShell{
+    grid-template-columns: 1.35fr 0.9fr;
+  }
+}
+
+/* Card */
+.ui-card{
+  background: var(--card);
+  border: 1px solid var(--cardBorder);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+}
+
+.ui-cardContent{
+  padding: 20px;
+}
+
+@media (min-width: 768px){
+  .ui-cardContent{ padding: 24px; }
+}
+
+/* Buttons */
+.ui-btn{
+  border-radius: 18px;
+  padding: 10px 14px;
+  border: 1px solid rgba(51, 65, 85, 0.4);
+  background: rgba(30, 41, 59, 0.6);
+  color: var(--text);
+  cursor: pointer;
+  transition: transform 80ms ease, background 140ms ease, border-color 140ms ease, opacity 140ms ease;
+}
+.ui-btn:hover{
+  background: rgba(30, 41, 59, 0.85);
+}
+.ui-btn:active{
+  transform: translateY(1px);
+}
+.ui-btn:disabled{
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ui-btnPrimary{
+  background: rgba(79, 70, 229, 0.95); /* indigo-600 */
+  border-color: rgba(129, 140, 248, 0.35);
+}
+.ui-btnPrimary:hover{
+  background: rgba(79, 70, 229, 0.88);
+}
+
+.ui-btnSuccess{
+  background: rgba(16, 185, 129, 0.92); /* emerald-500/600 */
+  border-color: rgba(52, 211, 153, 0.35);
+}
+.ui-btnDanger{
+  background: rgba(225, 29, 72, 0.9); /* rose-600 */
+  border-color: rgba(251, 113, 133, 0.35);
+}
+
+.ui-btnGhost{
+  background: rgba(15, 23, 42, 0.25);
+  border-color: rgba(51, 65, 85, 0.4);
+}
+
+/* Badge */
+.ui-badge{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  border: 1px solid rgba(71, 85, 105, 0.5);
+  background: rgba(15, 23, 42, 0.25);
+  color: rgba(248, 250, 252, 0.92);
+}
+
+/* Separator */
+.ui-sep{
+  height: 1px;
+  background: rgba(51, 65, 85, 0.4);
+  border: 0;
+  margin: 18px 0;
+}
+
+/* Progress */
+.ui-progress{
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.35);
+  border: 1px solid rgba(51, 65, 85, 0.35);
+  overflow: hidden;
+}
+.ui-progressBar{
+  height: 100%;
+  width: 0%;
+  background: rgba(99, 102, 241, 0.9); /* indigo */
+  transition: width 140ms ease;
+}
+
+/* Inputs */
+.ui-input{
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(71, 85, 105, 0.45);
+  background: rgba(2, 6, 23, 0.35);
+  color: var(--text);
+  outline: none;
+}
+.ui-input:focus{
+  border-color: rgba(129, 140, 248, 0.45);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
+}
+
+/* Small panels */
+.panel{
+  border-radius: 18px;
+  border: 1px solid rgba(51, 65, 85, 0.4);
+  background: rgba(2, 6, 23, 0.25);
+  padding: 14px;
+}
+.muted{ color: var(--muted2); }

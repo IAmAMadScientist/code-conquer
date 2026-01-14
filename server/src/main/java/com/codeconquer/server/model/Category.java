@@ -1,8 +1,8 @@
 package com.codeconquer.server.model;
 
 public enum Category {
-    TRACE,
-    SPOT_THE_BUG,
-    BINARY_BLITZ,
-    CONCEPT_CLASH
+    STACK_MAZE,
+    GRAPH_PATH,
+    BST_INSERT,
+    QUEUE_COMMANDER
 }
