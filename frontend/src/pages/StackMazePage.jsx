@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import AppShell from "../components/AppShell";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { Progress } from "../components/ui/progress";
 import { cn } from "../lib/utils";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
+import ResultSubmitPanel from "../components/ResultSubmitPanel";
 
 function clamp(n, a, b) {
   return Math.max(a, Math.min(b, n));
@@ -35,6 +36,9 @@ function makeMaze(size) {
 
 export default function StackMazePage() {
   const size = 7;
+  const loc = useLocation();
+  const challenge = loc.state?.challenge;
+  const difficulty = challenge?.difficulty || "EASY";
 
   const [grid, setGrid] = useState(() => makeMaze(size));
   const [pos, setPos] = useState({ r: 0, c: 0 });
@@ -44,9 +48,15 @@ export default function StackMazePage() {
   const [energy, setEnergy] = useState(14);
   const [crashes, setCrashes] = useState(0);
 
+  // timing
+  const startRef = useRef(Date.now());
+  const [timeMs, setTimeMs] = useState(0);
+
   const goal = { r: size - 1, c: size - 1 };
 
   function reset() {
+    startRef.current = Date.now();
+    setTimeMs(0);
     setGrid(makeMaze(size));
     setPos({ r: 0, c: 0 });
     setStack([]);
@@ -110,6 +120,18 @@ export default function StackMazePage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pos, energy, status]);
+
+  // stop timer on finish
+  useEffect(() => {
+    if (status === "playing") return;
+    setTimeMs(Date.now() - startRef.current);
+  }, [status]);
+
+  // freeze time when finished
+  useEffect(() => {
+    if (status === "playing") return;
+    setTimeMs(Date.now() - startRef.current);
+  }, [status]);
 
   const energyPct = Math.round((energy / 14) * 100);
 
@@ -227,6 +249,17 @@ export default function StackMazePage() {
         <div className="muted" style={{ fontSize: 12 }}>
           Skillcheck: plan moves “wrong way around” and you feel it instantly — Stack = LIFO.
         </div>
+
+        {status !== "playing" && (
+          <ResultSubmitPanel
+            category="STACK_MAZE"
+            difficulty={difficulty}
+            timeMs={timeMs}
+            errors={crashes}
+            won={status === "won"}
+            onPlayAgain={reset}
+          />
+        )}
       </div>
     </AppShell>
   );

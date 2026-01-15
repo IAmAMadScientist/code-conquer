@@ -1,10 +1,11 @@
 // src/pages/GraphPathfinderPage.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import AppShell from "../components/AppShell";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { Progress } from "../components/ui/progress";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
+import ResultSubmitPanel from "../components/ResultSubmitPanel";
 
 function clamp(n, a, b) {
   return Math.max(a, Math.min(b, n));
@@ -253,6 +254,10 @@ function reconstructPath(prev, start, goal) {
 }
 
 export default function GraphPathfinderPage() {
+  const loc = useLocation();
+  const challenge = loc.state?.challenge;
+  const difficulty = challenge?.difficulty || "EASY";
+
   const [seed, setSeed] = useState(0);
 
   const { nodes, edges, start, goal } = useMemo(() => makeGraph(), [seed]);
@@ -272,10 +277,17 @@ export default function GraphPathfinderPage() {
   const [path, setPath] = useState([start]);
   const [status, setStatus] = useState("playing"); // playing | won | invalid
   const [message, setMessage] = useState("");
-  const [score, setScore] = useState(0);
+
+  // scoring helpers
+  const startRef = useRef(Date.now());
+  const [timeMs, setTimeMs] = useState(0);
+  const [errors, setErrors] = useState(0);
 
   // IMPORTANT: when graph changes, start changes -> reset path
   useEffect(() => {
+    startRef.current = Date.now();
+    setTimeMs(0);
+    setErrors(0);
     setPath([start]);
     setStatus("playing");
     setMessage("");
@@ -304,18 +316,30 @@ export default function GraphPathfinderPage() {
   }
 
   function resetSameGraph() {
+    startRef.current = Date.now();
+    setTimeMs(0);
+    setErrors(0);
     setPath([start]);
     setStatus("playing");
     setMessage("");
   }
 
   function newGraph() {
+    startRef.current = Date.now();
+    setTimeMs(0);
+    setErrors(0);
     setSeed((s) => s + 1);
     // path gets reset by useEffect([start]), but do it now too for instant UI
     setPath([start]);
     setStatus("playing");
     setMessage("");
   }
+
+  // stop timer on finish
+  useEffect(() => {
+    if (status === "playing") return;
+    setTimeMs(Date.now() - startRef.current);
+  }, [status]);
 
   function undo() {
     if (path.length <= 1 || status !== "playing") return;
@@ -346,21 +370,21 @@ export default function GraphPathfinderPage() {
 
   function check() {
     if (!safeOptimal) {
-      setStatus("invalid");
+      setErrors((e) => e + 1);
       setMessage("No path from START to GOAL in this graph. Click 'New graph'.");
       return;
     }
 
     const last = path[path.length - 1];
     if (last !== goal) {
-      setStatus("invalid");
+      setErrors((e) => e + 1);
       setMessage("You must end on the Goal node.");
       return;
     }
 
     for (let i = 0; i < path.length - 1; i++) {
       if (!isNeighbor(path[i], path[i + 1])) {
-        setStatus("invalid");
+        setErrors((e) => e + 1);
         setMessage("Invalid path: contains a non-edge step.");
         return;
       }
@@ -368,22 +392,17 @@ export default function GraphPathfinderPage() {
 
     const w = pathWeight(path);
     if (!Number.isFinite(w)) {
-      setStatus("invalid");
+      setErrors((e) => e + 1);
       setMessage("Invalid path (missing edge weight).");
       return;
     }
 
-    const ratio = safeOptimal > 0 ? w / safeOptimal : 999;
-    const pts = Math.max(0, Math.round(200 - (ratio - 1) * 180));
-    setScore((s) => s + pts);
-
-    if (w === safeOptimal) {
-      setStatus("won");
-      setMessage(`Perfect! Your cost = ${w}. Optimal = ${safeOptimal}. +${pts} pts`);
-    } else {
-      setStatus("won");
-      setMessage(`Nice. Your cost = ${w}. Optimal = ${safeOptimal}. +${pts} pts`);
-    }
+    setStatus("won");
+    setMessage(
+      w === safeOptimal
+        ? `Perfect! Your cost = ${w}. Optimal = ${safeOptimal}.`
+        : `Nice. Your cost = ${w}. Optimal = ${safeOptimal}.`
+    );
   }
 
   const currentWeight = pathWeight(path);
@@ -407,7 +426,8 @@ export default function GraphPathfinderPage() {
       headerBadges={
         <>
           <Badge>Category: GRAPH_PATH</Badge>
-          <Badge>Score: {score}</Badge>
+          <Badge>Diff: {difficulty}</Badge>
+          <Badge>Errors: {errors}</Badge>
           <Badge>Optimal: {safeOptimal ?? "?"}</Badge>
           <Badge>Yours: {Number.isFinite(currentWeight) ? currentWeight : "-"}</Badge>
         </>
@@ -620,6 +640,17 @@ export default function GraphPathfinderPage() {
           <div className="muted" style={{ fontSize: 12, marginTop: 10 }}>
             Skillcheck: shortest path isn’t “fewest edges” — it’s minimum total weight (Dijkstra).
           </div>
+
+          {status === "won" && (
+            <ResultSubmitPanel
+              category="GRAPH_PATH"
+              difficulty={difficulty}
+              timeMs={timeMs}
+              errors={errors}
+              won={true}
+              onPlayAgain={resetSameGraph}
+            />
+          )}
         </div>
       </div>
     </AppShell>

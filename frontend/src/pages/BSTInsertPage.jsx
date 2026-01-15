@@ -1,8 +1,9 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import AppShell from "../components/AppShell";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
+import ResultSubmitPanel from "../components/ResultSubmitPanel";
 
 function randInt(a, b) {
   return Math.floor(Math.random() * (b - a + 1)) + a;
@@ -105,17 +106,27 @@ function makePuzzle() {
 // Page
 // ------------------------
 export default function BSTInsertPage() {
+  const loc = useLocation();
+  const challenge = loc.state?.challenge;
+  const difficulty = challenge?.difficulty || "EASY";
+
   const [seed, setSeed] = useState(0);
   const puzzle = useMemo(() => makePuzzle(), [seed]);
 
-  const [score, setScore] = useState(0);
   const [dropped, setDropped] = useState(null); // { parent, side }
-  const [status, setStatus] = useState("playing"); // playing | correct | wrong
+  const [status, setStatus] = useState("playing"); // playing | won
   const [msg, setMsg] = useState("");
+
+  const startRef = useRef(Date.now());
+  const [timeMs, setTimeMs] = useState(0);
+  const [errors, setErrors] = useState(0);
 
   const layout = useMemo(() => buildLayout(puzzle.root), [puzzle.root]);
 
   function newPuzzle() {
+    startRef.current = Date.now();
+    setTimeMs(0);
+    setErrors(0);
     setSeed((s) => s + 1);
     setDropped(null);
     setStatus("playing");
@@ -136,6 +147,7 @@ export default function BSTInsertPage() {
 
   function check() {
     if (!dropped) {
+      setErrors((e) => e + 1);
       setMsg("Drag the new node onto a free slot first.");
       return;
     }
@@ -144,13 +156,13 @@ export default function BSTInsertPage() {
       dropped.side === puzzle.answer.side;
 
     if (ok) {
-      setStatus("correct");
-      setScore((s) => s + 200);
+      setStatus("won");
+      setTimeMs(Date.now() - startRef.current);
       setMsg(
-        `✅ Correct! Insert ${puzzle.newValue} as ${puzzle.answer.side === "L" ? "LEFT" : "RIGHT"} child of ${puzzle.answer.parentValue}. +200 pts`
+        `✅ Correct! Insert ${puzzle.newValue} as ${puzzle.answer.side === "L" ? "LEFT" : "RIGHT"} child of ${puzzle.answer.parentValue}.`
       );
     } else {
-      setStatus("wrong");
+      setErrors((e) => e + 1);
       setMsg(
         `❌ Not quite. Follow BST insertion from the root: compare and go left/right until you hit an empty slot.`
       );
@@ -167,10 +179,10 @@ export default function BSTInsertPage() {
       headerBadges={
         <>
           <Badge>Category: BST_INSERT</Badge>
-          <Badge>Score: {score}</Badge>
+          <Badge>Diff: {difficulty}</Badge>
+          <Badge>Errors: {errors}</Badge>
           <Badge>New node: {puzzle.newValue}</Badge>
-          {status === "correct" && <Badge style={{ borderColor: "rgba(52,211,153,0.45)" }}>CORRECT</Badge>}
-          {status === "wrong" && <Badge style={{ borderColor: "rgba(251,113,133,0.45)" }}>WRONG</Badge>}
+          {status === "won" && <Badge style={{ borderColor: "rgba(52,211,153,0.45)" }}>WON</Badge>}
         </>
       }
       rightPanel={
@@ -244,15 +256,24 @@ export default function BSTInsertPage() {
             className="panel"
             style={{
               borderColor:
-                status === "correct"
+                status === "won"
                   ? "rgba(52,211,153,0.45)"
-                  : status === "wrong"
-                    ? "rgba(251,113,133,0.45)"
-                    : "rgba(129,140,248,0.35)",
+                  : "rgba(129,140,248,0.35)",
             }}
           >
             {msg}
           </div>
+        )}
+
+        {status === "won" && (
+          <ResultSubmitPanel
+            category="BST_INSERT"
+            difficulty={difficulty}
+            timeMs={timeMs}
+            errors={errors}
+            won={true}
+            onPlayAgain={newPuzzle}
+          />
         )}
 
         {/* tree svg */}

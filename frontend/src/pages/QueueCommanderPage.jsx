@@ -1,9 +1,10 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import AppShell from "../components/AppShell";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { Progress } from "../components/ui/progress";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
+import ResultSubmitPanel from "../components/ResultSubmitPanel";
 
 function clamp(n, a, b) {
   return Math.max(a, Math.min(b, n));
@@ -114,6 +115,10 @@ function tokenStyle(kind) {
 }
 
 export default function QueueCommanderPage() {
+  const loc = useLocation();
+  const challenge = loc.state?.challenge;
+  const difficulty = challenge?.difficulty || "EASY";
+
   const [seed, setSeed] = useState(0);
   const [level, setLevel] = useState(1);
 
@@ -126,7 +131,10 @@ export default function QueueCommanderPage() {
 
   const [status, setStatus] = useState("playing"); // playing | won | lost
   const [msg, setMsg] = useState("");
-  const [score, setScore] = useState(0);
+
+  const startRef = useRef(Date.now());
+  const [timeMs, setTimeMs] = useState(0);
+  const [errors, setErrors] = useState(0);
 
   const nextIncoming = incomingIdx < incoming.length ? incoming[incomingIdx] : null;
   const expectedNext = output.length < target.length ? target[output.length] : null;
@@ -135,6 +143,9 @@ export default function QueueCommanderPage() {
   const progressPct = Math.round((output.length / target.length) * 100);
 
   function hardReset() {
+    startRef.current = Date.now();
+    setTimeMs(0);
+    setErrors(0);
     setIncomingIdx(0);
     setQueue([]);
     setOutput([]);
@@ -151,10 +162,12 @@ export default function QueueCommanderPage() {
   function enqueue() {
     if (status !== "playing") return;
     if (nextIncoming == null) {
+      setErrors((e) => e + 1);
       setMsg("No more incoming items.");
       return;
     }
     if (queue.length >= capacity) {
+      setErrors((e) => e + 1);
       setMsg(`Queue full (capacity ${capacity}). Dequeue first.`);
       return;
     }
@@ -166,6 +179,7 @@ export default function QueueCommanderPage() {
   function dequeue() {
     if (status !== "playing") return;
     if (queue.length === 0) {
+      setErrors((e) => e + 1);
       setMsg("Queue empty. Enqueue something first.");
       return;
     }
@@ -173,7 +187,9 @@ export default function QueueCommanderPage() {
 
     // must match expected target output
     if (front !== expectedNext) {
+      setErrors((e) => e + 1);
       setStatus("lost");
+      setTimeMs(Date.now() - startRef.current);
       setMsg(`❌ Wrong! You dequeued ${front}, but expected ${expectedNext}.`);
       return;
     }
@@ -186,10 +202,9 @@ export default function QueueCommanderPage() {
   function checkWinIfDone() {
     if (!done) return;
     setStatus("won");
+    setTimeMs(Date.now() - startRef.current);
     const bonus = Math.max(0, (incoming.length - incomingIdx) * 5) + Math.max(0, (capacity - queue.length) * 8);
-    const pts = 220 + Math.round(bonus);
-    setScore((s) => s + pts);
-    setMsg(`✅ Perfect schedule! +${pts} pts`);
+    setMsg(`✅ Perfect schedule! Bonus moves: ${Math.round(bonus)}.`);
   }
 
   // if done becomes true, finish
@@ -210,7 +225,8 @@ export default function QueueCommanderPage() {
         <>
           <Badge>Category: QUEUE_COMMANDER</Badge>
           <Badge>Level: {level}</Badge>
-          <Badge>Score: {score}</Badge>
+          <Badge>Diff: {difficulty}</Badge>
+          <Badge>Errors: {errors}</Badge>
           <Badge>Cap: {capacity}</Badge>
           {status === "won" && <Badge style={{ borderColor: "rgba(52,211,153,0.45)" }}>WON</Badge>}
           {status === "lost" && <Badge style={{ borderColor: "rgba(251,113,133,0.45)" }}>LOST</Badge>}
@@ -289,6 +305,17 @@ export default function QueueCommanderPage() {
           >
             {msg}
           </div>
+        )}
+
+        {status !== "playing" && (
+          <ResultSubmitPanel
+            category="QUEUE_COMMANDER"
+            difficulty={difficulty}
+            timeMs={timeMs}
+            errors={errors}
+            won={status === "won"}
+            onPlayAgain={hardReset}
+          />
         )}
 
         {/* incoming + queue + output */}

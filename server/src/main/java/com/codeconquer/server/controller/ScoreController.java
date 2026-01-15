@@ -2,6 +2,7 @@ package com.codeconquer.server.controller;
 
 import com.codeconquer.server.model.Score;
 import com.codeconquer.server.service.ScoreService;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -17,17 +18,40 @@ public class ScoreController {
     }
 
     @PostMapping
-    public Score submitScore(@RequestBody Score score) {
-        return scoreService.saveScore(score);
+    public ResponseEntity<Score> submitScore(@RequestBody Score score) {
+        if (score.getSessionId() == null || score.getSessionId().isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+        if (score.getPlayerName() == null || score.getPlayerName().isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+        return ResponseEntity.ok(scoreService.saveScore(score));
     }
 
+    /**
+     * Optional filters:
+     *  - sessionId: return only scores from that match
+     *  - playerName: (requires sessionId) return only that player's scores
+     */
     @GetMapping
-    public List<Score> getAllScores() {
+    public List<Score> getScores(@RequestParam(required = false) String sessionId,
+                                 @RequestParam(required = false) String playerName) {
+
+        if (sessionId != null && !sessionId.isBlank()) {
+            if (playerName != null && !playerName.isBlank()) {
+                return scoreService.getScoresForSessionAndPlayer(sessionId, playerName);
+            }
+            return scoreService.getScoresForSession(sessionId);
+        }
+
         return scoreService.getAllScores();
     }
 
     @GetMapping("/top")
-    public List<Score> getTopScores() {
+    public List<Score> getTopScores(@RequestParam(required = false) String sessionId) {
+        if (sessionId != null && !sessionId.isBlank()) {
+            return scoreService.getTopScoresForSession(sessionId);
+        }
         return scoreService.getTopScores();
     }
 }
