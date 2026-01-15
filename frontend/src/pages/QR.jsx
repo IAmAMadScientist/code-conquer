@@ -1,9 +1,10 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import AppShell from "../components/AppShell";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { getSession } from "../lib/session";
+import { getPlayer } from "../lib/player";
 
 /**
  * QR entrypoint.

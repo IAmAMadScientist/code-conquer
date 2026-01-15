@@ -22,9 +22,11 @@ public class ScoreController {
         if (score.getSessionId() == null || score.getSessionId().isBlank()) {
             return ResponseEntity.badRequest().build();
         }
-        if (score.getPlayerName() == null || score.getPlayerName().isBlank()) {
+        if (score.getPlayerId() == null || score.getPlayerId().isBlank()) {
             return ResponseEntity.badRequest().build();
         }
+        // Ignore any client-provided playerName; it will be set server-side from playerId.
+        score.setPlayerName(null);
         return ResponseEntity.ok(scoreService.saveScore(score));
     }
 

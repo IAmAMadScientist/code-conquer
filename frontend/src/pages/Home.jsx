@@ -1,18 +1,22 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { createSession, joinSessionByCode, getSession, clearSession } from "../lib/session";
+import { getPlayer, registerPlayer, clearPlayer } from "../lib/player";
 import AppShell from "../components/AppShell";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 
 export default function Home() {
   const [session, setSession] = useState(() => getSession());
+  const [player, setPlayer] = useState(() => getPlayer());
+  const [playerName, setPlayerName] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [err, setErr] = useState(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     setSession(getSession());
+    setPlayer(getPlayer());
   }, []);
 
   async function onCreate() {
@@ -28,7 +32,23 @@ export default function Home() {
     }
   }
 
-  async function onJoin() {
+  async function onSetName() {
+  if (!session?.sessionId) return;
+  if (!playerName.trim()) return;
+  setBusy(true);
+  setErr(null);
+  try {
+    const p = await registerPlayer(session.sessionId, playerName.trim());
+    setPlayer(p);
+    setPlayerName("");
+  } catch (e) {
+    setErr(e?.message || "Failed to set player name");
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function onJoin() {
     setErr(null);
     setBusy(true);
     try {
@@ -68,9 +88,35 @@ export default function Home() {
             <div className="panel" style={{ marginBottom: 12 }}>
         <div style={{ fontWeight: 750, marginBottom: 6 }}>Match / Session</div>
         {session?.sessionCode ? (
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-            <Badge>Active match: {session.sessionCode}</Badge>
-            <Button variant="secondary" onClick={onClear} disabled={busy}>Leave</Button>
+          <div style={{ display: "grid", gap: 10 }}>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+              <Badge>Active match: {session.sessionCode}</Badge>
+              <Button variant="secondary" onClick={onClear} disabled={busy}>Leave</Button>
+            </div>
+
+            {player?.playerId ? (
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                <Badge variant="secondary">You are: {player.playerName || "Player"}</Badge>
+              </div>
+            ) : (
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                <span className="muted" style={{ fontSize: 13 }}>Set your player name for this match:</span>
+                <input
+                  value={playerName}
+                  onChange={(e) => setPlayerName(e.target.value)}
+                  placeholder="e.g. Alex"
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: 10,
+                    border: "1px solid rgba(148,163,184,0.35)",
+                    background: "rgba(15,23,42,0.35)",
+                    color: "inherit",
+                    minWidth: 220,
+                  }}
+                />
+                <Button variant="primary" onClick={onSetName} disabled={busy || !playerName.trim()}>Set name</Button>
+              </div>
+            )}
           </div>
         ) : (
           <>

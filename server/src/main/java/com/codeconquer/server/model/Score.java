@@ -16,12 +16,13 @@ public class Score {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // Groups all scores belonging to one physical boardgame match
     private String sessionId;
-
-    // Convenience for humans (join code). Optional but handy.
     private String sessionCode;
 
+    // New: stable identity within a session. Frontend should send playerId.
+    private String playerId;
+
+    // Denormalized for easy leaderboard queries / history. Backend sets this from playerId.
     private String playerName;
 
     // For minigames: category is your minigame identifier (STACK_MAZE, GRAPH_PATH, ...)
@@ -31,8 +32,9 @@ public class Score {
 
     private int points;
 
-    // Optional analytics / fairness; frontend can fill these in
+    // Analytics inputs (used by scoring formula)
     private Long timeMs;
     private Integer errors;
+
     private Instant createdAt;
 }

@@ -13,6 +13,9 @@ export function getSession() {
 export function clearSession() {
   localStorage.removeItem(STORAGE_ID);
   localStorage.removeItem(STORAGE_CODE);
+  // also clear player identity for this device
+  localStorage.removeItem("cc_playerId");
+  localStorage.removeItem("cc_playerName");
 }
 
 async function parseJsonOrThrow(res) {

@@ -4,6 +4,7 @@ import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { computePoints, formatTime, normalizeDifficulty } from "../lib/scoring";
 import { getSession } from "../lib/session";
+import { getPlayer } from "../lib/player";
 
 // Tip: later move this into .env (VITE_API_BASE) and use a dev proxy.
 const API_BASE = "http://localhost:8080/api";
@@ -33,19 +34,23 @@ export default function ResultSubmitPanel({
 }) {
   const nav = useNavigate();
   const session = useMemo(() => getSession(), []);
+  const player = useMemo(() => getPlayer(), []);
   const diff = normalizeDifficulty(difficulty);
 
   const points = useMemo(
     () => computePoints({ difficulty: diff, timeMs, errors, won }),
     [diff, timeMs, errors, won]
   );
-
-  const [playerName, setPlayerName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [err, setErr] = useState(null);
 
   async function submit() {
+    if (!player?.playerId) {
+      setErr("Kein Spieler gesetzt. Bitte auf Home einen Namen setzen.");
+      return;
+    }
+
     setErr(null);
     setSubmitting(true);
     try {
@@ -55,7 +60,7 @@ export default function ResultSubmitPanel({
         body: JSON.stringify({
           sessionId: session?.sessionId || "",
           sessionCode: session?.sessionCode || "",
-          playerName: playerName?.trim() || "Player",
+          playerId: player?.playerId || "",
           points,
           category,
           difficulty: diff,
@@ -99,29 +104,21 @@ export default function ResultSubmitPanel({
       </div>
 
       <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-          <label className="muted" style={{ fontSize: 13 }}>
-            Spielername
-          </label>
-          <input
-            value={playerName}
-            onChange={(e) => setPlayerName(e.target.value)}
-            placeholder="z.B. Alex"
-            style={{
-              flex: "1 1 220px",
-              minWidth: 180,
-              padding: "10px 12px",
-              borderRadius: 999,
-              border: "1px solid rgba(51,65,85,0.55)",
-              background: "rgba(2,6,23,0.22)",
-              color: "rgba(226,232,240,0.95)",
-              outline: "none",
-            }}
-          />
-          <Button onClick={submit} disabled={submitting || submitted} variant={submitted ? "secondary" : "primary"}>
-            {submitted ? "Score gespeichert" : submitting ? "Speichere..." : "Score speichern"}
-          </Button>
-        </div>
+  {player?.playerId ? (
+    <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+      <span className="muted" style={{ fontSize: 13 }}>
+        Player: <strong>{player.playerName || "Player"}</strong>
+      </span>
+      <Button onClick={submit} disabled={submitting || submitted} variant={submitted ? "secondary" : "primary"}>
+        {submitted ? "Score gespeichert" : submitting ? "Speichere..." : "Score speichern"}
+      </Button>
+    </div>
+  ) : (
+    <div className="muted" style={{ fontSize: 13, lineHeight: 1.5 }}>
+      ⚠️ Kein Spielername gesetzt. Geh auf <strong>Home</strong> und setz deinen Namen für dieses Match, dann komm zurück.
+    </div>
+  )}
+
 
         {err && (
           <div className="panel" style={{ borderColor: "rgba(251,113,133,0.35)" }}>
