@@ -23,7 +23,7 @@ export default function Play() {
       const s = await fetchLobby(session.sessionId);
       setState(s);
     } catch (e) {
-      setErr(e?.message || "Failed to load lobby state");
+      setErr(e?.message || "Failed to load game state");
     }
   }
 
@@ -44,12 +44,7 @@ export default function Play() {
       <AppShell title="Play" subtitle="Join a match and set your profile first.">
         <div className="panel">
           <div style={{ fontWeight: 750, marginBottom: 8 }}>Not ready</div>
-          <div className="muted" style={{ marginBottom: 12 }}>
-            You need to join a match and set your player profile first.
-          </div>
-          <Link to="/">
-            <Button variant="primary">Home</Button>
-          </Link>
+          <div className="muted">You need to be in a match and have a player profile.</div>
         </div>
       </AppShell>
     );
@@ -61,20 +56,22 @@ export default function Play() {
 
   return (
     <AppShell
-      title="Play"
-      subtitle="Turn-based difficulty selection."
+      title="Difficulty"
+      subtitle="Only the current player can choose."
       headerBadges={
         <>
-          <Badge>Play</Badge>
           {session?.sessionCode ? <Badge variant="secondary">Match: {session.sessionCode}</Badge> : null}
           {me?.playerName ? <Badge variant="secondary">You: {me.playerIcon || "🙂"} {me.playerName}</Badge> : null}
+          {state?.started ? <Badge variant="secondary">Started</Badge> : <Badge>Not started</Badge>}
         </>
       }
       rightPanel={
         <div className="panel">
-          <div style={{ fontSize: 16, fontWeight: 650 }}>Turn order</div>
+          <div style={{ fontSize: 16, fontWeight: 650 }}>Turn</div>
           <div className="muted" style={{ fontSize: 14, marginTop: 10, lineHeight: 1.5 }}>
-            The backend enforces turns. Only the current player can start a challenge and submit a score.
+            {state?.started
+              ? "Wait if it's not your turn. After a player finishes a minigame, the turn automatically advances."
+              : "Waiting in lobby… The game starts automatically when everyone is ready."}
           </div>
         </div>
       }
@@ -83,48 +80,32 @@ export default function Play() {
         {err ? <div style={{ opacity: 0.9 }}>⚠️ {err}</div> : null}
 
         {!state?.started ? (
-          <div style={{ display: "grid", gap: 10 }}>
-            <div style={{ fontWeight: 750 }}>Game not started</div>
-            <div className="muted">
-              Go to the lobby and press Ready. The match starts automatically when everyone is ready.
-            </div>
-            <Link to="/lobby">
-              <Button variant="primary">Go to Lobby</Button>
-            </Link>
+          <div className="muted">
+            Game not started yet. (Lobby is only for the start. If you’re stuck here, someone didn’t ready up.)
           </div>
         ) : (
           <>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-              <Badge variant={isMyTurn ? "secondary" : "outline"}>
-                {isMyTurn ? "Your turn" : "Waiting"}
-              </Badge>
+              <Badge variant={isMyTurn ? "secondary" : "outline"}>{isMyTurn ? "Your turn" : "Waiting"}</Badge>
               {currentPlayer ? (
-                <Badge variant="secondary">
-                  Current: {currentPlayer.icon || "🙂"} {currentPlayer.name} (#{currentPlayer.turnOrder})
-                </Badge>
+                <Badge variant="secondary">Current: {currentPlayer.icon || "🙂"} {currentPlayer.name}</Badge>
               ) : null}
             </div>
 
-            <div className="muted">Choose difficulty (only enabled on your turn):</div>
+            <div className="muted">Choose difficulty:</div>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <Button variant="primary" onClick={() => go("EASY")} disabled={!isMyTurn}>Easy</Button>
               <Button variant="secondary" onClick={() => go("MEDIUM")} disabled={!isMyTurn}>Medium</Button>
               <Button variant="secondary" onClick={() => go("HARD")} disabled={!isMyTurn}>Hard</Button>
             </div>
-
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 8 }}>
-              <Link to="/leaderboard">
-                <Button variant="ghost">Leaderboard</Button>
-              </Link>
-              <Link to="/lobby">
-                <Button variant="ghost">Lobby</Button>
-              </Link>
-              <Link to="/">
-                <Button variant="ghost">Home</Button>
-              </Link>
-            </div>
           </>
         )}
+
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
+          <Link to="/leaderboard">
+            <Button variant="ghost">Leaderboard</Button>
+          </Link>
+        </div>
       </div>
     </AppShell>
   );

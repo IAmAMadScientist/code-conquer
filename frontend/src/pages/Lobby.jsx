@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import AppShell from "../components/AppShell";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
+import QRCode from "react-qr-code";
 import { getSession } from "../lib/session";
 import { getPlayer, fetchLobby, setReady } from "../lib/player";
 
@@ -16,6 +17,7 @@ export default function Lobby() {
   const [err, setErr] = useState(null);
 
   const canView = !!(session?.sessionId && me?.playerId);
+  const joinUrl = session?.sessionCode ? `${window.location.origin}/join/${session.sessionCode}` : "";
 
   async function load() {
     if (!session?.sessionId) return;
@@ -24,7 +26,7 @@ export default function Lobby() {
       const s = await fetchLobby(session.sessionId);
       setState(s);
 
-      // Auto-navigate when started (players should now use turn-based play screen)
+      // Once started, lobby is done -> go to play.
       if (s?.started) {
         nav("/play");
       }
@@ -44,6 +46,7 @@ export default function Lobby() {
   async function toggleReady() {
     if (!session?.sessionId || !me?.playerId) return;
     const currentlyReady = !!state?.players?.find((p) => p.id === me.playerId)?.ready;
+
     setBusy(true);
     setErr(null);
     try {
@@ -58,15 +61,12 @@ export default function Lobby() {
 
   if (!canView) {
     return (
-      <AppShell title="Lobby" subtitle="Join a match and set your name first.">
+      <AppShell title="Lobby" subtitle="Join a match and set your profile first.">
         <div className="panel">
           <div style={{ fontWeight: 750, marginBottom: 8 }}>Not ready</div>
           <div className="muted" style={{ marginBottom: 12 }}>
-            You need to join a match and set your player profile before entering the lobby.
+            You need to join a match and set your name + emoji first.
           </div>
-          <Link to="/">
-            <Button variant="primary">Home</Button>
-          </Link>
         </div>
       </AppShell>
     );
@@ -79,7 +79,7 @@ export default function Lobby() {
   return (
     <AppShell
       title="Lobby"
-      subtitle="Wait until everyone is ready. The game will start automatically."
+      subtitle="Scan to join, then everyone presses Ready. Lobby is only for the start."
       headerBadges={
         <>
           <Badge>Lobby</Badge>
@@ -89,18 +89,24 @@ export default function Lobby() {
       }
       rightPanel={
         <div className="panel">
-          <div style={{ fontSize: 16, fontWeight: 650 }}>Rules</div>
+          <div style={{ fontSize: 16, fontWeight: 650 }}>Join QR</div>
           <div className="muted" style={{ fontSize: 14, marginTop: 10, lineHeight: 1.5 }}>
-            • Everyone picks a name + emoji.<br />
-            • Everyone presses <strong>Ready</strong>.<br />
-            • When all are ready, the match starts automatically.<br />
-            • Then players act in turn order (1 → 2 → 3 …).
+            Others can scan this QR to join this match.
           </div>
         </div>
       }
     >
       <div className="panel" style={{ display: "grid", gap: 12 }}>
         {err ? <div style={{ opacity: 0.9 }}>⚠️ {err}</div> : null}
+
+        <div style={{ display: "grid", gap: 8, justifyItems: "center" }}>
+          <div style={{ background: "white", padding: 10, borderRadius: 12 }}>
+            <QRCode value={joinUrl} size={180} />
+          </div>
+          <div className="muted" style={{ fontSize: 12, wordBreak: "break-all", textAlign: "center" }}>
+            {joinUrl}
+          </div>
+        </div>
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
           <Badge variant="secondary">Players: {players.length}</Badge>
@@ -109,24 +115,25 @@ export default function Lobby() {
 
         <div style={{ display: "grid", gap: 8 }}>
           {players.map((p) => (
-            <div key={p.id} style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "10px 12px",
-              borderRadius: 12,
-              border: "1px solid rgba(148,163,184,0.18)",
-              background: p.id === me.playerId ? "rgba(59,130,246,0.10)" : "rgba(15,23,42,0.25)"
-            }}>
+            <div
+              key={p.id}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "10px 12px",
+                borderRadius: 12,
+                border: "1px solid rgba(148,163,184,0.18)",
+                background: p.id === me.playerId ? "rgba(59,130,246,0.10)" : "rgba(15,23,42,0.25)",
+              }}
+            >
               <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                 <div style={{ fontSize: 20, width: 26, textAlign: "center" }}>{p.icon || "🙂"}</div>
                 <div>
                   <div style={{ fontWeight: 700 }}>
                     {p.turnOrder}. {p.name}
                   </div>
-                  <div className="muted" style={{ fontSize: 12 }}>
-                    {p.id === me.playerId ? "You" : "Player"}
-                  </div>
+                  <div className="muted" style={{ fontSize: 12 }}>{p.id === me.playerId ? "You" : "Player"}</div>
                 </div>
               </div>
               <Badge variant={p.ready ? "secondary" : "outline"}>{p.ready ? "Ready" : "Not ready"}</Badge>
@@ -138,16 +145,11 @@ export default function Lobby() {
           <Button variant={meRow?.ready ? "secondary" : "primary"} onClick={toggleReady} disabled={busy}>
             {meRow?.ready ? "Unready" : "Ready"}
           </Button>
-          <Link to="/leaderboard">
-            <Button variant="ghost">Leaderboard</Button>
-          </Link>
-          <Link to="/">
-            <Button variant="ghost">Home</Button>
-          </Link>
+          <Button variant="ghost" onClick={() => nav("/leaderboard")}>Leaderboard</Button>
         </div>
 
         <div className="muted" style={{ fontSize: 13, lineHeight: 1.5 }}>
-          Turn order is currently the join order (Player 1 is the first person who registered in this match).
+          When everyone is ready, the match starts automatically and players will move on to turn-based play.
         </div>
       </div>
     </AppShell>

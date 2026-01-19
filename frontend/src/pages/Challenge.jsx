@@ -14,9 +14,8 @@ async function parseJsonOrThrow(res) {
     data = await res.json();
   } catch {}
   if (!res.ok) {
-    // Friendly defaults for common turn/lobby states
-    if (res.status === 409) throw new Error("Game not started yet. Go to Lobby and press Ready.");
-    if (res.status === 403) throw new Error("Not your turn. Please wait for your turn.");
+    if (res.status === 409) throw new Error("Game not started yet.");
+    if (res.status === 403) throw new Error("Not your turn.");
     throw new Error(data?.error || `Request failed (${res.status})`);
   }
   return data;
@@ -80,11 +79,10 @@ export default function Challenge() {
 
   return (
     <AppShell
-      title="Challenge Router"
+      title="Challenge"
       subtitle="Selecting a random minigame…"
       headerBadges={
         <>
-          <Badge>Challenge</Badge>
           <Badge variant="secondary">Diff: {difficulty}</Badge>
           {session?.sessionCode ? <Badge variant="secondary">Match: {session.sessionCode}</Badge> : null}
           {player?.playerName ? <Badge variant="secondary">Player: {player.playerIcon || "🙂"} {player.playerName}</Badge> : null}
@@ -95,16 +93,11 @@ export default function Challenge() {
         <div className="panel">
           <div style={{ fontWeight: 750, marginBottom: 8 }}>Not ready</div>
           <div className="muted" style={{ marginBottom: 12 }}>
-            You need to join a match and set your player profile first.
+            You need to be in a match and have a player profile.
           </div>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <Link to="/">
-              <Button variant="primary">Home</Button>
-            </Link>
-            <Link to="/lobby">
-              <Button variant="secondary">Lobby</Button>
-            </Link>
-          </div>
+          <Link to="/leaderboard">
+            <Button variant="ghost">Leaderboard</Button>
+          </Link>
         </div>
       ) : (
         <>
@@ -120,10 +113,10 @@ export default function Challenge() {
               <div className="muted" style={{ marginBottom: 12 }}>{err}</div>
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <Link to="/play">
-                  <Button variant="primary">Back to Play</Button>
+                  <Button variant="primary">Back to Difficulty</Button>
                 </Link>
-                <Link to="/lobby">
-                  <Button variant="secondary">Lobby</Button>
+                <Link to="/leaderboard">
+                  <Button variant="ghost">Leaderboard</Button>
                 </Link>
               </div>
             </div>

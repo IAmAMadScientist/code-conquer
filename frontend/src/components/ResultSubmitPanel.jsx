@@ -1,12 +1,10 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { computePoints, formatTime, normalizeDifficulty } from "../lib/scoring";
 import { getSession } from "../lib/session";
 import { getPlayer } from "../lib/player";
 
-// Tip: later move this into .env (VITE_API_BASE) and use a dev proxy.
 const API_BASE = "http://localhost:8080/api";
 
 async function parseJsonOrThrow(res) {
@@ -21,13 +19,17 @@ async function parseJsonOrThrow(res) {
   return data;
 }
 
+/**
+ * Auto-submit result:
+ * - As soon as a minigame ends (won = true/false), we compute points, save score, and redirect to /play.
+ * - The backend advances the turn after a successful score save.
+ */
 export default function ResultSubmitPanel({
   category,
   difficulty,
   timeMs,
   errors,
   won,
-  onPlayAgain,
 }) {
   const nav = useNavigate();
 
@@ -37,53 +39,64 @@ export default function ResultSubmitPanel({
   const diffNorm = normalizeDifficulty(difficulty);
   const points = computePoints({ difficulty: diffNorm, timeMs, errors, won });
 
-  const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const [status, setStatus] = useState("pending"); // pending | saving | saved | error
   const [err, setErr] = useState(null);
 
-  async function submit() {
-    if (!player?.playerId) {
-      setErr("Kein Spieler gesetzt. Bitte im Lobby-Flow ein Profil setzen.");
-      return;
+  const submittedRef = useRef(false);
+
+  useEffect(() => {
+    async function submit() {
+      if (submittedRef.current) return;
+      // Only submit when game has ended (won is boolean)
+      if (won !== true && won !== false) return;
+
+      if (!session?.sessionId) {
+        setStatus("error");
+        setErr("No active session.");
+        return;
+      }
+      if (!player?.playerId) {
+        setStatus("error");
+        setErr("No player set.");
+        return;
+      }
+
+      submittedRef.current = true;
+      setStatus("saving");
+      setErr(null);
+
+      try {
+        const payload = {
+          sessionId: session.sessionId,
+          sessionCode: session.sessionCode || "",
+          playerId: player.playerId,
+          category,
+          difficulty: diffNorm,
+          points,
+          timeMs,
+          errors,
+        };
+
+        const res = await fetch(`${API_BASE}/scores`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        await parseJsonOrThrow(res);
+
+        setStatus("saved");
+        // Immediately return to difficulty selection. Turn advances server-side.
+        nav("/play", { replace: true });
+      } catch (e) {
+        submittedRef.current = false; // allow retry on error
+        setStatus("error");
+        setErr(e?.message || "Failed to save score");
+      }
     }
-    if (!session?.sessionId) {
-      setErr("Keine Session aktiv.");
-      return;
-    }
 
-    setSubmitting(true);
-    setErr(null);
-
-    try {
-      const payload = {
-        sessionId: session.sessionId,
-        sessionCode: session.sessionCode || "",
-        playerId: player.playerId,
-        category,
-        difficulty: diffNorm,
-        points,
-        timeMs,
-        errors,
-      };
-
-      const res = await fetch(`${API_BASE}/scores`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      await parseJsonOrThrow(res);
-
-      setSubmitted(true);
-
-      // After scoring, next player's turn begins server-side.
-      // We send this player back to the Play screen (will show waiting if not their turn).
-      nav("/play");
-    } catch (e) {
-      setErr(e?.message || "Failed to save score");
-    } finally {
-      setSubmitting(false);
-    }
-  }
+    submit();
+  }, [category, diffNorm, errors, nav, player?.playerId, points, session?.sessionCode, session?.sessionId, timeMs, won]);
 
   return (
     <div className="panel" style={{ marginTop: 14 }}>
@@ -99,25 +112,20 @@ export default function ResultSubmitPanel({
         <Badge variant="secondary">Points: {points}</Badge>
       </div>
 
-      {err ? <div style={{ marginTop: 10, opacity: 0.9 }}>⚠️ {err}</div> : null}
-
-      <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-        <Button onClick={submit} disabled={submitting || submitted || !player?.playerId} variant={submitted ? "secondary" : "primary"}>
-          {submitted ? "Score gespeichert" : submitting ? "Speichere..." : "Score speichern"}
-        </Button>
-
-        <Button variant="ghost" onClick={() => nav("/leaderboard")}>Leaderboard</Button>
-        <Button variant="ghost" onClick={() => nav("/lobby")}>Lobby</Button>
-        <Button variant="ghost" onClick={() => nav("/play")}>Play</Button>
-
-        {onPlayAgain ? (
-          <Button variant="secondary" onClick={onPlayAgain}>Play again</Button>
-        ) : null}
+      <div style={{ marginTop: 10 }}>
+        {status === "saving" ? <div className="muted">Saving score…</div> : null}
+        {status === "error" ? <div style={{ opacity: 0.9 }}>⚠️ {err}</div> : null}
       </div>
 
-      <div className="muted" style={{ marginTop: 10, fontSize: 13, lineHeight: 1.5 }}>
-        Tip: After saving the score, the backend automatically advances the turn to the next player.
-      </div>
+      {status === "error" ? (
+        <div className="muted" style={{ marginTop: 10, fontSize: 13 }}>
+          Refresh the page to retry saving. (Backend will still enforce turn order.)
+        </div>
+      ) : (
+        <div className="muted" style={{ marginTop: 10, fontSize: 13 }}>
+          Redirecting back to difficulty selection…
+        </div>
+      )}
     </div>
   );
 }

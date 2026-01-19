@@ -26,7 +26,6 @@ export default function Join() {
     async function doJoin() {
       if (!code) return;
 
-      // If already joined to the same code, don't re-join.
       const s = getSession();
       if (s?.sessionCode && s.sessionCode.toUpperCase() === code.toUpperCase()) return;
 
@@ -156,9 +155,6 @@ export default function Join() {
         )}
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <Link to="/">
-            <Button variant="ghost">Home</Button>
-          </Link>
           <Link to="/lobby">
             <Button variant="primary" disabled={!readyToLobby}>
               Go to Lobby

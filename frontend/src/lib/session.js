@@ -3,6 +3,23 @@ const API_BASE = "http://localhost:8080/api";
 const STORAGE_ID = "cc_sessionId";
 const STORAGE_CODE = "cc_sessionCode";
 
+// Player storage keys (kept here to clear on session leave)
+const PLAYER_ID = "cc_playerId";
+const PLAYER_NAME = "cc_playerName";
+const PLAYER_ICON = "cc_playerIcon";
+
+async function parseJsonOrThrow(res) {
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {}
+  if (!res.ok) {
+    const msg = data?.error || data?.message || `HTTP ${res.status}`;
+    throw new Error(msg);
+  }
+  return data;
+}
+
 export function getSession() {
   const sessionId = localStorage.getItem(STORAGE_ID) || "";
   const sessionCode = localStorage.getItem(STORAGE_CODE) || "";
@@ -13,21 +30,11 @@ export function getSession() {
 export function clearSession() {
   localStorage.removeItem(STORAGE_ID);
   localStorage.removeItem(STORAGE_CODE);
-  // also clear player identity for this device
-  localStorage.removeItem("cc_playerId");
-  localStorage.removeItem("cc_playerName");
-  localStorage.removeItem("cc_playerIcon");
-}
 
-
-async function parseJsonOrThrow(res) {
-  let data = null;
-  try { data = await res.json(); } catch {}
-  if (!res.ok) {
-    const msg = data?.error || `Request failed (${res.status})`;
-    throw new Error(msg);
-  }
-  return data;
+  // Also clear player identity on this device
+  localStorage.removeItem(PLAYER_ID);
+  localStorage.removeItem(PLAYER_NAME);
+  localStorage.removeItem(PLAYER_ICON);
 }
 
 export async function createSession() {

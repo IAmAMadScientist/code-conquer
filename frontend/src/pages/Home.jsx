@@ -1,32 +1,44 @@
-import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { createSession, joinSessionByCode, getSession, clearSession } from "../lib/session";
-import { getPlayer, registerPlayer, clearPlayer } from "../lib/player";
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import AppShell from "../components/AppShell";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
-import QRCode from "react-qr-code";
+import { createSession, joinSessionByCode, getSession, clearSession } from "../lib/session";
+import { getPlayer, registerPlayer, clearPlayer } from "../lib/player";
+
+const EMOJIS = ["🦊","🐱","🐶","🐸","🐼","🦁","🐙","🦄","🐝","🐧","🐢","🦖","👾","🤖","🧠","🔥","⭐","🍀","🍕","🎲"];
 
 export default function Home() {
+  const nav = useNavigate();
+
   const [session, setSession] = useState(() => getSession());
   const [player, setPlayer] = useState(() => getPlayer());
-  const [playerName, setPlayerName] = useState("");
-  const joinUrl = session?.sessionCode ? `${window.location.origin}/join/${session.sessionCode}` : "";
+
   const [joinCode, setJoinCode] = useState("");
-  const [err, setErr] = useState(null);
+  const [playerName, setPlayerName] = useState("");
+  const [icon, setIcon] = useState(player?.playerIcon || "🦊");
+
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
 
   useEffect(() => {
+    // Keep local state in sync if storage changes (rare, but helps).
     setSession(getSession());
     setPlayer(getPlayer());
   }, []);
 
   async function onCreate() {
-    setErr(null);
     setBusy(true);
+    setErr(null);
     try {
+      // New match => clear previous player identity
+      clearPlayer();
       const s = await createSession();
       setSession(s);
+      setPlayer(getPlayer());
+      setJoinCode("");
+      setPlayerName("");
+      setIcon("🦊");
     } catch (e) {
       setErr(e?.message || "Failed to create match");
     } finally {
@@ -34,28 +46,15 @@ export default function Home() {
     }
   }
 
-  async function onSetName() {
-  if (!session?.sessionId) return;
-  if (!playerName.trim()) return;
-  setBusy(true);
-  setErr(null);
-  try {
-    const p = await registerPlayer(session.sessionId, playerName.trim());
-    setPlayer(p);
-    setPlayerName("");
-  } catch (e) {
-    setErr(e?.message || "Failed to set player name");
-  } finally {
-    setBusy(false);
-  }
-}
-
-async function onJoin() {
-    setErr(null);
+  async function onJoinByCode() {
+    if (!joinCode.trim()) return;
     setBusy(true);
+    setErr(null);
     try {
-      const s = await joinSessionByCode(joinCode.trim());
+      clearPlayer();
+      const s = await joinSessionByCode(joinCode.trim().toUpperCase());
       setSession(s);
+      setPlayer(getPlayer());
     } catch (e) {
       setErr(e?.message || "Failed to join match");
     } finally {
@@ -63,87 +62,71 @@ async function onJoin() {
     }
   }
 
-  function onClear() {
+  async function onSaveProfileAndGoLobby() {
+    if (!session?.sessionId) return;
+    if (!playerName.trim()) return;
+
+    setBusy(true);
+    setErr(null);
+    try {
+      const p = await registerPlayer(session.sessionId, playerName.trim(), icon);
+      setPlayer(p);
+      nav("/lobby");
+    } catch (e) {
+      setErr(e?.message || "Failed to save profile");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function onLeave() {
     clearSession();
-    setSession(null);
+    clearPlayer();
+    setSession(getSession());
+    setPlayer(getPlayer());
     setJoinCode("");
+    setPlayerName("");
+    setIcon("🦊");
+    setErr(null);
   }
 
   return (
     <AppShell
       title="Code & Conquer"
-      subtitle="Play a category, pick difficulty, get 1 random challenge — or browse everything."
+      subtitle="Create a match, set your player profile, then go to the lobby."
       headerBadges={
         <>
-          <Badge>Home</Badge>
+          {session?.sessionCode ? <Badge variant="secondary">Match: {session.sessionCode}</Badge> : <Badge>Not in match</Badge>}
+          {player?.playerId ? <Badge variant="secondary">You: {player.playerIcon || "🙂"} {player.playerName}</Badge> : null}
         </>
       }
       rightPanel={
         <div className="panel">
-          <div style={{ fontSize: 16, fontWeight: 650 }}>What you can do</div>
-          <div className="muted" style={{ fontSize: 14, marginTop: 10 }}>
-            • Start Game → category → difficulty → minigame<br/>
+          <div style={{ fontSize: 16, fontWeight: 650 }}>Start here</div>
+          <div className="muted" style={{ fontSize: 14, marginTop: 10, lineHeight: 1.5 }}>
+            1) Create or join a match<br />
+            2) Set your name + emoji<br />
+            3) Go to lobby and press Ready
           </div>
         </div>
       }
     >
-            <div className="panel" style={{ marginBottom: 12 }}>
-        <div style={{ fontWeight: 750, marginBottom: 6 }}>Match / Session</div>
-        {session?.sessionCode ? (
-          <div style={{ display: "grid", gap: 10 }}>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-              <Badge>Active match: {session.sessionCode}</Badge>
-              <Button variant="secondary" onClick={onClear} disabled={busy}>Leave</Button>
-            </div>
-<div className="muted" style={{ fontSize: 13 }}>
-  Scan to join:
-</div>
-<div className="panel" style={{ display: "grid", gap: 8, justifyItems: "center" }}>
-  <div style={{ background: "white", padding: 10, borderRadius: 12 }}>
-    <QRCode value={joinUrl} size={160} />
-  </div>
-  <div className="muted" style={{ fontSize: 12, wordBreak: "break-all", textAlign: "center" }}>
-    {joinUrl}
-  </div>
-</div>
+      <div className="panel" style={{ display: "grid", gap: 12 }}>
+        {err ? <div style={{ opacity: 0.9 }}>⚠️ {err}</div> : null}
 
-
-            {player?.playerId ? (
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                <Badge variant="secondary">You are: {player.playerIcon || "🙂"} {player.playerName || "Player"}</Badge>
-              </div>
-            ) : (
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                <span className="muted" style={{ fontSize: 13 }}>Set your player name for this match:</span>
-                <input
-                  value={playerName}
-                  onChange={(e) => setPlayerName(e.target.value)}
-                  placeholder="e.g. Alex"
-                  style={{
-                    padding: "10px 12px",
-                    borderRadius: 10,
-                    border: "1px solid rgba(148,163,184,0.35)",
-                    background: "rgba(15,23,42,0.35)",
-                    color: "inherit",
-                    minWidth: 220,
-                  }}
-                />
-                <Button variant="primary" onClick={onSetName} disabled={busy || !playerName.trim()}>Set name</Button>
-              </div>
-            )}
-          </div>
-        ) : (
+        {!session?.sessionId ? (
           <>
-            <div style={{ opacity: 0.9, marginBottom: 8 }}>
-              Create a match once per boardgame. Other devices can join with the code.
-            </div>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <Button variant="primary" onClick={onCreate} disabled={busy}>Create match</Button>
-              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            </div>
+
+            <div style={{ display: "grid", gap: 8 }}>
+              <div className="muted">Or join by code:</div>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                 <input
                   value={joinCode}
                   onChange={(e) => setJoinCode(e.target.value)}
-                  placeholder="Enter code (e.g. A2F9KQ)"
+                  placeholder="6-digit code"
                   style={{
                     padding: "10px 12px",
                     borderRadius: 10,
@@ -151,30 +134,79 @@ async function onJoin() {
                     background: "rgba(15,23,42,0.35)",
                     color: "inherit",
                     minWidth: 220,
+                    textTransform: "uppercase",
                   }}
                 />
-                <Button variant="secondary" onClick={onJoin} disabled={busy || !joinCode.trim()}>Join</Button>
+                <Button variant="secondary" onClick={onJoinByCode} disabled={busy || !joinCode.trim()}>
+                  Join
+                </Button>
               </div>
             </div>
-            {err ? <div style={{ marginTop: 8, opacity: 0.9 }}>⚠️ {err}</div> : null}
+          </>
+        ) : (
+          <>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+              <Badge>Active match: {session.sessionCode}</Badge>
+              <Button variant="secondary" onClick={onLeave} disabled={busy}>Leave match</Button>
+            </div>
+
+            {!player?.playerId ? (
+              <div style={{ display: "grid", gap: 10 }}>
+                <div className="muted">Set your player profile:</div>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                  <input
+                    value={playerName}
+                    onChange={(e) => setPlayerName(e.target.value)}
+                    placeholder="e.g. Alex"
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: 10,
+                      border: "1px solid rgba(148,163,184,0.35)",
+                      background: "rgba(15,23,42,0.35)",
+                      color: "inherit",
+                      minWidth: 220,
+                    }}
+                  />
+                  <Button variant="primary" onClick={onSaveProfileAndGoLobby} disabled={busy || !playerName.trim()}>
+                    Save & go to Lobby
+                  </Button>
+                </div>
+
+                <div style={{ display: "grid", gap: 8 }}>
+                  <div className="muted" style={{ fontSize: 13 }}>Emoji:</div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {EMOJIS.map((e) => (
+                      <button
+                        key={e}
+                        onClick={() => setIcon(e)}
+                        style={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: 12,
+                          border: e === icon ? "2px solid rgba(59,130,246,0.9)" : "1px solid rgba(148,163,184,0.25)",
+                          background: "rgba(15,23,42,0.25)",
+                          fontSize: 20,
+                          cursor: "pointer",
+                        }}
+                        aria-label={`Pick ${e}`}
+                        type="button"
+                      >
+                        {e}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="muted" style={{ fontSize: 12 }}>Selected: {icon}</div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <Button variant="primary" onClick={() => nav("/lobby")}>Go to Lobby</Button>
+                <Button variant="secondary" onClick={() => nav("/play")}>Play</Button>
+                <Button variant="ghost" onClick={() => nav("/leaderboard")}>Leaderboard</Button>
+              </div>
+            )}
           </>
         )}
-      </div>
-
-<div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-        <Link to="/categories">
-          <Button variant="primary">Start Game</Button>
-        </Link>
-
-        {session?.sessionId ? (
-          <Link to="/leaderboard">
-            <Button variant="secondary">Leaderboard</Button>
-          </Link>
-        ) : null}
-        <Link to="/categories">
-          <Button variant="ghost">Browse Minigames</Button>
-        </Link>
-
       </div>
     </AppShell>
   );
