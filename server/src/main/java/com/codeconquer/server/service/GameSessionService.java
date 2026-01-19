@@ -7,6 +7,7 @@ import com.codeconquer.server.repository.PlayerRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.Random;
@@ -14,6 +15,9 @@ import java.util.UUID;
 
 @Service
 public class GameSessionService {
+
+    public static final String TURN_IDLE = "IDLE";
+    public static final String TURN_IN_CHALLENGE = "IN_CHALLENGE";
 
     private final GameSessionRepository sessionRepository;
     private final PlayerRepository playerRepository;
@@ -31,6 +35,8 @@ public class GameSessionService {
         s.setCreatedAt(Instant.now());
         s.setStarted(false);
         s.setCurrentTurnOrder(0);
+        s.setTurnStatus(TURN_IDLE);
+        s.setActiveChallengeId(null);
         return sessionRepository.save(s);
     }
 
@@ -46,6 +52,29 @@ public class GameSessionService {
         return sessionRepository.save(s);
     }
 
+    /**
+     * Ensures players in a session have a clean sequential turnOrder (1..n).
+     * This prevents edge cases where turnOrder might be 0 or have gaps due to older data.
+     */
+    public void normalizeTurnOrders(String sessionId) {
+        List<Player> players = playerRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
+        if (players.isEmpty()) return;
+
+        players.sort(Comparator.comparing(Player::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())));
+        int i = 1;
+        boolean changed = false;
+        for (Player p : players) {
+            if (p.getTurnOrder() != i) {
+                p.setTurnOrder(i);
+                changed = true;
+            }
+            i++;
+        }
+        if (changed) {
+            playerRepository.saveAll(players);
+        }
+    }
+
     public void tryStartIfAllReady(String sessionId) {
         Optional<GameSession> opt = findById(sessionId);
         if (opt.isEmpty()) return;
@@ -59,13 +88,19 @@ public class GameSessionService {
         boolean allReady = players.stream().allMatch(Player::isReady);
         if (!allReady) return;
 
-        // Start: current turn is player with turnOrder=1 (first joined). Can change to random later.
+        normalizeTurnOrders(sessionId);
+
         s.setStarted(true);
-        int first = players.stream().mapToInt(Player::getTurnOrder).min().orElse(1);
-        s.setCurrentTurnOrder(first);
+        s.setCurrentTurnOrder(1);
+        s.setTurnStatus(TURN_IDLE);
+        s.setActiveChallengeId(null);
         save(s);
     }
 
+    /**
+     * Advances to the next player in sequential turn order.
+     * Uses the actual list of players rather than numeric +1 with gaps.
+     */
     public void advanceTurn(String sessionId) {
         Optional<GameSession> opt = findById(sessionId);
         if (opt.isEmpty()) return;
@@ -73,16 +108,20 @@ public class GameSessionService {
         GameSession s = opt.get();
         if (!s.isStarted()) return;
 
+        normalizeTurnOrders(sessionId);
         List<Player> players = playerRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
         if (players.isEmpty()) return;
 
-        int max = players.stream().mapToInt(Player::getTurnOrder).max().orElse(1);
-        int min = players.stream().mapToInt(Player::getTurnOrder).min().orElse(1);
+        int n = players.size();
+        int current = s.getCurrentTurnOrder();
+        if (current < 1 || current > n) current = 1;
 
-        int next = s.getCurrentTurnOrder() + 1;
-        if (next > max) next = min;
+        int next = current + 1;
+        if (next > n) next = 1;
 
         s.setCurrentTurnOrder(next);
+        s.setTurnStatus(TURN_IDLE);
+        s.setActiveChallengeId(null);
         save(s);
     }
 

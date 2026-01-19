@@ -20,5 +20,12 @@ public class GameSession {
     // Current player's turn order (1..n). 0 means not started.
     private int currentTurnOrder;
 
+    // Turn phase control
+    // IDLE | IN_CHALLENGE
+    private String turnStatus;
+
+    // Set when turnStatus == IN_CHALLENGE
+    private String activeChallengeId;
+
     private Instant createdAt;
 }

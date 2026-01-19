@@ -273,7 +273,8 @@ export default function BSTInsertPage() {
             errors={errors}
             won={true}
             onPlayAgain={newPuzzle}
-          />
+          challengeId={challenge?.challengeInstanceId}
+        />
         )}
 
         {/* tree svg */}

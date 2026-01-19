@@ -7,14 +7,16 @@ import { cn } from "../lib/utils";
 import { Link, useLocation } from "react-router-dom";
 import ResultSubmitPanel from "../components/ResultSubmitPanel";
 
+function clamp(n, a, b) {
+  return Math.max(a, Math.min(b, n));
+}
+
 function randInt(a, b) {
   return Math.floor(Math.random() * (b - a + 1)) + a;
 }
 
 function makeMaze(size) {
-  const grid = Array.from({ length: size }, () =>
-    Array.from({ length: size }, () => 0)
-  );
+  const grid = Array.from({ length: size }, () => Array.from({ length: size }, () => 0));
   const wallCount = Math.floor(size * size * 0.18);
   for (let k = 0; k < wallCount; k++) {
     const r = randInt(0, size - 1);
@@ -50,48 +52,9 @@ export default function StackMazePage() {
   const startRef = useRef(Date.now());
   const [timeMs, setTimeMs] = useState(0);
 
-  // run loop (timeout, not interval)
-  const timeoutRef = useRef(null);
-  const STEP_MS = 350;
-
-  // IMPORTANT: keep latest state in refs so stepOnce can be pure & deterministic
-  const gridRef = useRef(grid);
-  const posRef = useRef(pos);
-  const stackRef = useRef(stack);
-  const statusRef = useRef(status);
-  const runningRef = useRef(running);
-
-  useEffect(() => {
-    gridRef.current = grid;
-  }, [grid]);
-
-  useEffect(() => {
-    posRef.current = pos;
-  }, [pos]);
-
-  useEffect(() => {
-    stackRef.current = stack;
-  }, [stack]);
-
-  useEffect(() => {
-    statusRef.current = status;
-  }, [status]);
-
-  useEffect(() => {
-    runningRef.current = running;
-  }, [running]);
-
   const goal = { r: size - 1, c: size - 1 };
 
-  function hardStopLoop() {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-      timeoutRef.current = null;
-    }
-  }
-
   function reset() {
-    hardStopLoop();
     startRef.current = Date.now();
     setTimeMs(0);
     setGrid(makeMaze(size));
@@ -114,64 +77,34 @@ export default function StackMazePage() {
     setStack((s) => s.slice(0, -1));
   }
 
-  function computeNextPos(currentPos, dir, currentGrid) {
-    let nr = currentPos.r;
-    let nc = currentPos.c;
-
-    if (dir === "U") nr--;
-    if (dir === "D") nr++;
-    if (dir === "L") nc--;
-    if (dir === "R") nc++;
-
-    const blocked =
-      nr < 0 ||
-      nc < 0 ||
-      nr >= size ||
-      nc >= size ||
-      currentGrid[nr][nc] === 1;
-
-    return blocked ? { nextPos: currentPos, crashed: true } : { nextPos: { r: nr, c: nc }, crashed: false };
-  }
-
   function stepOnce() {
-    // Read latest state from refs (no side-effects inside other setState updaters!)
-    const s = stackRef.current;
-    if (!s || s.length === 0) return;
+    setStack((s) => {
+      if (s.length === 0) return s;
+      const d = s[s.length - 1];
+      const next = s.slice(0, -1);
+      setEnergy((e) => e - 1);
+      setPos((p) => {
+        let nr = p.r, nc = p.c;
+        if (d === "U") nr--;
+        if (d === "D") nr++;
+        if (d === "L") nc--;
+        if (d === "R") nc++;
 
-    const dir = s[s.length - 1];
-    const nextStack = s.slice(0, -1);
-
-    // 1) pop stack
-    setStack(nextStack);
-
-    // 2) consume energy
-    setEnergy((e) => e - 1);
-
-    // 3) compute movement + crash
-    const { nextPos, crashed } = computeNextPos(posRef.current, dir, gridRef.current);
-
-    if (crashed) setCrashes((x) => x + 1);
-    setPos(nextPos);
+        if (nr < 0 || nc < 0 || nr >= size || nc >= size || grid[nr][nc] === 1) {
+          setCrashes((x) => x + 1);
+          return p;
+        }
+        return { r: nr, c: nc };
+      });
+      return next;
+    });
   }
 
-  // Safe run loop with setTimeout (and no stale closures via refs)
   useEffect(() => {
-    hardStopLoop();
-
     if (!running) return;
     if (status !== "playing") return;
-
-    const tick = () => {
-      // stop if changed
-      if (!runningRef.current || statusRef.current !== "playing") return;
-
-      stepOnce();
-      timeoutRef.current = setTimeout(tick, STEP_MS);
-    };
-
-    timeoutRef.current = setTimeout(tick, STEP_MS);
-
-    return () => hardStopLoop();
+    const t = setInterval(() => stepOnce(), 350);
+    return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [running, status]);
 
@@ -194,6 +127,12 @@ export default function StackMazePage() {
     setTimeMs(Date.now() - startRef.current);
   }, [status]);
 
+  // freeze time when finished
+  useEffect(() => {
+    if (status === "playing") return;
+    setTimeMs(Date.now() - startRef.current);
+  }, [status]);
+
   const energyPct = Math.round((energy / 14) * 100);
 
   return (
@@ -205,12 +144,8 @@ export default function StackMazePage() {
           <Badge>Category: STACK_MAZE</Badge>
           <Badge>Energy: {energy}</Badge>
           <Badge>Crashes: {crashes}</Badge>
-          {status === "won" && (
-            <Badge style={{ borderColor: "rgba(52,211,153,0.35)" }}>WON</Badge>
-          )}
-          {status === "lost" && (
-            <Badge style={{ borderColor: "rgba(251,113,133,0.35)" }}>LOST</Badge>
-          )}
+          {status === "won" && <Badge style={{ borderColor: "rgba(52,211,153,0.35)" }}>WON</Badge>}
+          {status === "lost" && <Badge style={{ borderColor: "rgba(251,113,133,0.35)" }}>LOST</Badge>}
         </>
       }
       rightPanel={
@@ -229,8 +164,7 @@ export default function StackMazePage() {
     >
       <div style={{ display: "grid", gap: 12 }}>
         <div className="muted" style={{ fontSize: 14 }}>
-          Program the robot with a{" "}
-          <strong style={{ color: "rgba(199,210,254,0.95)" }}>Stack</strong> (LIFO).
+          Program the robot with a <strong style={{ color: "rgba(199,210,254,0.95)" }}>Stack</strong> (LIFO).
         </div>
 
         <Progress value={energyPct} />
@@ -244,14 +178,13 @@ export default function StackMazePage() {
               return (
                 <div
                   key={`${r}-${c}`}
-                  className={cn("h-11 rounded-2xl border flex items-center justify-center text-xs", "panel")}
+                  className={cn(
+                    "h-11 rounded-2xl border flex items-center justify-center text-xs",
+                    isWall ? "panel" : "panel",
+                  )}
                   style={{
                     background: isWall ? "rgba(30,41,59,0.5)" : "rgba(2,6,23,0.22)",
-                    borderColor: isGoal
-                      ? "rgba(52,211,153,0.35)"
-                      : isMe
-                      ? "rgba(129,140,248,0.35)"
-                      : "rgba(51,65,85,0.4)",
+                    borderColor: isGoal ? "rgba(52,211,153,0.35)" : isMe ? "rgba(129,140,248,0.35)" : "rgba(51,65,85,0.4)",
                   }}
                 >
                   {isWall ? "█" : isMe ? "🤖" : isGoal ? "🏁" : ""}
@@ -272,13 +205,10 @@ export default function StackMazePage() {
               <div className="muted">(empty)</div>
             ) : (
               stack.map((d, i) => (
-                <Badge
-                  key={i}
-                  style={{
-                    borderColor: i === stack.length - 1 ? "rgba(252,211,77,0.35)" : undefined,
-                    background: i === stack.length - 1 ? "rgba(245,158,11,0.10)" : undefined,
-                  }}
-                >
+                <Badge key={i} style={{
+                  borderColor: i === stack.length - 1 ? "rgba(252,211,77,0.35)" : undefined,
+                  background: i === stack.length - 1 ? "rgba(245,158,11,0.10)" : undefined
+                }}>
                   {d}
                 </Badge>
               ))
@@ -328,7 +258,8 @@ export default function StackMazePage() {
             errors={crashes}
             won={status === "won"}
             onPlayAgain={reset}
-          />
+          challengeId={challenge?.challengeInstanceId}
+        />
         )}
       </div>
     </AppShell>

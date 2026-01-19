@@ -8,7 +8,6 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 
 @Service
 public class ScoreService {
@@ -26,37 +25,49 @@ public class ScoreService {
     }
 
     public Score saveScore(Score score) {
-        if (score == null) {
-            throw new IllegalArgumentException("Score required");
-        }
-        if (score.getSessionId() == null || score.getSessionId().isBlank()) {
-            throw new IllegalArgumentException("SessionId required");
-        }
-        if (score.getPlayerId() == null || score.getPlayerId().isBlank()) {
-            throw new IllegalArgumentException("PlayerId required");
-        }
+        if (score == null) throw new IllegalArgumentException("Score required");
+        if (score.getSessionId() == null || score.getSessionId().isBlank()) throw new IllegalArgumentException("SessionId required");
+        if (score.getPlayerId() == null || score.getPlayerId().isBlank()) throw new IllegalArgumentException("PlayerId required");
 
-        Optional<GameSession> sessionOpt = sessionService.findById(score.getSessionId());
-        if (sessionOpt.isEmpty()) {
-            throw new IllegalArgumentException("Session not found");
-        }
+        GameSession s = sessionService.findById(score.getSessionId())
+                .orElseThrow(() -> new IllegalArgumentException("Session not found"));
 
-        Optional<Player> playerOpt = playerService.findById(score.getPlayerId());
-        if (playerOpt.isEmpty()) {
-            throw new IllegalArgumentException("Player not found");
-        }
-        Player p = playerOpt.get();
+        Player p = playerService.findById(score.getPlayerId())
+                .orElseThrow(() -> new IllegalArgumentException("Player not found"));
+
         if (p.getSessionId() == null || !p.getSessionId().equals(score.getSessionId())) {
             throw new IllegalArgumentException("Player not found for session");
         }
 
-        // Denormalize player name so leaderboard stays simple & consistent.
-        score.setPlayerName(p.getName());
+        // Enforce started + turn owner
+        if (!s.isStarted()) throw new IllegalArgumentException("Session not started");
+        if (s.getCurrentTurnOrder() <= 0) throw new IllegalArgumentException("Session turn not initialized");
+        if (p.getTurnOrder() != s.getCurrentTurnOrder()) throw new IllegalArgumentException("Not your turn");
 
-        // Timestamp if missing
+        // Phase enforcement: must match the active challenge instance
+        if (!GameSessionService.TURN_IN_CHALLENGE.equals(s.getTurnStatus())) {
+            throw new IllegalArgumentException("No active challenge");
+        }
+        if (score.getChallengeId() == null || score.getChallengeId().isBlank()) {
+            throw new IllegalArgumentException("challengeId required");
+        }
+        if (s.getActiveChallengeId() == null || !s.getActiveChallengeId().equals(score.getChallengeId())) {
+            throw new IllegalArgumentException("challengeId mismatch");
+        }
+
+        // Denormalize player name for leaderboard/history
+        score.setPlayerName(p.getName());
         score.setCreatedAt(Instant.now());
 
-        return scoreRepository.save(score);
+        Score saved = scoreRepository.save(score);
+
+        // Unlock turn and advance
+        s.setTurnStatus(GameSessionService.TURN_IDLE);
+        s.setActiveChallengeId(null);
+        sessionService.save(s);
+        sessionService.advanceTurn(score.getSessionId());
+
+        return saved;
     }
 
     public List<Score> getAllScores() {

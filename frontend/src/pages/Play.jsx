@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import AppShell from "../components/AppShell";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
@@ -8,11 +8,13 @@ import { getPlayer, fetchLobby } from "../lib/player";
 
 export default function Play() {
   const nav = useNavigate();
+  const loc = useLocation();
   const session = useMemo(() => getSession(), []);
   const me = useMemo(() => getPlayer(), []);
 
   const [state, setState] = useState(null);
   const [err, setErr] = useState(null);
+  const [summary, setSummary] = useState(loc.state?.turnSummary || null);
 
   const canView = !!(session?.sessionId && me?.playerId);
 
@@ -34,6 +36,13 @@ export default function Play() {
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+useEffect(() => {
+  if (!summary) return;
+  const t = setTimeout(() => setSummary(null), 4500);
+  return () => clearTimeout(t);
+}, [summary]);
+
 
   function go(diff) {
     nav(`/challenge?difficulty=${encodeURIComponent(diff)}`);
@@ -78,6 +87,22 @@ export default function Play() {
     >
       <div className="panel" style={{ display: "grid", gap: 12 }}>
         {err ? <div style={{ opacity: 0.9 }}>⚠️ {err}</div> : null}
+{summary ? (
+  <div className="panel" style={{ border: "1px solid rgba(148,163,184,0.22)" }}>
+    <div style={{ fontWeight: 800, marginBottom: 6 }}>
+      {summary.saved ? "✅ Score saved" : "⚠️ Score not saved"}
+    </div>
+    {summary.error ? <div className="muted" style={{ marginBottom: 6 }}>{summary.error}</div> : null}
+    {summary.next ? (
+      <div className="muted">
+        Next turn: <strong>{summary.next.icon || "🙂"} {summary.next.name}</strong> (#{summary.next.turnOrder})
+      </div>
+    ) : (
+      <div className="muted">Next turn is ready.</div>
+    )}
+  </div>
+) : null}
+
 
         {!state?.started ? (
           <div className="muted">

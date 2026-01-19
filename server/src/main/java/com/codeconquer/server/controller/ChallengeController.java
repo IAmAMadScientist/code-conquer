@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Optional;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/challenges")
@@ -44,10 +45,25 @@ public class ChallengeController {
         if (p.getSessionId() == null || !p.getSessionId().equals(sessionId)) return ResponseEntity.badRequest().build();
 
         if (!s.isStarted()) return ResponseEntity.status(409).build(); // game not started
+
+        // Turn enforcement
         if (s.getCurrentTurnOrder() <= 0 || p.getTurnOrder() != s.getCurrentTurnOrder()) {
             return ResponseEntity.status(403).build(); // not your turn
         }
 
-        return ResponseEntity.ok(router.pickRandom(difficulty, category));
+        // Phase enforcement: only one active challenge per turn
+        if (!GameSessionService.TURN_IDLE.equals(s.getTurnStatus())) {
+            return ResponseEntity.status(423).build(); // locked / in challenge
+        }
+
+        // Lock the turn to a single challenge instance
+        String instanceId = UUID.randomUUID().toString();
+        s.setTurnStatus(GameSessionService.TURN_IN_CHALLENGE);
+        s.setActiveChallengeId(instanceId);
+        sessionService.save(s);
+
+        ChallengeDescriptor d = router.pickRandom(difficulty, category);
+        d.setChallengeInstanceId(instanceId);
+        return ResponseEntity.ok(d);
     }
 }

@@ -19,6 +19,9 @@ public class Score {
     private String sessionId;
     private String sessionCode;
 
+    // Challenge instance token to prevent double-starts / double-submits
+    private String challengeId;
+
     // New: stable identity within a session. Frontend should send playerId.
     private String playerId;
 

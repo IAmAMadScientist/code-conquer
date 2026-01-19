@@ -649,7 +649,8 @@ export default function GraphPathfinderPage() {
               errors={errors}
               won={true}
               onPlayAgain={resetSameGraph}
-            />
+          challengeId={challenge?.challengeInstanceId}
+        />
           )}
         </div>
       </div>

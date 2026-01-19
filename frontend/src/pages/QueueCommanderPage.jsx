@@ -315,7 +315,8 @@ export default function QueueCommanderPage() {
             errors={errors}
             won={status === "won"}
             onPlayAgain={hardReset}
-          />
+          challengeId={challenge?.challengeInstanceId}
+        />
         )}
 
         {/* incoming + queue + output */}
