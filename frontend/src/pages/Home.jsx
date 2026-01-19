@@ -5,11 +5,13 @@ import { getPlayer, registerPlayer, clearPlayer } from "../lib/player";
 import AppShell from "../components/AppShell";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
+import QRCode from "react-qr-code";
 
 export default function Home() {
   const [session, setSession] = useState(() => getSession());
   const [player, setPlayer] = useState(() => getPlayer());
   const [playerName, setPlayerName] = useState("");
+  const joinUrl = session?.sessionCode ? `${window.location.origin}/join/${session.sessionCode}` : "";
   const [joinCode, setJoinCode] = useState("");
   const [err, setErr] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -93,10 +95,22 @@ async function onJoin() {
               <Badge>Active match: {session.sessionCode}</Badge>
               <Button variant="secondary" onClick={onClear} disabled={busy}>Leave</Button>
             </div>
+<div className="muted" style={{ fontSize: 13 }}>
+  Scan to join:
+</div>
+<div className="panel" style={{ display: "grid", gap: 8, justifyItems: "center" }}>
+  <div style={{ background: "white", padding: 10, borderRadius: 12 }}>
+    <QRCode value={joinUrl} size={160} />
+  </div>
+  <div className="muted" style={{ fontSize: 12, wordBreak: "break-all", textAlign: "center" }}>
+    {joinUrl}
+  </div>
+</div>
+
 
             {player?.playerId ? (
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                <Badge variant="secondary">You are: {player.playerName || "Player"}</Badge>
+                <Badge variant="secondary">You are: {player.playerIcon || "🙂"} {player.playerName || "Player"}</Badge>
               </div>
             ) : (
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
@@ -157,6 +171,9 @@ async function onJoin() {
             <Button variant="secondary">Leaderboard</Button>
           </Link>
         ) : null}
+        <Link to="/categories">
+          <Button variant="ghost">Browse Minigames</Button>
+        </Link>
 
       </div>
     </AppShell>

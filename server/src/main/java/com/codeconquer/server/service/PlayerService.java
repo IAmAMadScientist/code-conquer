@@ -7,7 +7,6 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -22,28 +21,33 @@ public class PlayerService {
         this.sessionService = sessionService;
     }
 
-    public Player registerPlayer(String sessionId, String name) {
-        if (sessionId == null || sessionId.isBlank()) {
-            throw new IllegalArgumentException("sessionId required");
-        }
-        if (name == null || name.isBlank()) {
-            throw new IllegalArgumentException("name required");
-        }
+    public Player registerPlayer(String sessionId, String name, String icon) {
+        if (sessionId == null || sessionId.isBlank()) throw new IllegalArgumentException("sessionId required");
+        if (name == null || name.isBlank()) throw new IllegalArgumentException("name required");
 
         Optional<GameSession> session = sessionService.findById(sessionId);
-        if (session.isEmpty()) {
-            throw new IllegalArgumentException("session not found");
-        }
+        if (session.isEmpty()) throw new IllegalArgumentException("session not found");
 
         String trimmed = name.trim();
-        // If player already exists (case-insensitive), return the existing one.
+
         Optional<Player> existing = playerRepository.findBySessionIdAndNameIgnoreCase(sessionId, trimmed);
-        if (existing.isPresent()) return existing.get();
+        if (existing.isPresent()) {
+            // Optionally update icon if provided
+            Player p = existing.get();
+            if (icon != null && !icon.isBlank()) p.setIcon(icon.trim());
+            return playerRepository.save(p);
+        }
 
         Player p = new Player();
         p.setId(UUID.randomUUID().toString());
         p.setSessionId(sessionId);
         p.setName(trimmed);
+        p.setIcon(icon == null || icon.isBlank() ? "🙂" : icon.trim());
+        p.setReady(false);
+
+        int nextOrder = playerRepository.getMaxTurnOrder(sessionId) + 1;
+        p.setTurnOrder(nextOrder);
+
         p.setCreatedAt(Instant.now());
         return playerRepository.save(p);
     }
@@ -54,5 +58,14 @@ public class PlayerService {
 
     public Optional<Player> findById(String playerId) {
         return playerRepository.findById(playerId);
+    }
+
+    public Player setReady(String sessionId, String playerId, boolean ready) {
+        Player p = playerRepository.findById(playerId).orElseThrow(() -> new IllegalArgumentException("player not found"));
+        if (p.getSessionId() == null || !p.getSessionId().equals(sessionId)) throw new IllegalArgumentException("player not in session");
+        p.setReady(ready);
+        Player saved = playerRepository.save(p);
+        sessionService.tryStartIfAllReady(sessionId);
+        return saved;
     }
 }

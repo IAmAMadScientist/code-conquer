@@ -2,6 +2,7 @@ package com.codeconquer.server.controller;
 
 import com.codeconquer.server.dto.PlayerRequest;
 import com.codeconquer.server.dto.PlayerResponse;
+import com.codeconquer.server.dto.ReadyRequest;
 import com.codeconquer.server.model.Player;
 import com.codeconquer.server.service.PlayerService;
 import org.springframework.http.ResponseEntity;
@@ -25,8 +26,8 @@ public class PlayerController {
             return ResponseEntity.badRequest().build();
         }
         try {
-            Player p = playerService.registerPlayer(sessionId, body.getName());
-            return ResponseEntity.ok(new PlayerResponse(p.getId(), p.getName(), p.getColor()));
+            Player p = playerService.registerPlayer(sessionId, body.getName(), body.getIcon());
+            return ResponseEntity.ok(new PlayerResponse(p.getId(), p.getName(), p.getIcon(), p.getColor(), p.isReady(), p.getTurnOrder()));
         } catch (IllegalArgumentException ex) {
             return ResponseEntity.badRequest().build();
         }
@@ -36,5 +37,16 @@ public class PlayerController {
     public ResponseEntity<List<Player>> list(@PathVariable String sessionId) {
         if (sessionId == null || sessionId.isBlank()) return ResponseEntity.badRequest().build();
         return ResponseEntity.ok(playerService.listPlayers(sessionId));
+    }
+
+    @PostMapping("/{sessionId}/players/{playerId}/ready")
+    public ResponseEntity<PlayerResponse> setReady(@PathVariable String sessionId, @PathVariable String playerId, @RequestBody ReadyRequest body) {
+        if (body == null) return ResponseEntity.badRequest().build();
+        try {
+            Player p = playerService.setReady(sessionId, playerId, body.isReady());
+            return ResponseEntity.ok(new PlayerResponse(p.getId(), p.getName(), p.getIcon(), p.getColor(), p.isReady(), p.getTurnOrder()));
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().build();
+        }
     }
 }

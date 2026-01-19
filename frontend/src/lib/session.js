@@ -16,7 +16,9 @@ export function clearSession() {
   // also clear player identity for this device
   localStorage.removeItem("cc_playerId");
   localStorage.removeItem("cc_playerName");
+  localStorage.removeItem("cc_playerIcon");
 }
+
 
 async function parseJsonOrThrow(res) {
   let data = null;

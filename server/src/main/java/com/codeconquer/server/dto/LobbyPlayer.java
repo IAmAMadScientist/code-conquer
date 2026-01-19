@@ -5,11 +5,10 @@ import lombok.Data;
 
 @Data
 @AllArgsConstructor
-public class PlayerResponse {
-    private String playerId;
+public class LobbyPlayer {
+    private String id;
     private String name;
     private String icon;
-    private String color; // reserved
     private boolean ready;
     private int turnOrder;
 }

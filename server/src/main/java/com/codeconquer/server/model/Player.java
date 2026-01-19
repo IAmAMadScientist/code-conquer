@@ -17,8 +17,14 @@ public class Player {
 
     private String name;
 
-    // Reserved for Variant 2 (e.g., color/avatar). Keep nullable for now.
-    private String color;
+    // Variant 2 ready: emoji/icon + optional color
+    private String icon;   // e.g. "🦊"
+    private String color;  // reserved
+
+    private boolean ready;
+
+    // Turn order within session (1..n)
+    private int turnOrder;
 
     private Instant createdAt;
 }

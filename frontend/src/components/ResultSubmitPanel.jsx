@@ -15,15 +15,12 @@ async function parseJsonOrThrow(res) {
     data = await res.json();
   } catch {}
   if (!res.ok) {
-    const msg = data?.error || `Request failed (${res.status})`;
+    const msg = data?.error || data?.message || `Request failed (${res.status})`;
     throw new Error(msg);
   }
   return data;
 }
 
-/**
- * Shows a consistent end-of-minigame panel and optionally submits score to the backend.
- */
 export default function ResultSubmitPanel({
   category,
   difficulty,
@@ -33,112 +30,93 @@ export default function ResultSubmitPanel({
   onPlayAgain,
 }) {
   const nav = useNavigate();
+
   const session = useMemo(() => getSession(), []);
   const player = useMemo(() => getPlayer(), []);
-  const diff = normalizeDifficulty(difficulty);
 
-  const points = useMemo(
-    () => computePoints({ difficulty: diff, timeMs, errors, won }),
-    [diff, timeMs, errors, won]
-  );
+  const diffNorm = normalizeDifficulty(difficulty);
+  const points = computePoints({ difficulty: diffNorm, timeMs, errors, won });
+
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [err, setErr] = useState(null);
 
   async function submit() {
     if (!player?.playerId) {
-      setErr("Kein Spieler gesetzt. Bitte auf Home einen Namen setzen.");
+      setErr("Kein Spieler gesetzt. Bitte im Lobby-Flow ein Profil setzen.");
+      return;
+    }
+    if (!session?.sessionId) {
+      setErr("Keine Session aktiv.");
       return;
     }
 
-    setErr(null);
     setSubmitting(true);
+    setErr(null);
+
     try {
+      const payload = {
+        sessionId: session.sessionId,
+        sessionCode: session.sessionCode || "",
+        playerId: player.playerId,
+        category,
+        difficulty: diffNorm,
+        points,
+        timeMs,
+        errors,
+      };
+
       const res = await fetch(`${API_BASE}/scores`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId: session?.sessionId || "",
-          sessionCode: session?.sessionCode || "",
-          playerId: player?.playerId || "",
-          points,
-          category,
-          difficulty: diff,
-          timeMs,
-          errors: Math.max(0, errors || 0),
-        }),
+        body: JSON.stringify(payload),
       });
       await parseJsonOrThrow(res);
+
       setSubmitted(true);
+
+      // After scoring, next player's turn begins server-side.
+      // We send this player back to the Play screen (will show waiting if not their turn).
+      nav("/play");
     } catch (e) {
-      setErr(e?.message || "Failed to submit score");
+      setErr(e?.message || "Failed to save score");
     } finally {
       setSubmitting(false);
     }
   }
 
-  const diffSlug = diff.toLowerCase();
-
   return (
-    <div
-      className="panel"
-      style={{
-        marginTop: 14,
-        borderColor: won ? "rgba(52,211,153,0.35)" : "rgba(251,113,133,0.35)",
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-        <div style={{ fontWeight: 750, fontSize: 16 }}>{won ? "✅ Challenge cleared" : "❌ Challenge failed"}</div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <Badge>Cat: {category}</Badge>
-          <Badge>Diff: {diff}</Badge>
-          <Badge>Time: {formatTime(timeMs)}</Badge>
-          <Badge>Errors: {Math.max(0, errors || 0)}</Badge>
-          {session?.sessionCode ? <Badge>Match: {session.sessionCode}</Badge> : null}
-          <Badge style={{ borderColor: "rgba(252,211,77,0.35)" }}>Points: {points}</Badge>
-        </div>
+    <div className="panel" style={{ marginTop: 14 }}>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+        <Badge>Result</Badge>
+        <Badge variant="secondary">Diff: {diffNorm}</Badge>
+        <Badge variant="secondary">Time: {formatTime(timeMs)}</Badge>
+        <Badge variant="secondary">Errors: {errors ?? 0}</Badge>
+        {session?.sessionCode ? <Badge variant="secondary">Match: {session.sessionCode}</Badge> : null}
+        {player?.playerName ? (
+          <Badge variant="secondary">Player: {player.playerIcon || "🙂"} {player.playerName}</Badge>
+        ) : null}
+        <Badge variant="secondary">Points: {points}</Badge>
       </div>
 
-      <div className="muted" style={{ marginTop: 8, fontSize: 13, lineHeight: 1.5 }}>
-        Punkte = Basis (Difficulty) × Zeitfaktor − Fehler-Penalty. Schneller = mehr Punkte, mehr Fehler = weniger.
+      {err ? <div style={{ marginTop: 10, opacity: 0.9 }}>⚠️ {err}</div> : null}
+
+      <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+        <Button onClick={submit} disabled={submitting || submitted || !player?.playerId} variant={submitted ? "secondary" : "primary"}>
+          {submitted ? "Score gespeichert" : submitting ? "Speichere..." : "Score speichern"}
+        </Button>
+
+        <Button variant="ghost" onClick={() => nav("/leaderboard")}>Leaderboard</Button>
+        <Button variant="ghost" onClick={() => nav("/lobby")}>Lobby</Button>
+        <Button variant="ghost" onClick={() => nav("/play")}>Play</Button>
+
+        {onPlayAgain ? (
+          <Button variant="secondary" onClick={onPlayAgain}>Play again</Button>
+        ) : null}
       </div>
 
-      <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-  {player?.playerId ? (
-    <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-      <span className="muted" style={{ fontSize: 13 }}>
-        Player: <strong>{player.playerName || "Player"}</strong>
-      </span>
-      <Button onClick={submit} disabled={submitting || submitted} variant={submitted ? "secondary" : "primary"}>
-        {submitted ? "Score gespeichert" : submitting ? "Speichere..." : "Score speichern"}
-      </Button>
-    </div>
-  ) : (
-    <div className="muted" style={{ fontSize: 13, lineHeight: 1.5 }}>
-      ⚠️ Kein Spielername gesetzt. Geh auf <strong>Home</strong> und setz deinen Namen für dieses Match, dann komm zurück.
-    </div>
-  )}
-
-
-        {err && (
-          <div className="panel" style={{ borderColor: "rgba(251,113,133,0.35)" }}>
-            {err}
-          </div>
-        )}
-
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <Button variant="success" onClick={() => nav(`/qr/${diffSlug}`)}>
-            Next challenge ({diffSlug})
-          </Button>
-          {onPlayAgain && (
-            <Button variant="ghost" onClick={onPlayAgain}>
-              Play again
-            </Button>
-          )}
-          <Button variant="ghost" onClick={() => nav("/categories")}>
-            Back to categories
-          </Button>
-        </div>
+      <div className="muted" style={{ marginTop: 10, fontSize: 13, lineHeight: 1.5 }}>
+        Tip: After saving the score, the backend automatically advances the turn to the next player.
       </div>
     </div>
   );
