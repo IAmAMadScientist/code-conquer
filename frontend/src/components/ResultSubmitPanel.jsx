@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Badge } from "./ui/badge";
 import { computePoints, formatTime, normalizeDifficulty } from "../lib/scoring";
 import { getSession } from "../lib/session";
-import { fetchLobby, getPlayer } from "../lib/player";
+import { getPlayer } from "../lib/player";
 
 const API_BASE = "http://localhost:8080/api";
 
@@ -21,7 +21,8 @@ async function parseJsonOrThrow(res) {
 
 /**
  * Auto-saves the score when the game ends (won === true/false),
- * then redirects to /play. Backend advances the turn after a valid score submit.
+ * then redirects to /turn-summary. Backend advances the turn only after the
+ * handover is confirmed (phone pass prompt).
  */
 export default function ResultSubmitPanel({
   category,
@@ -87,17 +88,7 @@ export default function ResultSubmitPanel({
 
       setSaved(true);
 
-      // Fetch lobby state after submit to show "next player" prompt on /play.
-      let nextInfo = null;
-      try {
-        const st = await fetchLobby(session.sessionId);
-        const next = (st?.players || []).find((p) => p.id === st?.currentPlayerId);
-        if (next) {
-          nextInfo = { name: next.name, icon: next.icon, turnOrder: next.turnOrder };
-        }
-      } catch {}
-
-      nav("/play", { state: { turnSummary: { saved: true, next: nextInfo } } });
+      nav("/turn-summary", { replace: true });
     } catch (e) {
       // If save fails (e.g. not your turn, token mismatch), allow retry by leaving submittedRef true?
       // We keep it true to avoid spamming; user should go back to /play.
@@ -131,7 +122,7 @@ export default function ResultSubmitPanel({
       </div>
 
       <div className="muted" style={{ marginTop: 10, fontSize: 13 }}>
-        {saving ? "Saving score and switching turn…" : saved ? "Score saved. Redirecting…" : "Finishing…"}
+        {saving ? "Saving score…" : saved ? "Score saved. Showing next player…" : "Finishing…"}
       </div>
 
       {err ? <div style={{ marginTop: 10, opacity: 0.9 }}>⚠️ {err}</div> : null}

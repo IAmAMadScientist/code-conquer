@@ -29,4 +29,18 @@ public class SessionController {
     public ResponseEntity<GameSession> getByCode(@PathVariable String code) {
         return service.findByCode(code).map(ResponseEntity::ok).orElse(ResponseEntity.notFound().build());
     }
+
+    /**
+     * After a score is saved, the current player must confirm the handover.
+     * This advances to the next player.
+     */
+    @PostMapping("/{id}/turn/confirm")
+    public ResponseEntity<Void> confirmTurnHandover(@PathVariable String id, @RequestParam String playerId) {
+        try {
+            service.confirmTurnHandover(id, playerId);
+            return ResponseEntity.ok().build();
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
 }

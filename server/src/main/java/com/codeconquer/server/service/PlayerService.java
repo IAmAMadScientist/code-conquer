@@ -68,4 +68,15 @@ public class PlayerService {
         sessionService.tryStartIfAllReady(sessionId);
         return saved;
     }
+
+    public void removePlayer(String sessionId, String playerId) {
+        Player p = playerRepository.findById(playerId)
+                .orElseThrow(() -> new IllegalArgumentException("player not found"));
+        if (p.getSessionId() == null || !p.getSessionId().equals(sessionId)) {
+            throw new IllegalArgumentException("player not in session");
+        }
+        int leavingOrder = p.getTurnOrder();
+        playerRepository.delete(p);
+        sessionService.handlePlayerLeft(sessionId, leavingOrder);
+    }
 }

@@ -18,6 +18,7 @@ public class GameSessionService {
 
     public static final String TURN_IDLE = "IDLE";
     public static final String TURN_IN_CHALLENGE = "IN_CHALLENGE";
+    public static final String TURN_AWAITING_CONFIRM = "AWAITING_CONFIRM";
 
     private final GameSessionRepository sessionRepository;
     private final PlayerRepository playerRepository;
@@ -123,6 +124,67 @@ public class GameSessionService {
         s.setTurnStatus(TURN_IDLE);
         s.setActiveChallengeId(null);
         save(s);
+    }
+
+    /**
+     * Remove a player and keep turn state consistent.
+     *
+     * If the leaving player was currently up, we unlock any in-progress phase and
+     * advance to the next available player.
+     */
+    public void handlePlayerLeft(String sessionId, int leavingTurnOrder) {
+        Optional<GameSession> opt = findById(sessionId);
+        if (opt.isEmpty()) return;
+
+        GameSession s = opt.get();
+        if (!s.isStarted()) {
+            // Lobby phase: just keep orders clean.
+            normalizeTurnOrders(sessionId);
+            return;
+        }
+
+        normalizeTurnOrders(sessionId);
+
+        if (leavingTurnOrder > 0 && leavingTurnOrder == s.getCurrentTurnOrder()) {
+            // Current player left mid-turn: unlock and move on.
+            s.setTurnStatus(TURN_IDLE);
+            s.setActiveChallengeId(null);
+            save(s);
+            advanceTurn(sessionId);
+        } else {
+            // Not current: ensure currentTurnOrder still maps into 1..n after normalization.
+            List<Player> players = playerRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
+            int n = players.size();
+            if (n <= 0) return;
+            int cur = s.getCurrentTurnOrder();
+            if (cur < 1 || cur > n) {
+                s.setCurrentTurnOrder(1);
+                save(s);
+            }
+        }
+    }
+
+    /**
+     * Confirms the end-of-turn handover after a score has been saved.
+     * Only the current player may confirm.
+     */
+    public void confirmTurnHandover(String sessionId, String playerId) {
+        if (sessionId == null || sessionId.isBlank()) throw new IllegalArgumentException("sessionId required");
+        if (playerId == null || playerId.isBlank()) throw new IllegalArgumentException("playerId required");
+
+        GameSession s = findById(sessionId).orElseThrow(() -> new IllegalArgumentException("Session not found"));
+        if (!s.isStarted()) throw new IllegalArgumentException("Session not started");
+        if (!TURN_AWAITING_CONFIRM.equals(s.getTurnStatus())) throw new IllegalArgumentException("No handover pending");
+
+        normalizeTurnOrders(sessionId);
+        Player p = playerRepository.findById(playerId).orElseThrow(() -> new IllegalArgumentException("Player not found"));
+        if (p.getSessionId() == null || !p.getSessionId().equals(sessionId)) {
+            throw new IllegalArgumentException("Player not found for session");
+        }
+        if (p.getTurnOrder() != s.getCurrentTurnOrder()) throw new IllegalArgumentException("Not your turn");
+
+        // Advance to next player and reset phase.
+        advanceTurn(sessionId);
     }
 
     private String generateUniqueCode() {

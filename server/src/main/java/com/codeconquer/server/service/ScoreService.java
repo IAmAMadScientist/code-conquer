@@ -61,11 +61,11 @@ public class ScoreService {
 
         Score saved = scoreRepository.save(score);
 
-        // Unlock turn and advance
-        s.setTurnStatus(GameSessionService.TURN_IDLE);
+        // Unlock challenge but DO NOT advance the turn yet.
+        // We wait for a "hand-over" confirmation so players can pass the phone.
+        s.setTurnStatus(GameSessionService.TURN_AWAITING_CONFIRM);
         s.setActiveChallengeId(null);
         sessionService.save(s);
-        sessionService.advanceTurn(score.getSessionId());
 
         return saved;
     }

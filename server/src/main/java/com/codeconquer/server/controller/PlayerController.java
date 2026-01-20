@@ -49,4 +49,17 @@ public class PlayerController {
             return ResponseEntity.badRequest().build();
         }
     }
+
+    /**
+     * Leaves a match (removes the player from the session).
+     */
+    @DeleteMapping("/{sessionId}/players/{playerId}")
+    public ResponseEntity<Void> leave(@PathVariable String sessionId, @PathVariable String playerId) {
+        try {
+            playerService.removePlayer(sessionId, playerId);
+            return ResponseEntity.ok().build();
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
 }

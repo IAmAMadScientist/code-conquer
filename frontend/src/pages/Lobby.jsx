@@ -4,8 +4,8 @@ import AppShell from "../components/AppShell";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import QRCode from "react-qr-code";
-import { getSession } from "../lib/session";
-import { getPlayer, fetchLobby, setReady } from "../lib/player";
+import { getSession, clearSession } from "../lib/session";
+import { getPlayer, fetchLobby, setReady, leaveSession, clearPlayer } from "../lib/player";
 
 export default function Lobby() {
   const nav = useNavigate();
@@ -57,6 +57,15 @@ export default function Lobby() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function leaveLobby() {
+    if (session?.sessionId && me?.playerId) {
+      try { await leaveSession(session.sessionId, me.playerId); } catch {}
+    }
+    clearPlayer();
+    clearSession();
+    nav("/");
   }
 
   if (!canView) {
@@ -145,7 +154,7 @@ export default function Lobby() {
           <Button variant={meRow?.ready ? "secondary" : "primary"} onClick={toggleReady} disabled={busy}>
             {meRow?.ready ? "Unready" : "Ready"}
           </Button>
-          <Button variant="ghost" onClick={() => nav("/leaderboard")}>Leaderboard</Button>
+          <Button variant="ghost" onClick={leaveLobby}>Leave lobby</Button>
         </div>
 
         <div className="muted" style={{ fontSize: 13, lineHeight: 1.5 }}>
