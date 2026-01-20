@@ -52,7 +52,9 @@ public class ChallengeController {
         }
 
         // Phase enforcement: only one active challenge per turn
-        if (!GameSessionService.TURN_IDLE.equals(s.getTurnStatus())) {
+        // Be defensive: older rows could have null in turnStatus.
+        String status = s.getTurnStatus();
+        if (status != null && !GameSessionService.TURN_IDLE.equals(status)) {
             return ResponseEntity.status(423).build(); // locked / in challenge
         }
 
