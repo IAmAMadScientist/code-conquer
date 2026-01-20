@@ -14,7 +14,6 @@ import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Picks a minigame ("challenge") for a given difficulty and optional category.
- *
  * Current implementation is in-memory and deterministic enough for an MVP.
  * Later you can replace this with DB-driven content, weights, cooldowns,
  * "don't repeat last game" etc.

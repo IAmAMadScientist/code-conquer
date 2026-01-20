@@ -38,6 +38,10 @@ public class GameSessionService {
         s.setCurrentTurnOrder(0);
         s.setTurnStatus(TURN_IDLE);
         s.setActiveChallengeId(null);
+        s.setLastEventSeq(0);
+        s.setLastEventType(null);
+        s.setLastEventMessage(null);
+        s.setLastEventAt(null);
         return sessionRepository.save(s);
     }
 
@@ -132,7 +136,7 @@ public class GameSessionService {
      * If the leaving player was currently up, we unlock any in-progress phase and
      * advance to the next available player.
      */
-    public void handlePlayerLeft(String sessionId, int leavingTurnOrder) {
+    public void handlePlayerLeft(String sessionId, int leavingTurnOrder, String leavingName, String leavingIcon) {
         Optional<GameSession> opt = findById(sessionId);
         if (opt.isEmpty()) return;
 
@@ -140,6 +144,7 @@ public class GameSessionService {
         if (!s.isStarted()) {
             // Lobby phase: just keep orders clean.
             normalizeTurnOrders(sessionId);
+            publishEvent(s, "PLAYER_LEFT", formatLeftMessage(leavingName, leavingIcon));
             return;
         }
 
@@ -149,7 +154,7 @@ public class GameSessionService {
             // Current player left mid-turn: unlock and move on.
             s.setTurnStatus(TURN_IDLE);
             s.setActiveChallengeId(null);
-            save(s);
+            publishEvent(s, "PLAYER_LEFT", formatLeftMessage(leavingName, leavingIcon));
             advanceTurn(sessionId);
         } else {
             // Not current: ensure currentTurnOrder still maps into 1..n after normalization.
@@ -159,9 +164,26 @@ public class GameSessionService {
             int cur = s.getCurrentTurnOrder();
             if (cur < 1 || cur > n) {
                 s.setCurrentTurnOrder(1);
-                save(s);
+                publishEvent(s, "PLAYER_LEFT", formatLeftMessage(leavingName, leavingIcon));
+            } else {
+                publishEvent(s, "PLAYER_LEFT", formatLeftMessage(leavingName, leavingIcon));
             }
         }
+    }
+
+    private void publishEvent(GameSession s, String type, String message) {
+        if (s == null) return;
+        s.setLastEventSeq(s.getLastEventSeq() + 1);
+        s.setLastEventType(type);
+        s.setLastEventMessage(message);
+        s.setLastEventAt(Instant.now());
+        save(s);
+    }
+
+    private String formatLeftMessage(String name, String icon) {
+        String nm = (name == null || name.isBlank()) ? "Player" : name.trim();
+        String ic = (icon == null || icon.isBlank()) ? "🙂" : icon.trim();
+        return ic + " " + nm + " hat verlassen.";
     }
 
     /**

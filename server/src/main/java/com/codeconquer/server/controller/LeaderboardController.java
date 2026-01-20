@@ -1,6 +1,6 @@
 package com.codeconquer.server.controller;
 
-import com.codeconquer.server.dto.LeaderboardEntry;
+import com.codeconquer.server.dto.PlayerLeaderboardEntry;
 import com.codeconquer.server.service.LeaderboardService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -18,7 +18,7 @@ public class LeaderboardController {
     }
 
     @GetMapping
-    public ResponseEntity<List<LeaderboardEntry>> getLeaderboard(@RequestParam String sessionId) {
+    public ResponseEntity<List<PlayerLeaderboardEntry>> getLeaderboard(@RequestParam String sessionId) {
         if (sessionId == null || sessionId.isBlank()) {
             return ResponseEntity.badRequest().build();
         }

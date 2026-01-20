@@ -26,5 +26,9 @@ public class Player {
     // Turn order within session (1..n)
     private int turnOrder;
 
+    // Running total score for this match.
+    // This is the single source of truth for the leaderboard.
+    private int totalScore;
+
     private Instant createdAt;
 }

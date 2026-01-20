@@ -31,7 +31,7 @@ export default function Leaderboard() {
         const qs = new URLSearchParams();
         if (session?.sessionId) qs.set("sessionId", session.sessionId);
 
-        const res = await fetch(`${API_BASE}/scores/top?${qs.toString()}`);
+        const res = await fetch(`${API_BASE}/leaderboard?${qs.toString()}`);
         const data = await res.json();
         if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
 
@@ -85,7 +85,7 @@ export default function Leaderboard() {
           <div style={{ display: "grid", gap: 8 }}>
             {rows.map((r, idx) => (
               <div
-                key={r.id || idx}
+                key={r.playerId || idx}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -96,15 +96,18 @@ export default function Leaderboard() {
                   background: "rgba(15,23,42,0.25)",
                 }}
               >
-                <div style={{ display: "grid", gap: 2 }}>
-                  <div style={{ fontWeight: 750 }}>
-                    #{idx + 1} {r.playerName || "Player"}
-                  </div>
-                  <div className="muted" style={{ fontSize: 12 }}>
-                    {r.difficulty} • {r.category} • {fmtMs(r.timeMs)} • errors: {r.errors ?? 0}
+                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <div style={{ fontSize: 20, width: 26, textAlign: "center" }}>{r.icon || "🙂"}</div>
+                  <div style={{ display: "grid", gap: 2 }}>
+                    <div style={{ fontWeight: 750 }}>
+                      #{idx + 1} {r.playerName || "Player"}
+                    </div>
+                    <div className="muted" style={{ fontSize: 12 }}>
+                      Total score
+                    </div>
                   </div>
                 </div>
-                <Badge variant="secondary">{r.points}</Badge>
+                <Badge variant="secondary">{r.totalScore ?? 0}</Badge>
               </div>
             ))}
           </div>

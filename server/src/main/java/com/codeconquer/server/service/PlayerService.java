@@ -44,6 +44,7 @@ public class PlayerService {
         p.setName(trimmed);
         p.setIcon(icon == null || icon.isBlank() ? "🙂" : icon.trim());
         p.setReady(false);
+        p.setTotalScore(0);
 
         int nextOrder = playerRepository.getMaxTurnOrder(sessionId) + 1;
         p.setTurnOrder(nextOrder);
@@ -69,6 +70,19 @@ public class PlayerService {
         return saved;
     }
 
+    /**
+     * Adds points to a player's running total score for this session.
+     */
+    public Player addToTotalScore(String sessionId, String playerId, int deltaPoints) {
+        Player p = playerRepository.findById(playerId).orElseThrow(() -> new IllegalArgumentException("player not found"));
+        if (p.getSessionId() == null || !p.getSessionId().equals(sessionId)) {
+            throw new IllegalArgumentException("player not in session");
+        }
+        int next = p.getTotalScore() + Math.max(0, deltaPoints);
+        p.setTotalScore(next);
+        return playerRepository.save(p);
+    }
+
     public void removePlayer(String sessionId, String playerId) {
         Player p = playerRepository.findById(playerId)
                 .orElseThrow(() -> new IllegalArgumentException("player not found"));
@@ -76,7 +90,9 @@ public class PlayerService {
             throw new IllegalArgumentException("player not in session");
         }
         int leavingOrder = p.getTurnOrder();
+        String leavingName = p.getName();
+        String leavingIcon = p.getIcon();
         playerRepository.delete(p);
-        sessionService.handlePlayerLeft(sessionId, leavingOrder);
+        sessionService.handlePlayerLeft(sessionId, leavingOrder, leavingName, leavingIcon);
     }
 }

@@ -3,8 +3,8 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import AppShell from "../components/AppShell";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
-import { getSession } from "../lib/session";
-import { getPlayer, fetchLobby } from "../lib/player";
+import { getSession, clearSession } from "../lib/session";
+import { getPlayer, fetchLobby, leaveSession, clearPlayer } from "../lib/player";
 
 export default function Play() {
   const nav = useNavigate();
@@ -13,6 +13,7 @@ export default function Play() {
   const me = useMemo(() => getPlayer(), []);
 
   const [state, setState] = useState(null);
+  const [eventMsg, setEventMsg] = useState(null);
   const [err, setErr] = useState(null);
   const [summary, setSummary] = useState(loc.state?.turnSummary || null);
 
@@ -24,6 +25,17 @@ export default function Play() {
     try {
       const s = await fetchLobby(session.sessionId);
       setState(s);
+
+      // Lightweight event display (e.g. player left)
+      if (s?.lastEventSeq && s?.lastEventMessage) {
+        const key = `cc_evt_${session.sessionId}`;
+        const lastSeen = Number(sessionStorage.getItem(key) || "0");
+        if (s.lastEventSeq > lastSeen) {
+          sessionStorage.setItem(key, String(s.lastEventSeq));
+          setEventMsg(s.lastEventMessage);
+          setTimeout(() => setEventMsg(null), 4500);
+        }
+      }
     } catch (e) {
       setErr(e?.message || "Failed to load game state");
     }
@@ -46,6 +58,21 @@ useEffect(() => {
 
   function go(diff) {
     nav(`/challenge?difficulty=${encodeURIComponent(diff)}`);
+  }
+
+  async function leaveGame() {
+    const ok = window.confirm(
+      "Willst du das Spiel wirklich verlassen?\n\n" +
+      "Du verlässt das Match und musst beim nächsten QR-Join wieder Name + Icon auswählen."
+    );
+    if (!ok) return;
+
+    if (session?.sessionId && me?.playerId) {
+      try { await leaveSession(session.sessionId, me.playerId); } catch {}
+    }
+    clearPlayer();
+    clearSession();
+    nav("/");
   }
 
   if (!canView) {
@@ -87,6 +114,11 @@ useEffect(() => {
     >
       <div className="panel" style={{ display: "grid", gap: 12 }}>
         {err ? <div style={{ opacity: 0.9 }}>⚠️ {err}</div> : null}
+        {eventMsg ? (
+          <div className="panel" style={{ border: "1px solid rgba(148,163,184,0.22)" }}>
+            <div style={{ fontWeight: 800 }}>ℹ️ {eventMsg}</div>
+          </div>
+        ) : null}
 {summary ? (
   <div className="panel" style={{ border: "1px solid rgba(148,163,184,0.22)" }}>
     <div style={{ fontWeight: 800, marginBottom: 6 }}>
@@ -130,6 +162,7 @@ useEffect(() => {
           <Link to="/leaderboard">
             <Button variant="ghost">Leaderboard</Button>
           </Link>
+          <Button variant="ghost" onClick={leaveGame}>Leave game</Button>
         </div>
       </div>
     </AppShell>

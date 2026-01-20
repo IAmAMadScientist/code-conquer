@@ -14,4 +14,9 @@ public class LobbyState {
     private int currentTurnOrder;
     private String currentPlayerId;
     private List<LobbyPlayer> players;
+
+    // lightweight event channel for polling UIs
+    private long lastEventSeq;
+    private String lastEventType;
+    private String lastEventMessage;
 }

@@ -61,6 +61,9 @@ public class ScoreService {
 
         Score saved = scoreRepository.save(score);
 
+        // Update running total score for the player (used by leaderboard).
+        playerService.addToTotalScore(score.getSessionId(), score.getPlayerId(), score.getPoints());
+
         // Unlock challenge but DO NOT advance the turn yet.
         // We wait for a "hand-over" confirmation so players can pass the phone.
         s.setTurnStatus(GameSessionService.TURN_AWAITING_CONFIRM);

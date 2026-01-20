@@ -54,7 +54,10 @@ public class LobbyController {
                 s.isStarted(),
                 s.getCurrentTurnOrder(),
                 currentPlayerId,
-                lobbyPlayers
+                lobbyPlayers,
+                s.getLastEventSeq(),
+                s.getLastEventType(),
+                s.getLastEventMessage()
         ));
     }
 }

@@ -12,6 +12,8 @@ public interface PlayerRepository extends JpaRepository<Player, String> {
 
     List<Player> findBySessionIdOrderByCreatedAtAsc(String sessionId);
 
+    List<Player> findBySessionIdOrderByTotalScoreDescCreatedAtAsc(String sessionId);
+
     Optional<Player> findBySessionIdAndNameIgnoreCase(String sessionId, String name);
 
     @Query("SELECT COALESCE(MAX(p.turnOrder), 0) FROM Player p WHERE p.sessionId = :sessionId")

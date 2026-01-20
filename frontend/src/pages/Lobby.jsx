@@ -13,6 +13,7 @@ export default function Lobby() {
   const me = useMemo(() => getPlayer(), []);
 
   const [state, setState] = useState(null);
+  const [eventMsg, setEventMsg] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
 
@@ -25,6 +26,17 @@ export default function Lobby() {
     try {
       const s = await fetchLobby(session.sessionId);
       setState(s);
+
+      // Lightweight event display (e.g. player left)
+      if (s?.lastEventSeq && s?.lastEventMessage) {
+        const key = `cc_evt_${session.sessionId}`;
+        const lastSeen = Number(sessionStorage.getItem(key) || "0");
+        if (s.lastEventSeq > lastSeen) {
+          sessionStorage.setItem(key, String(s.lastEventSeq));
+          setEventMsg(s.lastEventMessage);
+          setTimeout(() => setEventMsg(null), 4500);
+        }
+      }
 
       // Once started, lobby is done -> go to play.
       if (s?.started) {
@@ -60,6 +72,11 @@ export default function Lobby() {
   }
 
   async function leaveLobby() {
+    const ok = window.confirm(
+      "Willst du das Spiel wirklich verlassen?\n\n" +
+      "Du verlässt das Match und musst beim nächsten QR-Join wieder Name + Icon auswählen."
+    );
+    if (!ok) return;
     if (session?.sessionId && me?.playerId) {
       try { await leaveSession(session.sessionId, me.playerId); } catch {}
     }
@@ -107,7 +124,11 @@ export default function Lobby() {
     >
       <div className="panel" style={{ display: "grid", gap: 12 }}>
         {err ? <div style={{ opacity: 0.9 }}>⚠️ {err}</div> : null}
-
+        {eventMsg ? (
+          <div className="panel" style={{ border: "1px solid rgba(148,163,184,0.22)" }}>
+            <div style={{ fontWeight: 800 }}>ℹ️ {eventMsg}</div>
+          </div>
+        ) : null}
         <div style={{ display: "grid", gap: 8, justifyItems: "center" }}>
           <div style={{ background: "white", padding: 10, borderRadius: 12 }}>
             <QRCode value={joinUrl} size={180} />

@@ -1,7 +1,8 @@
 package com.codeconquer.server.service;
 
-import com.codeconquer.server.dto.LeaderboardEntry;
-import com.codeconquer.server.repository.ScoreRepository;
+import com.codeconquer.server.dto.PlayerLeaderboardEntry;
+import com.codeconquer.server.model.Player;
+import com.codeconquer.server.repository.PlayerRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -9,13 +10,19 @@ import java.util.List;
 @Service
 public class LeaderboardService {
 
-    private final ScoreRepository scoreRepository;
+    private final PlayerRepository playerRepository;
 
-    public LeaderboardService(ScoreRepository scoreRepository) {
-        this.scoreRepository = scoreRepository;
+    public LeaderboardService(PlayerRepository playerRepository) {
+        this.playerRepository = playerRepository;
     }
 
-    public List<LeaderboardEntry> getLeaderboardForSession(String sessionId) {
-        return scoreRepository.getLeaderboardForSession(sessionId);
+    /**
+     * Leaderboard is based on each player's running total score within the session.
+     */
+    public List<PlayerLeaderboardEntry> getLeaderboardForSession(String sessionId) {
+        List<Player> players = playerRepository.findBySessionIdOrderByTotalScoreDescCreatedAtAsc(sessionId);
+        return players.stream()
+                .map(p -> new PlayerLeaderboardEntry(p.getId(), p.getName(), p.getIcon(), p.getTotalScore()))
+                .toList();
     }
 }

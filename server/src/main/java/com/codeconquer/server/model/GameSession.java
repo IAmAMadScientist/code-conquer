@@ -27,5 +27,12 @@ public class GameSession {
     // Set when turnStatus == IN_CHALLENGE
     private String activeChallengeId;
 
+    // Lightweight event channel for polling clients (no websockets needed).
+    // Increment lastEventSeq whenever something noteworthy happens (player left, etc.).
+    private long lastEventSeq;
+    private String lastEventType;
+    private String lastEventMessage;
+    private Instant lastEventAt;
+
     private Instant createdAt;
 }
