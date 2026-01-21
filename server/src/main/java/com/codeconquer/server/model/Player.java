@@ -43,5 +43,9 @@ public class Player {
     // For example, entering JAIL sets this to 1.
     private int skipTurns;
 
+    // If the player was sent to JAIL as a penalty (e.g. SPECIAL field),
+    // we remember the node they came from so we can return them after the skip.
+    private String jailReturnNodeId;
+
     private Instant createdAt;
 }

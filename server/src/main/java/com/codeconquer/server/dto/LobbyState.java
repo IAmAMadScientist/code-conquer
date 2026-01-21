@@ -14,6 +14,10 @@ public class LobbyState {
     private boolean turnOrderLocked;
     private int currentTurnOrder;
     private String currentPlayerId;
+    private String turnStatus;
+    private Integer lastDiceRoll;
+    private String pendingForkNodeId;
+    private Integer pendingRemainingSteps;
     private List<LobbyPlayer> players;
 
     // lightweight event channel for polling UIs

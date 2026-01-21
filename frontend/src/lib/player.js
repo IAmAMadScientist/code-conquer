@@ -83,3 +83,21 @@ export async function rollLobbyD20(sessionId, playerId) {
   const data = await parseJsonOrThrow(res);
   return data; // { roll }
 }
+
+export async function rollTurnD6(sessionId, playerId) {
+  const res = await fetch(
+    `${API_BASE}/turn/rollD6?sessionId=${encodeURIComponent(sessionId)}&playerId=${encodeURIComponent(playerId)}`,
+    { method: "POST" }
+  );
+  const data = await parseJsonOrThrow(res);
+  return data;
+}
+
+export async function chooseTurnPath(sessionId, playerId, toNodeId) {
+  const res = await fetch(
+    `${API_BASE}/turn/choosePath?sessionId=${encodeURIComponent(sessionId)}&playerId=${encodeURIComponent(playerId)}&toNodeId=${encodeURIComponent(toNodeId)}`,
+    { method: "POST" }
+  );
+  const data = await parseJsonOrThrow(res);
+  return data;
+}

@@ -23,6 +23,8 @@ public class GameSessionService {
     public static final String TURN_IDLE = "IDLE";
     public static final String TURN_IN_CHALLENGE = "IN_CHALLENGE";
     public static final String TURN_AWAITING_CONFIRM = "AWAITING_CONFIRM";
+    public static final String TURN_AWAITING_D6_ROLL = "AWAITING_D6_ROLL";
+    public static final String TURN_AWAITING_PATH_CHOICE = "AWAITING_PATH_CHOICE";
 
     private final GameSessionRepository sessionRepository;
     private final PlayerRepository playerRepository;
@@ -43,6 +45,9 @@ public class GameSessionService {
         s.setCurrentTurnOrder(0);
         s.setTurnStatus(TURN_IDLE);
         s.setActiveChallengeId(null);
+        s.setLastDiceRoll(null);
+        s.setPendingForkNodeId(null);
+        s.setPendingRemainingSteps(null);
         s.setLastEventSeq(0);
         s.setLastEventType(null);
         s.setLastEventMessage(null);
@@ -111,9 +116,15 @@ public class GameSessionService {
         s.setStarted(true);
         s.setTurnOrderLocked(true);
         s.setCurrentTurnOrder(1);
-        s.setTurnStatus(TURN_IDLE);
+        s.setTurnStatus(TURN_AWAITING_D6_ROLL);
         s.setActiveChallengeId(null);
+        s.setLastDiceRoll(null);
+        s.setPendingForkNodeId(null);
+        s.setPendingRemainingSteps(null);
         save(s);
+
+        // If the first player is supposed to skip (e.g. jailed), handle it immediately.
+        advanceTurnConsideringSkips(sessionId);
     }
 
     private boolean allHaveLobbyRoll(List<Player> players) {
@@ -194,9 +205,70 @@ public class GameSessionService {
         if (next > n) next = 1;
 
         s.setCurrentTurnOrder(next);
-        s.setTurnStatus(TURN_IDLE);
+        s.setTurnStatus(TURN_AWAITING_D6_ROLL);
         s.setActiveChallengeId(null);
+        s.setLastDiceRoll(null);
+        s.setPendingForkNodeId(null);
+        s.setPendingRemainingSteps(null);
         save(s);
+
+        advanceTurnConsideringSkips(sessionId);
+    }
+
+    /**
+     * If the current player has pending skipTurns, automatically skip them and advance.
+     * This keeps the game moving without needing an action from the skipped player.
+     */
+    public void advanceTurnConsideringSkips(String sessionId) {
+        Optional<GameSession> opt = findById(sessionId);
+        if (opt.isEmpty()) return;
+
+        GameSession s = opt.get();
+        if (!s.isStarted()) return;
+
+        normalizeTurnOrders(sessionId);
+        List<Player> players = playerRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
+        if (players.isEmpty()) return;
+
+        // Index by turnOrder for quick lookup.
+        Map<Integer, Player> byOrder = players.stream().collect(Collectors.toMap(Player::getTurnOrder, p -> p, (a, b) -> a));
+        int n = players.size();
+        int safety = n;
+
+        while (safety-- > 0) {
+            int curOrder = s.getCurrentTurnOrder();
+            if (curOrder < 1 || curOrder > n) curOrder = 1;
+            Player cur = byOrder.get(curOrder);
+            if (cur == null) break;
+
+            if (cur.getSkipTurns() > 0) {
+                cur.setSkipTurns(cur.getSkipTurns() - 1);
+                playerRepository.save(cur);
+                publishEvent(s, "TURN_SKIPPED", (cur.getIcon() == null || cur.getIcon().isBlank() ? "🙂" : cur.getIcon()) + " " + (cur.getName() == null || cur.getName().isBlank() ? "Player" : cur.getName()) + " setzt aus.");
+
+                int next = curOrder + 1;
+                if (next > n) next = 1;
+                s.setCurrentTurnOrder(next);
+                s.setTurnStatus(TURN_AWAITING_D6_ROLL);
+                s.setActiveChallengeId(null);
+                s.setLastDiceRoll(null);
+                s.setPendingForkNodeId(null);
+                s.setPendingRemainingSteps(null);
+                save(s);
+                continue;
+            }
+
+            // Current player is active and not skipping.
+            if (!TURN_AWAITING_D6_ROLL.equals(s.getTurnStatus())
+                    && !TURN_AWAITING_PATH_CHOICE.equals(s.getTurnStatus())
+                    && !TURN_IN_CHALLENGE.equals(s.getTurnStatus())
+                    && !TURN_AWAITING_CONFIRM.equals(s.getTurnStatus())
+                    && !TURN_IDLE.equals(s.getTurnStatus())) {
+                s.setTurnStatus(TURN_AWAITING_D6_ROLL);
+                save(s);
+            }
+            break;
+        }
     }
 
     /**
@@ -221,8 +293,11 @@ public class GameSessionService {
 
         if (leavingTurnOrder > 0 && leavingTurnOrder == s.getCurrentTurnOrder()) {
             // Current player left mid-turn: unlock and move on.
-            s.setTurnStatus(TURN_IDLE);
+            s.setTurnStatus(TURN_AWAITING_D6_ROLL);
             s.setActiveChallengeId(null);
+            s.setLastDiceRoll(null);
+            s.setPendingForkNodeId(null);
+            s.setPendingRemainingSteps(null);
             publishEvent(s, "PLAYER_LEFT", formatLeftMessage(leavingName, leavingIcon));
             advanceTurn(sessionId);
         } else {
