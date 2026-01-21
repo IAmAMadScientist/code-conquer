@@ -20,6 +20,7 @@ public class LobbyState {
     private Integer lastDiceRoll;
     private String pendingForkNodeId;
     private Integer pendingRemainingSteps;
+    private List<String> pendingForkOptions;
     private List<LobbyPlayer> players;
 
     // lightweight event channel for polling UIs

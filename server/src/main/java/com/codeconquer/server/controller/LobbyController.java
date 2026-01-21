@@ -66,6 +66,16 @@ public class LobbyController {
                 ))
                 .toList();
 
+        // If we're waiting at a fork, expose the available outgoing options so the UI can render buttons even after refresh.
+        List<String> pendingForkOptions = List.of();
+        if (GameSessionService.TURN_AWAITING_PATH_CHOICE.equals(s.getTurnStatus()) && s.getPendingForkNodeId() != null) {
+            try {
+                pendingForkOptions = boardGraphService.getBoard().outgoing(s.getPendingForkNodeId());
+            } catch (Exception ignored) {
+                pendingForkOptions = List.of();
+            }
+        }
+
         return ResponseEntity.ok(new LobbyState(
                 s.getId(),
                 s.getCode(),
@@ -79,6 +89,7 @@ public class LobbyController {
                 s.getLastDiceRoll(),
                 s.getPendingForkNodeId(),
                 s.getPendingRemainingSteps(),
+                pendingForkOptions,
                 lobbyPlayers,
                 s.getLastEventSeq(),
                 s.getLastEventType(),

@@ -40,22 +40,24 @@ export default function Play() {
         setPendingChoices(null);
       }
 
-      // Sync pending fork choices on refresh
+      // Sync pending fork choices on refresh/polling.
       if (s?.turnStatus === "AWAITING_PATH_CHOICE" && s?.pendingForkNodeId) {
-        // We don't know the options from lobby state alone, but the next action will call choosePath.
-        // Keep UI in a "choose" mode and show the fork node id.
-        if (!pendingChoices) {
-          setPendingChoices({ forkNodeId: s.pendingForkNodeId, remainingSteps: s.pendingRemainingSteps, options: null });
-        }
+        const opts = Array.isArray(s?.pendingForkOptions) ? s.pendingForkOptions : null;
+        setPendingChoices((prev) => {
+          // Keep existing options if we already have them, otherwise take from lobby payload.
+          if (prev && prev.forkNodeId === s.pendingForkNodeId) {
+            if ((!prev.options || prev.options.length === 0) && opts && opts.length) {
+              return { ...prev, remainingSteps: s.pendingRemainingSteps, options: opts };
+            }
+            return { ...prev, remainingSteps: s.pendingRemainingSteps };
+          }
+          return { forkNodeId: s.pendingForkNodeId, remainingSteps: s.pendingRemainingSteps, options: opts || [] };
+        });
       } else {
         setPendingChoices(null);
       }
 
-      // If we are in a fork choice state, expose options (only the current player can act).
-      if (s?.turnStatus === "AWAITING_PATH_CHOICE" && s?.pendingForkNodeId) {
-        // Options are not included in lobby payload; we keep them from the last API response.
-        // If user refreshes, they can roll again after we implement full option listing.
-      }
+      // Options are now included in lobby payload (pendingForkOptions) so refresh is safe.
 
       // Lightweight event display (e.g. player left)
       if (s?.lastEventSeq && s?.lastEventMessage) {
@@ -274,7 +276,7 @@ useEffect(() => {
                     </Button>
                   ))}
                   {!pendingChoices?.options?.length ? (
-                    <div className="muted">(No options loaded yet — roll again if needed)</div>
+                    <div className="muted">(Loading options…)</div>
                   ) : null}
                 </div>
               </div>
