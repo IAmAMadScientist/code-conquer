@@ -17,6 +17,12 @@ public class GameSession {
 
     private boolean started;
 
+    // Session lifecycle: LOBBY -> IN_PROGRESS -> FINISHED
+    private String status;
+
+    // Set when status == FINISHED
+    private String winnerPlayerId;
+
     // Once the lobby turn order has been finalized (or the game started),
     // prevent further lobby re-rolls.
     private boolean turnOrderLocked;

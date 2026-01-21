@@ -10,6 +10,8 @@ import java.util.List;
 public class LobbyState {
     private String sessionId;
     private String sessionCode;
+    private String sessionStatus;
+    private String winnerPlayerId;
     private boolean started;
     private boolean turnOrderLocked;
     private int currentTurnOrder;

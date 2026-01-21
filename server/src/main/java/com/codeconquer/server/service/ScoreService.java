@@ -41,6 +41,9 @@ public class ScoreService {
 
         // Enforce started + turn owner
         if (!s.isStarted()) throw new IllegalArgumentException("Session not started");
+        if (GameSessionService.SESSION_FINISHED.equals(s.getStatus())) {
+            throw new IllegalArgumentException("Session finished");
+        }
         if (s.getCurrentTurnOrder() <= 0) throw new IllegalArgumentException("Session turn not initialized");
         if (p.getTurnOrder() != s.getCurrentTurnOrder()) throw new IllegalArgumentException("Not your turn");
 
@@ -59,16 +62,27 @@ public class ScoreService {
         score.setPlayerName(p.getName());
         score.setCreatedAt(Instant.now());
 
+        // Phase 2D: fixed points per difficulty (easy 5 / medium 10 / hard 15).
+        // To keep the backend authoritative, normalize any positive score to the fixed base.
+        int expected = expectedBasePoints(score.getDifficulty());
+        if (score.getPoints() > 0 && expected > 0) {
+            score.setPoints(expected);
+        }
+
         Score saved = scoreRepository.save(score);
 
         // Update running total score for the player (used by leaderboard).
         playerService.addToTotalScore(score.getSessionId(), score.getPlayerId(), score.getPoints());
 
-        // Unlock challenge but DO NOT advance the turn yet.
-        // We wait for a "hand-over" confirmation so players can pass the phone.
-        s.setTurnStatus(GameSessionService.TURN_AWAITING_CONFIRM);
+        // Unlock challenge and advance the turn immediately.
+        // Your game uses "each player on their own phone", so there is no handover confirm.
+        s.setTurnStatus(GameSessionService.TURN_AWAITING_D6_ROLL);
         s.setActiveChallengeId(null);
         sessionService.save(s);
+
+        // Advance to next player and automatically consume any skipTurns.
+        sessionService.advanceTurn(score.getSessionId());
+        sessionService.advanceTurnConsideringSkips(score.getSessionId());
 
         return saved;
     }
@@ -91,5 +105,16 @@ public class ScoreService {
 
     public List<Score> getScoresForSessionAndPlayer(String sessionId, String playerName) {
         return scoreRepository.findBySessionIdAndPlayerNameOrderByIdAsc(sessionId, playerName);
+    }
+
+    private int expectedBasePoints(String difficulty) {
+        if (difficulty == null) return 0;
+        String d = difficulty.trim().toUpperCase();
+        return switch (d) {
+            case "EASY" -> 5;
+            case "MEDIUM" -> 10;
+            case "HARD" -> 15;
+            default -> 0;
+        };
     }
 }

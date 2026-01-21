@@ -20,6 +20,10 @@ import java.util.stream.Collectors;
 @Service
 public class GameSessionService {
 
+    public static final String SESSION_LOBBY = "LOBBY";
+    public static final String SESSION_IN_PROGRESS = "IN_PROGRESS";
+    public static final String SESSION_FINISHED = "FINISHED";
+
     public static final String TURN_IDLE = "IDLE";
     public static final String TURN_IN_CHALLENGE = "IN_CHALLENGE";
     public static final String TURN_AWAITING_CONFIRM = "AWAITING_CONFIRM";
@@ -41,6 +45,8 @@ public class GameSessionService {
         s.setCode(generateUniqueCode());
         s.setCreatedAt(Instant.now());
         s.setStarted(false);
+        s.setStatus(SESSION_LOBBY);
+        s.setWinnerPlayerId(null);
         s.setTurnOrderLocked(false);
         s.setCurrentTurnOrder(0);
         s.setTurnStatus(TURN_IDLE);
@@ -98,6 +104,7 @@ public class GameSessionService {
         if (opt.isEmpty()) return;
 
         GameSession s = opt.get();
+        if (SESSION_FINISHED.equals(s.getStatus())) return;
         if (s.isStarted()) return;
 
         List<Player> players = playerRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
@@ -114,6 +121,7 @@ public class GameSessionService {
         recomputeTurnOrderFromLobbyRoll(sessionId, players);
 
         s.setStarted(true);
+        s.setStatus(SESSION_IN_PROGRESS);
         s.setTurnOrderLocked(true);
         s.setCurrentTurnOrder(1);
         s.setTurnStatus(TURN_AWAITING_D6_ROLL);
@@ -191,6 +199,7 @@ public class GameSessionService {
         if (opt.isEmpty()) return;
 
         GameSession s = opt.get();
+        if (SESSION_FINISHED.equals(s.getStatus())) return;
         if (!s.isStarted()) return;
 
         normalizeTurnOrders(sessionId);
@@ -224,6 +233,7 @@ public class GameSessionService {
         if (opt.isEmpty()) return;
 
         GameSession s = opt.get();
+        if (SESSION_FINISHED.equals(s.getStatus())) return;
         if (!s.isStarted()) return;
 
         normalizeTurnOrders(sessionId);
@@ -242,6 +252,12 @@ public class GameSessionService {
             if (cur == null) break;
 
             if (cur.getSkipTurns() > 0) {
+                // If the player was teleported to JAIL as a penalty, return them to their original node
+                // after the skipped turn is consumed.
+                if (cur.getJailReturnNodeId() != null && !cur.getJailReturnNodeId().isBlank()) {
+                    cur.setPositionNodeId(cur.getJailReturnNodeId());
+                    cur.setJailReturnNodeId(null);
+                }
                 cur.setSkipTurns(cur.getSkipTurns() - 1);
                 playerRepository.save(cur);
                 publishEvent(s, "TURN_SKIPPED", (cur.getIcon() == null || cur.getIcon().isBlank() ? "🙂" : cur.getIcon()) + " " + (cur.getName() == null || cur.getName().isBlank() ? "Player" : cur.getName()) + " setzt aus.");
@@ -282,6 +298,10 @@ public class GameSessionService {
         if (opt.isEmpty()) return;
 
         GameSession s = opt.get();
+        if (SESSION_FINISHED.equals(s.getStatus())) {
+            publishEvent(s, "PLAYER_LEFT", formatLeftMessage(leavingName, leavingIcon));
+            return;
+        }
         if (!s.isStarted()) {
             // Lobby phase: just keep orders clean.
             normalizeTurnOrders(sessionId);
@@ -339,6 +359,7 @@ public class GameSessionService {
         if (playerId == null || playerId.isBlank()) throw new IllegalArgumentException("playerId required");
 
         GameSession s = findById(sessionId).orElseThrow(() -> new IllegalArgumentException("Session not found"));
+        if (SESSION_FINISHED.equals(s.getStatus())) throw new IllegalArgumentException("Session finished");
         if (!s.isStarted()) throw new IllegalArgumentException("Session not started");
         if (!TURN_AWAITING_CONFIRM.equals(s.getTurnStatus())) throw new IllegalArgumentException("No handover pending");
 
@@ -351,6 +372,56 @@ public class GameSessionService {
 
         // Advance to next player and reset phase.
         advanceTurn(sessionId);
+    }
+
+    /**
+     * Marks the session as finished and records the winner.
+     * Further turn/challenge actions should be blocked once finished.
+     */
+    public void finishSession(String sessionId, String winnerPlayerId, String winnerName, String winnerIcon) {
+        if (sessionId == null || sessionId.isBlank()) throw new IllegalArgumentException("sessionId required");
+        GameSession s = findById(sessionId).orElseThrow(() -> new IllegalArgumentException("Session not found"));
+        if (SESSION_FINISHED.equals(s.getStatus())) return;
+
+        s.setStatus(SESSION_FINISHED);
+        s.setWinnerPlayerId(winnerPlayerId);
+        s.setTurnStatus(TURN_IDLE);
+        s.setActiveChallengeId(null);
+        s.setPendingForkNodeId(null);
+        s.setPendingRemainingSteps(null);
+        s.setLastDiceRoll(null);
+
+        String nm = (winnerName == null || winnerName.isBlank()) ? "Player" : winnerName.trim();
+        String ic = (winnerIcon == null || winnerIcon.isBlank()) ? "🏁" : winnerIcon.trim();
+        publishEvent(s, "GAME_FINISHED", ic + " " + nm + " hat das Spiel gewonnen! 🏁");
+        save(s);
+    }
+
+    /**
+     * Marks a session as finished and sets the winner.
+     * The game remains readable (leaderboard etc.), but no further turns/actions are allowed.
+     */
+    public void finishSession(String sessionId, String winnerPlayerId) {
+        if (sessionId == null || sessionId.isBlank()) throw new IllegalArgumentException("sessionId required");
+        if (winnerPlayerId == null || winnerPlayerId.isBlank()) throw new IllegalArgumentException("winnerPlayerId required");
+
+        GameSession s = findById(sessionId).orElseThrow(() -> new IllegalArgumentException("Session not found"));
+        if (SESSION_FINISHED.equals(s.getStatus())) return;
+
+        s.setStatus(SESSION_FINISHED);
+        s.setWinnerPlayerId(winnerPlayerId);
+        s.setTurnStatus(TURN_IDLE);
+        s.setActiveChallengeId(null);
+        s.setPendingForkNodeId(null);
+        s.setPendingRemainingSteps(null);
+        s.setLastDiceRoll(null);
+
+        // Publish a friendly win message.
+        Player winner = playerRepository.findById(winnerPlayerId).orElse(null);
+        String icon = winner == null ? "🏁" : (winner.getIcon() == null || winner.getIcon().isBlank() ? "🙂" : winner.getIcon());
+        String name = winner == null ? "Player" : (winner.getName() == null || winner.getName().isBlank() ? "Player" : winner.getName());
+        publishEvent(s, "GAME_FINISHED", "🏁 " + icon + " " + name + " hat gewonnen!");
+        save(s);
     }
 
     private String generateUniqueCode() {

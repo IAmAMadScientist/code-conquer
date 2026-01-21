@@ -4,7 +4,7 @@ import AppShell from "../components/AppShell";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { getSession, clearSession } from "../lib/session";
-import { getPlayer, fetchLobby, leaveSession, clearPlayer, rollTurnD6, chooseTurnPath } from "../lib/player";
+import { getPlayer, fetchLobby, leaveSession, clearPlayer, rollTurnD6, chooseTurnPath, startTurnChallenge } from "../lib/player";
 import D6Die from "../components/D6Die";
 
 export default function Play() {
@@ -28,6 +28,12 @@ export default function Play() {
     try {
       const s = await fetchLobby(session.sessionId);
       setState(s);
+
+      // If the match is finished, go to endscreen.
+      if (s?.sessionStatus === "FINISHED") {
+        nav("/end", { replace: true });
+        return;
+      }
 
       // If the session is no longer waiting for a path choice, clear any stale local UI.
       if (s?.turnStatus !== "AWAITING_PATH_CHOICE") {
@@ -81,8 +87,15 @@ useEffect(() => {
 }, [summary]);
 
 
-  function go(diff) {
-    nav(`/challenge?difficulty=${encodeURIComponent(diff)}`);
+  async function doStartChallenge() {
+    if (!session?.sessionId || !me?.playerId) return;
+    setErr(null);
+    try {
+      const ch = await startTurnChallenge(session.sessionId, me.playerId);
+      nav(ch.route, { state: { challenge: ch } });
+    } catch (e) {
+      setErr(e?.message || "Failed to start challenge");
+    }
   }
 
   async function doRollD6() {
@@ -166,12 +179,14 @@ useEffect(() => {
   const isMyTurn = !!(state?.started && state?.currentPlayerId && state.currentPlayerId === me.playerId);
   const waitingForDice = state?.turnStatus === "AWAITING_D6_ROLL";
   const waitingForPath = state?.turnStatus === "AWAITING_PATH_CHOICE";
-  const canChooseDifficulty = isMyTurn && state?.turnStatus === "IDLE";
+  const canStartChallenge = isMyTurn && state?.turnStatus === "IDLE";
+  const myFieldType = meState?.positionType || null;
+  const hasChallengeOnField = myFieldType === "EASY" || myFieldType === "MEDIUM" || myFieldType === "HARD";
 
   return (
     <AppShell
-      title="Difficulty"
-      subtitle="Only the current player can choose."
+      title="Play"
+      subtitle="Roll the D6 to move. Difficulty comes from the board."
       headerBadges={
         <>
           {session?.sessionCode ? <Badge variant="secondary">Match: {session.sessionCode}</Badge> : null}
@@ -265,16 +280,30 @@ useEffect(() => {
               </div>
             ) : null}
 
-            <div className="muted">Choose difficulty:</div>
-            {!canChooseDifficulty ? (
+            <div className="muted">Challenge:</div>
+            {myFieldType ? (
+              <div className="muted" style={{ fontSize: 13 }}>
+                Current field: <strong>{myFieldType}</strong>
+              </div>
+            ) : null}
+            {!canStartChallenge ? (
               <div className="muted" style={{ fontSize: 13 }}>
                 {waitingForDice ? "Roll the D6 first." : waitingForPath ? "Finish the fork choice first." : ""}
               </div>
             ) : null}
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <Button variant="primary" onClick={() => go("EASY")} disabled={!canChooseDifficulty}>Easy</Button>
-              <Button variant="secondary" onClick={() => go("MEDIUM")} disabled={!canChooseDifficulty}>Medium</Button>
-              <Button variant="secondary" onClick={() => go("HARD")} disabled={!canChooseDifficulty}>Hard</Button>
+              <Button
+                variant="primary"
+                onClick={doStartChallenge}
+                disabled={!canStartChallenge || !hasChallengeOnField}
+              >
+                Start challenge
+              </Button>
+              {canStartChallenge && !hasChallengeOnField ? (
+                <div className="muted" style={{ alignSelf: "center", fontSize: 13 }}>
+                  No challenge on this field.
+                </div>
+              ) : null}
             </div>
           </>
         )}

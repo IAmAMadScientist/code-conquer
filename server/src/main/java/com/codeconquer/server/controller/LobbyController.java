@@ -5,6 +5,7 @@ import com.codeconquer.server.dto.LobbyState;
 import com.codeconquer.server.model.GameSession;
 import com.codeconquer.server.model.Player;
 import com.codeconquer.server.service.GameSessionService;
+import com.codeconquer.server.service.BoardGraphService;
 import com.codeconquer.server.service.PlayerService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -21,10 +22,12 @@ public class LobbyController {
 
     private final GameSessionService sessionService;
     private final PlayerService playerService;
+    private final BoardGraphService boardGraphService;
 
-    public LobbyController(GameSessionService sessionService, PlayerService playerService) {
+    public LobbyController(GameSessionService sessionService, PlayerService playerService, BoardGraphService boardGraphService) {
         this.sessionService = sessionService;
         this.playerService = playerService;
+        this.boardGraphService = boardGraphService;
     }
 
     @GetMapping("/{sessionId}/lobby")
@@ -58,13 +61,16 @@ public class LobbyController {
                         p.getTurnOrder(),
                         p.getLobbyRoll(),
                         tiedIds.contains(p.getId()),
-                        p.getPositionNodeId()
+                        p.getPositionNodeId(),
+                        p.getPositionNodeId() == null ? null : boardGraphService.getBoard().getType(p.getPositionNodeId()).name()
                 ))
                 .toList();
 
         return ResponseEntity.ok(new LobbyState(
                 s.getId(),
                 s.getCode(),
+                s.getStatus(),
+                s.getWinnerPlayerId(),
                 s.isStarted(),
                 s.isTurnOrderLocked(),
                 s.getCurrentTurnOrder(),

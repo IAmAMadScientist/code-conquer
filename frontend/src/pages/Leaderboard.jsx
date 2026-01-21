@@ -62,7 +62,7 @@ export default function Leaderboard() {
         <div className="panel">
           <div style={{ fontSize: 16, fontWeight: 650 }}>Back to game</div>
           <div className="muted" style={{ fontSize: 14, marginTop: 10, lineHeight: 1.5 }}>
-            Use <strong>Back to Difficulty</strong> to continue. Lobby is only for the start.
+            Use <strong>Back to game</strong> to continue.
           </div>
         </div>
       }
@@ -70,7 +70,7 @@ export default function Leaderboard() {
       <div className="panel" style={{ display: "grid", gap: 12 }}>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
           <Link to="/play">
-            <Button variant="primary">Back to Difficulty</Button>
+            <Button variant="primary">Back to game</Button>
           </Link>
         </div>
 

@@ -21,8 +21,8 @@ async function parseJsonOrThrow(res) {
 
 /**
  * Auto-saves the score when the game ends (won === true/false),
- * then redirects to /turn-summary. Backend advances the turn only after the
- * handover is confirmed (phone pass prompt).
+ * then redirects back to /play. The backend immediately advances the turn
+ * (your design: everyone uses their own phone).
  */
 export default function ResultSubmitPanel({
   category,
@@ -88,7 +88,7 @@ export default function ResultSubmitPanel({
 
       setSaved(true);
 
-      nav("/turn-summary", { replace: true });
+      nav("/play", { replace: true, state: { turnSummary: { saved: true } } });
     } catch (e) {
       // If save fails (e.g. not your turn, token mismatch), allow retry by leaving submittedRef true?
       // We keep it true to avoid spamming; user should go back to /play.

@@ -21,6 +21,9 @@ public class ChallengeDescriptor {
     private Category category;
     private Difficulty difficulty;
 
+    // Fixed base points for this difficulty (Phase 2D). Frontend may use this for display.
+    private Integer basePoints;
+
     // Frontend route to open (e.g. "/stackmaze")
     private String route;
 
@@ -48,6 +51,9 @@ public class ChallengeDescriptor {
 
     public Difficulty getDifficulty() { return difficulty; }
     public void setDifficulty(Difficulty difficulty) { this.difficulty = difficulty; }
+
+    public Integer getBasePoints() { return basePoints; }
+    public void setBasePoints(Integer basePoints) { this.basePoints = basePoints; }
 
     public String getRoute() { return route; }
     public void setRoute(String route) { this.route = route; }

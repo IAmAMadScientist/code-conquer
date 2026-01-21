@@ -101,3 +101,14 @@ export async function chooseTurnPath(sessionId, playerId, toNodeId) {
   const data = await parseJsonOrThrow(res);
   return data;
 }
+
+// Board-driven challenge selection (Phase 2D)
+export async function startTurnChallenge(sessionId, playerId, category) {
+  const qs = new URLSearchParams();
+  qs.set("sessionId", sessionId);
+  qs.set("playerId", playerId);
+  if (category) qs.set("category", String(category).toUpperCase());
+  const res = await fetch(`${API_BASE}/challenges/forTurn?${qs.toString()}`);
+  const data = await parseJsonOrThrow(res);
+  return data;
+}

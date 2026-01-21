@@ -29,6 +29,11 @@ export default function Lobby() {
       const s = await fetchLobby(session.sessionId);
       setState(s);
 
+      if (s?.sessionStatus === "FINISHED") {
+        nav("/end", { replace: true });
+        return;
+      }
+
       // Lightweight event display (e.g. player left)
       if (s?.lastEventSeq && s?.lastEventMessage) {
         const key = `cc_evt_${session.sessionId}`;

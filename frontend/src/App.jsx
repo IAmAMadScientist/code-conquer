@@ -11,6 +11,7 @@ import Join from "./pages/Join";
 import Play from "./pages/Play";
 import Lobby from "./pages/Lobby";
 import TurnSummary from "./pages/TurnSummary";
+import Endscreen from "./pages/Endscreen";
 import StackMazePage from "./pages/StackMazePage";
 import GraphPathfinderPage from "./pages/GraphPathfinderPage";
 import BSTInsertPage from "./pages/BSTInsertPage";
@@ -66,6 +67,7 @@ export default function App() {
         <Route path="/play" element={<Play />} />
         <Route path="/lobby" element={<Lobby />} />
         <Route path="/turn-summary" element={<TurnSummary />} />
+        <Route path="/end" element={<Endscreen />} />
         <Route path="/leaderboard" element={<Leaderboard />} />
         <Route path="/stackmaze" element={<StackMazePage />} />
         <Route path="/graphpath" element={<GraphPathfinderPage />} />

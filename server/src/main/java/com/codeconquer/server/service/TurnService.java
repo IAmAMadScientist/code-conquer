@@ -44,6 +44,9 @@ public class TurnService {
         GameSession s = requireSession(sessionId);
         Player p = requirePlayer(playerId, sessionId);
         if (!s.isStarted()) throw new IllegalArgumentException("Session not started");
+        if (GameSessionService.SESSION_FINISHED.equals(s.getStatus())) {
+            throw new IllegalArgumentException("Session finished");
+        }
 
         // Auto-skip if needed (jail mechanic)
         sessionService.advanceTurnConsideringSkips(sessionId);
@@ -86,6 +89,9 @@ public class TurnService {
         GameSession s = requireSession(sessionId);
         Player p = requirePlayer(playerId, sessionId);
         if (!s.isStarted()) throw new IllegalArgumentException("Session not started");
+        if (GameSessionService.SESSION_FINISHED.equals(s.getStatus())) {
+            throw new IllegalArgumentException("Session finished");
+        }
 
         // Auto-skip if needed
         sessionService.advanceTurnConsideringSkips(sessionId);
@@ -113,6 +119,21 @@ public class TurnService {
 
         // Apply immediate landing effects for the chosen node before continuing.
         BoardNodeType landed = board.getType(toNodeId);
+        if (landed == BoardNodeType.SPECIAL) {
+            // SPECIAL: send player to JAIL for one turn, then return to this node.
+            sendToJailForOneTurn(p, toNodeId);
+            // Clear fork state and end turn immediately.
+            s.setPendingForkNodeId(null);
+            s.setPendingRemainingSteps(null);
+            s.setTurnStatus(GameSessionService.TURN_AWAITING_D6_ROLL);
+            sessionRepository.save(s);
+            playerRepository.save(p);
+
+            sessionService.advanceTurn(sessionId);
+            sessionService.advanceTurnConsideringSkips(sessionId);
+            Integer roll = s.getLastDiceRoll();
+            return responseFor(sessionId, playerId, roll, p, s, new MoveResult(), "SPECIAL -> JAIL");
+        }
         if (landed == BoardNodeType.JAIL) {
             p.setSkipTurns(1);
             // Clear fork state and end turn immediately.
@@ -128,10 +149,9 @@ public class TurnService {
             return responseFor(sessionId, playerId, roll, p, s, new MoveResult(), "Landed on JAIL");
         }
         if (landed == BoardNodeType.FINISH) {
-            // Phase 2C will handle FINISH, but we stop movement now.
-            s.setPendingForkNodeId(null);
-            s.setPendingRemainingSteps(null);
-            s.setTurnStatus(GameSessionService.TURN_IDLE);
+            // Finish: mark session finished and announce winner.
+            sessionService.finishSession(sessionId, playerId);
+            s = requireSession(sessionId);
             sessionRepository.save(s);
             playerRepository.save(p);
             Integer roll = s.getLastDiceRoll();
@@ -207,19 +227,38 @@ public class TurnService {
 
             // Landing effects
             BoardNodeType landedType = board.getType(next);
+            if (landedType == BoardNodeType.SPECIAL) {
+                // SPECIAL: send player to JAIL for one turn, then return to this node.
+                sendToJailForOneTurn(p, next);
+                mr.turnEnded = true;
+                return mr;
+            }
             if (landedType == BoardNodeType.JAIL) {
                 p.setSkipTurns(1);
                 mr.turnEnded = true;
                 return mr;
             }
             if (landedType == BoardNodeType.FINISH) {
-                // End game is Phase 2C, but stop movement here.
-                remaining = 0;
-                break;
+                // Finish game immediately.
+                sessionService.finishSession(s.getId(), p.getId());
+                mr.turnEnded = true;
+                return mr;
             }
         }
         mr.awaitingChoice = false;
         return mr;
+    }
+
+    private void sendToJailForOneTurn(Player p, String returnNodeId) {
+        String jailId = boardService.getJailNodeId();
+        if (jailId == null || jailId.isBlank()) {
+            // If no jail node is defined, fall back to a normal skip without teleport.
+            p.setSkipTurns(1);
+            return;
+        }
+        p.setJailReturnNodeId(returnNodeId);
+        p.setPositionNodeId(jailId);
+        p.setSkipTurns(1);
     }
 
     private TurnMoveResponse responseFor(String sessionId, String playerId, Integer roll, Player p, GameSession s, MoveResult mr, String msg) {
