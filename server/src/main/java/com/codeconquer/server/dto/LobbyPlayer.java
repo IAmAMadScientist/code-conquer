@@ -13,4 +13,5 @@ public class LobbyPlayer {
     private int turnOrder;
     private Integer lobbyRoll;
     private boolean tied;
+    private String positionNodeId;
 }

@@ -34,5 +34,14 @@ public class Player {
     // Nullable until the player has rolled.
     private Integer lobbyRoll;
 
+    // --- Board position state (Phase 2A) ---
+    // The current node id on the board graph (e.g. "n0").
+    // Initialized to START when the player joins a session.
+    private String positionNodeId;
+
+    // Jail mechanic support (Phase 2A prep): number of upcoming turns to skip.
+    // For example, entering JAIL sets this to 1.
+    private int skipTurns;
+
     private Instant createdAt;
 }

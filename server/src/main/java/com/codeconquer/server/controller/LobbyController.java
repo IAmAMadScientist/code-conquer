@@ -57,7 +57,8 @@ public class LobbyController {
                         p.isReady(),
                         p.getTurnOrder(),
                         p.getLobbyRoll(),
-                        tiedIds.contains(p.getId())
+                        tiedIds.contains(p.getId()),
+                        p.getPositionNodeId()
                 ))
                 .toList();
 

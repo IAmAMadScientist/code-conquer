@@ -16,11 +16,13 @@ public class PlayerService {
 
     private final PlayerRepository playerRepository;
     private final GameSessionService sessionService;
+    private final BoardGraphService boardGraphService;
     private final Random random = new Random();
 
-    public PlayerService(PlayerRepository playerRepository, GameSessionService sessionService) {
+    public PlayerService(PlayerRepository playerRepository, GameSessionService sessionService, BoardGraphService boardGraphService) {
         this.playerRepository = playerRepository;
         this.sessionService = sessionService;
+        this.boardGraphService = boardGraphService;
     }
 
     public Player registerPlayer(String sessionId, String name, String icon) {
@@ -37,6 +39,10 @@ public class PlayerService {
             // Optionally update icon if provided
             Player p = existing.get();
             if (icon != null && !icon.isBlank()) p.setIcon(icon.trim());
+            // Phase 2A: ensure board state is initialized for legacy rows
+            if (p.getPositionNodeId() == null || p.getPositionNodeId().isBlank()) {
+                p.setPositionNodeId(boardGraphService.getStartNodeId());
+            }
             return playerRepository.save(p);
         }
 
@@ -48,6 +54,9 @@ public class PlayerService {
         p.setReady(false);
         p.setTotalScore(0);
         p.setLobbyRoll(null);
+        // Phase 2A: board position init
+        p.setPositionNodeId(boardGraphService.getStartNodeId());
+        p.setSkipTurns(0);
 
         int nextOrder = playerRepository.getMaxTurnOrder(sessionId) + 1;
         p.setTurnOrder(nextOrder);
