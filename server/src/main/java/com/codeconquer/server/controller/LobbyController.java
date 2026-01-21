@@ -9,6 +9,8 @@ import com.codeconquer.server.service.PlayerService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
@@ -34,6 +36,9 @@ public class LobbyController {
         List<Player> players = playerService.listPlayers(sessionId);
         players.sort(Comparator.comparingInt(Player::getTurnOrder));
 
+        // Compute ties for lobbyRoll display/controls
+        List<String> tiedIds = sessionService.computeTiedPlayerIds(players);
+
         String currentPlayerId = null;
         if (s.isStarted() && s.getCurrentTurnOrder() > 0) {
             for (Player p : players) {
@@ -45,13 +50,22 @@ public class LobbyController {
         }
 
         List<LobbyPlayer> lobbyPlayers = players.stream()
-                .map(p -> new LobbyPlayer(p.getId(), p.getName(), p.getIcon(), p.isReady(), p.getTurnOrder()))
+                .map(p -> new LobbyPlayer(
+                        p.getId(),
+                        p.getName(),
+                        p.getIcon(),
+                        p.isReady(),
+                        p.getTurnOrder(),
+                        p.getLobbyRoll(),
+                        tiedIds.contains(p.getId())
+                ))
                 .toList();
 
         return ResponseEntity.ok(new LobbyState(
                 s.getId(),
                 s.getCode(),
                 s.isStarted(),
+                s.isTurnOrderLocked(),
                 s.getCurrentTurnOrder(),
                 currentPlayerId,
                 lobbyPlayers,
@@ -59,5 +73,17 @@ public class LobbyController {
                 s.getLastEventType(),
                 s.getLastEventMessage()
         ));
+    }
+
+    @PostMapping("/{sessionId}/lobby/roll")
+    public ResponseEntity<Map<String, Object>> rollLobby(@PathVariable String sessionId, @RequestParam String playerId) {
+        try {
+            int roll = playerService.rollLobbyD20(sessionId, playerId);
+            return ResponseEntity.ok(Map.of("roll", roll));
+        } catch (IllegalStateException ex) {
+            return ResponseEntity.status(423).body(Map.of("message", ex.getMessage()));
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(Map.of("message", ex.getMessage()));
+        }
     }
 }

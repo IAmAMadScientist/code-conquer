@@ -8,6 +8,8 @@ import com.codeconquer.server.service.PlayerService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 import java.util.List;
 
 @RestController
@@ -40,13 +42,15 @@ public class PlayerController {
     }
 
     @PostMapping("/{sessionId}/players/{playerId}/ready")
-    public ResponseEntity<PlayerResponse> setReady(@PathVariable String sessionId, @PathVariable String playerId, @RequestBody ReadyRequest body) {
+    public ResponseEntity<Object> setReady(@PathVariable String sessionId, @PathVariable String playerId, @RequestBody ReadyRequest body) {
         if (body == null) return ResponseEntity.badRequest().build();
         try {
             Player p = playerService.setReady(sessionId, playerId, body.isReady());
             return ResponseEntity.ok(new PlayerResponse(p.getId(), p.getName(), p.getIcon(), p.getColor(), p.isReady(), p.getTurnOrder()));
+        } catch (IllegalStateException ex) {
+            return ResponseEntity.status(423).body(Map.of("message", ex.getMessage()));
         } catch (IllegalArgumentException ex) {
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.badRequest().body(Map.of("message", ex.getMessage()));
         }
     }
 

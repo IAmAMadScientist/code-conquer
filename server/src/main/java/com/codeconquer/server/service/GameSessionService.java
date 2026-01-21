@@ -7,11 +7,15 @@ import com.codeconquer.server.repository.PlayerRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class GameSessionService {
@@ -35,6 +39,7 @@ public class GameSessionService {
         s.setCode(generateUniqueCode());
         s.setCreatedAt(Instant.now());
         s.setStarted(false);
+        s.setTurnOrderLocked(false);
         s.setCurrentTurnOrder(0);
         s.setTurnStatus(TURN_IDLE);
         s.setActiveChallengeId(null);
@@ -65,7 +70,10 @@ public class GameSessionService {
         List<Player> players = playerRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
         if (players.isEmpty()) return;
 
-        players.sort(Comparator.comparing(Player::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())));
+        // Preserve the established order. In the lobby (before rolls are finalized)
+        // turnOrder is assigned incrementally; once rolls are applied, turnOrder is the
+        // authoritative sequence for the rest of the match.
+        players.sort(Comparator.comparingInt(Player::getTurnOrder));
         int i = 1;
         boolean changed = false;
         for (Player p : players) {
@@ -90,16 +98,77 @@ public class GameSessionService {
         List<Player> players = playerRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
         if (players.isEmpty()) return;
 
+        // Lobby D20 requirement: everyone must have rolled, and there must be no ties.
         boolean allReady = players.stream().allMatch(Player::isReady);
         if (!allReady) return;
 
-        normalizeTurnOrders(sessionId);
+        if (!allHaveLobbyRoll(players)) return;
+        if (!computeTiedPlayerIds(players).isEmpty()) return;
+
+        // Finalize initial turn order from lobby rolls before starting.
+        recomputeTurnOrderFromLobbyRoll(sessionId, players);
 
         s.setStarted(true);
+        s.setTurnOrderLocked(true);
         s.setCurrentTurnOrder(1);
         s.setTurnStatus(TURN_IDLE);
         s.setActiveChallengeId(null);
         save(s);
+    }
+
+    private boolean allHaveLobbyRoll(List<Player> players) {
+        return players.stream().allMatch(p -> p.getLobbyRoll() != null);
+    }
+
+    /**
+     * Returns the set of player IDs that are currently in a lobby-roll tie.
+     * Only non-null rolls are considered.
+     */
+    public List<String> computeTiedPlayerIds(List<Player> players) {
+        Map<Integer, List<Player>> byRoll = new HashMap<>();
+        for (Player p : players) {
+            if (p.getLobbyRoll() == null) continue;
+            byRoll.computeIfAbsent(p.getLobbyRoll(), k -> new ArrayList<>()).add(p);
+        }
+        List<String> tied = new ArrayList<>();
+        for (Map.Entry<Integer, List<Player>> e : byRoll.entrySet()) {
+            if (e.getValue().size() > 1) {
+                tied.addAll(e.getValue().stream().map(Player::getId).toList());
+            }
+        }
+        return tied;
+    }
+
+    /**
+     * Finalizes (or refreshes) player.turnOrder based on lobbyRoll descending.
+     * Only safe to call when everyone has rolled and there are no ties.
+     */
+    public void recomputeTurnOrderFromLobbyRoll(String sessionId, List<Player> players) {
+        if (players == null) {
+            players = playerRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
+        }
+        if (players.isEmpty()) return;
+
+        // Sort by roll descending. As a safety net, break ties by createdAt/id,
+        // but callers should ensure no ties remain.
+        List<Player> sorted = new ArrayList<>(players);
+        sorted.sort(
+                Comparator
+                        .comparing(Player::getLobbyRoll, Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(Player::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(Player::getId)
+        );
+
+        boolean changed = false;
+        int i = 1;
+        for (Player p : sorted) {
+            if (p.getTurnOrder() != i) {
+                p.setTurnOrder(i);
+                changed = true;
+            }
+            i++;
+        }
+        if (changed) playerRepository.saveAll(sorted);
     }
 
     /**

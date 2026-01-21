@@ -11,6 +11,7 @@ public class LobbyState {
     private String sessionId;
     private String sessionCode;
     private boolean started;
+    private boolean turnOrderLocked;
     private int currentTurnOrder;
     private String currentPlayerId;
     private List<LobbyPlayer> players;

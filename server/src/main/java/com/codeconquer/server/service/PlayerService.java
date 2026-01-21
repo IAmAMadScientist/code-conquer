@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Random;
 import java.util.UUID;
 
 @Service
@@ -15,6 +16,7 @@ public class PlayerService {
 
     private final PlayerRepository playerRepository;
     private final GameSessionService sessionService;
+    private final Random random = new Random();
 
     public PlayerService(PlayerRepository playerRepository, GameSessionService sessionService) {
         this.playerRepository = playerRepository;
@@ -45,6 +47,7 @@ public class PlayerService {
         p.setIcon(icon == null || icon.isBlank() ? "🙂" : icon.trim());
         p.setReady(false);
         p.setTotalScore(0);
+        p.setLobbyRoll(null);
 
         int nextOrder = playerRepository.getMaxTurnOrder(sessionId) + 1;
         p.setTurnOrder(nextOrder);
@@ -64,10 +67,60 @@ public class PlayerService {
     public Player setReady(String sessionId, String playerId, boolean ready) {
         Player p = playerRepository.findById(playerId).orElseThrow(() -> new IllegalArgumentException("player not found"));
         if (p.getSessionId() == null || !p.getSessionId().equals(sessionId)) throw new IllegalArgumentException("player not in session");
+
+        // Phase 1: Must roll a lobby D20 before being allowed to ready up.
+        if (ready) {
+            if (p.getLobbyRoll() == null) {
+                throw new IllegalStateException("Du musst zuerst den D20 für die Zugreihenfolge würfeln.");
+            }
+            List<Player> players = playerRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
+            List<String> tied = sessionService.computeTiedPlayerIds(players);
+            if (tied.contains(p.getId())) {
+                throw new IllegalStateException("Tie beim D20! Bitte würfle erneut, bevor du Ready drückst.");
+            }
+        }
+
         p.setReady(ready);
         Player saved = playerRepository.save(p);
         sessionService.tryStartIfAllReady(sessionId);
         return saved;
+    }
+
+    /**
+     * Rolls a D20 for lobby turn order. Players may re-roll only if they are in a tie.
+     */
+    public int rollLobbyD20(String sessionId, String playerId) {
+        if (sessionId == null || sessionId.isBlank()) throw new IllegalArgumentException("sessionId required");
+        if (playerId == null || playerId.isBlank()) throw new IllegalArgumentException("playerId required");
+
+        GameSession session = sessionService.findById(sessionId).orElseThrow(() -> new IllegalArgumentException("session not found"));
+        if (session.isStarted() || session.isTurnOrderLocked()) {
+            throw new IllegalStateException("Turn order ist bereits fixiert.");
+        }
+
+        Player p = playerRepository.findById(playerId).orElseThrow(() -> new IllegalArgumentException("player not found"));
+        if (p.getSessionId() == null || !p.getSessionId().equals(sessionId)) throw new IllegalArgumentException("player not in session");
+
+        List<Player> players = playerRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
+        List<String> tied = sessionService.computeTiedPlayerIds(players);
+
+        boolean canRoll = (p.getLobbyRoll() == null) || tied.contains(p.getId());
+        if (!canRoll) {
+            throw new IllegalStateException("Du hast bereits gewürfelt.");
+        }
+
+        int roll = random.nextInt(20) + 1;
+        p.setLobbyRoll(roll);
+        // Reset ready if player re-rolls (keeps flow consistent)
+        p.setReady(false);
+        playerRepository.save(p);
+
+        // Refresh rolls list and finalize turn order if possible (all rolled + no ties)
+        List<Player> updated = playerRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
+        if (updated.stream().allMatch(pl -> pl.getLobbyRoll() != null) && sessionService.computeTiedPlayerIds(updated).isEmpty()) {
+            sessionService.recomputeTurnOrderFromLobbyRoll(sessionId, updated);
+        }
+        return roll;
     }
 
     /**

@@ -11,4 +11,6 @@ public class LobbyPlayer {
     private String icon;
     private boolean ready;
     private int turnOrder;
+    private Integer lobbyRoll;
+    private boolean tied;
 }

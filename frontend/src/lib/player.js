@@ -75,3 +75,11 @@ export async function fetchLobby(sessionId) {
   const data = await parseJsonOrThrow(res);
   return data;
 }
+
+export async function rollLobbyD20(sessionId, playerId) {
+  const res = await fetch(`${API_BASE}/sessions/${encodeURIComponent(sessionId)}/lobby/roll?playerId=${encodeURIComponent(playerId)}`, {
+    method: "POST",
+  });
+  const data = await parseJsonOrThrow(res);
+  return data; // { roll }
+}

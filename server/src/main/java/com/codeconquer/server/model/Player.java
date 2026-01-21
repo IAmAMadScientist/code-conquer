@@ -30,5 +30,9 @@ public class Player {
     // This is the single source of truth for the leaderboard.
     private int totalScore;
 
+    // Lobby D20 roll used to determine the initial turn order.
+    // Nullable until the player has rolled.
+    private Integer lobbyRoll;
+
     private Instant createdAt;
 }

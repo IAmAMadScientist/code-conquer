@@ -17,6 +17,10 @@ public class GameSession {
 
     private boolean started;
 
+    // Once the lobby turn order has been finalized (or the game started),
+    // prevent further lobby re-rolls.
+    private boolean turnOrderLocked;
+
     // Current player's turn order (1..n). 0 means not started.
     private int currentTurnOrder;
 
