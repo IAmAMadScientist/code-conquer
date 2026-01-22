@@ -30,6 +30,10 @@ public class Player {
     // This is the single source of truth for the leaderboard.
     private int totalScore;
 
+    // Prevent "same challenge twice in a row" per player.
+    private String lastChallengeCategory;
+
+
     // Lobby D20 roll used to determine the initial turn order.
     // Nullable until the player has rolled.
     private Integer lobbyRoll;

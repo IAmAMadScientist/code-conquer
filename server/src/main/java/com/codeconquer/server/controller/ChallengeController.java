@@ -69,9 +69,21 @@ public class ChallengeController {
         s.setActiveChallengeId(instanceId);
         sessionService.save(s);
 
-        ChallengeDescriptor d = router.pickRandom(difficulty, category);
+        Category exclude = null;
+        try {
+            if (p.getLastChallengeCategory() != null && !p.getLastChallengeCategory().isBlank()) {
+                exclude = Category.valueOf(p.getLastChallengeCategory());
+            }
+        } catch (Exception ignored) {
+            exclude = null;
+        }
+
+        ChallengeDescriptor d = router.pickRandom(difficulty, category, exclude);
         d.setChallengeInstanceId(instanceId);
         d.setBasePoints(basePointsFor(difficulty));
+        // remember for "no repeat twice" rule
+        p.setLastChallengeCategory(d.getCategory().name());
+        playerService.save(p);
         return ResponseEntity.ok(d);
     }
 
@@ -125,9 +137,20 @@ public class ChallengeController {
         s.setActiveChallengeId(instanceId);
         sessionService.save(s);
 
-        ChallengeDescriptor d = router.pickRandom(diff, category);
+        Category exclude2 = null;
+        try {
+            if (p.getLastChallengeCategory() != null && !p.getLastChallengeCategory().isBlank()) {
+                exclude2 = Category.valueOf(p.getLastChallengeCategory());
+            }
+        } catch (Exception ignored) {
+            exclude2 = null;
+        }
+
+        ChallengeDescriptor d = router.pickRandom(diff, category, exclude2);
         d.setChallengeInstanceId(instanceId);
         d.setBasePoints(basePointsFor(diff));
+        p.setLastChallengeCategory(d.getCategory().name());
+        playerService.save(p);
         return ResponseEntity.ok(d);
     }
 

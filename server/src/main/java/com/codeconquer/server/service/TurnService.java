@@ -2,6 +2,7 @@ package com.codeconquer.server.service;
 
 import com.codeconquer.server.board.BoardGraph;
 import com.codeconquer.server.dto.TurnMoveResponse;
+import com.codeconquer.server.dto.ForkOption;
 import com.codeconquer.server.model.BoardNodeType;
 import com.codeconquer.server.model.GameSession;
 import com.codeconquer.server.model.Player;
@@ -69,6 +70,11 @@ public class TurnService {
         s.setLastDiceRoll(roll);
         s.setPendingForkNodeId(null);
         s.setPendingRemainingSteps(null);
+
+        // Log dice roll for live feed.
+        try {
+            sessionService.publishEvent(s, "D6_ROLL", "🎲 " + formatPlayer(p) + " würfelt D6: " + roll);
+        } catch (Exception ignored) {}
 
         MoveResult mr = moveSteps(s, p, roll);
         sessionRepository.save(s);
@@ -247,7 +253,7 @@ public class TurnService {
                 mr.awaitingChoice = true;
                 mr.forkNodeId = cur;
                 mr.remainingSteps = remaining;
-                mr.options = outs;
+                mr.options = boardService.getForkOptions(cur);
                 return mr;
             }
             if (outs.isEmpty()) {
@@ -340,6 +346,6 @@ public class TurnService {
         boolean turnEnded = false;
         String forkNodeId;
         Integer remainingSteps;
-        List<String> options;
+        List<ForkOption> options;
     }
 }

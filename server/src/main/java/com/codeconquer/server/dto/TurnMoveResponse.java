@@ -5,6 +5,8 @@ import lombok.Data;
 
 import java.util.List;
 
+import com.codeconquer.server.dto.ForkOption;
+
 @Data
 @AllArgsConstructor
 public class TurnMoveResponse {
@@ -21,7 +23,7 @@ public class TurnMoveResponse {
     // Fork state (only when turnStatus == AWAITING_PATH_CHOICE)
     private String forkNodeId;
     private Integer remainingSteps;
-    private List<String> options;
+    private List<ForkOption> options;
 
     // Human readable info (optional)
     private String message;

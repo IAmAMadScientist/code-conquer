@@ -5,6 +5,8 @@ import lombok.Data;
 
 import java.util.List;
 
+import com.codeconquer.server.dto.ForkOption;
+
 @Data
 @AllArgsConstructor
 public class LobbyState {
@@ -20,7 +22,7 @@ public class LobbyState {
     private Integer lastDiceRoll;
     private String pendingForkNodeId;
     private Integer pendingRemainingSteps;
-    private List<String> pendingForkOptions;
+    private List<ForkOption> pendingForkOptions;
     private List<LobbyPlayer> players;
 
     // lightweight event channel for polling UIs

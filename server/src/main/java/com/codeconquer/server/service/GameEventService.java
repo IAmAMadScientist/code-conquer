@@ -12,6 +12,9 @@ import java.util.List;
 @Service
 public class GameEventService {
 
+    /** UI should stay compact on mobile. */
+    public static final int MAX_RETURNED_EVENTS = 15;
+
     private final GameEventRepository repo;
 
     public GameEventService(GameEventRepository repo) {
@@ -21,13 +24,17 @@ public class GameEventService {
     public List<GameEvent> getEventsAfter(String sessionId, long afterSeq) {
         if (sessionId == null || sessionId.isBlank()) throw new IllegalArgumentException("sessionId required");
         if (afterSeq < 0) afterSeq = 0;
-        return repo.findBySessionIdAndSeqGreaterThanOrderBySeqAsc(sessionId, afterSeq);
+        return repo.findBySessionIdAndSeqGreaterThanOrderBySeqAsc(
+                sessionId,
+                afterSeq,
+                PageRequest.of(0, MAX_RETURNED_EVENTS)
+        );
     }
 
     public List<GameEvent> getLatest(String sessionId, int limit) {
         if (sessionId == null || sessionId.isBlank()) throw new IllegalArgumentException("sessionId required");
         if (limit <= 0) limit = 10;
-        if (limit > 50) limit = 50;
+        if (limit > MAX_RETURNED_EVENTS) limit = MAX_RETURNED_EVENTS;
         List<GameEvent> desc = repo.findBySessionIdOrderBySeqDesc(sessionId, PageRequest.of(0, limit));
         if (desc == null || desc.isEmpty()) return Collections.emptyList();
         // Convert to ascending order for UI.

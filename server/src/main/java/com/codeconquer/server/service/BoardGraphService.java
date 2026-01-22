@@ -4,9 +4,9 @@ import com.codeconquer.server.board.BoardEdgeDef;
 import com.codeconquer.server.board.BoardGraph;
 import com.codeconquer.server.board.BoardGraphDefinition;
 import com.codeconquer.server.board.BoardNodeDef;
+import com.codeconquer.server.dto.ForkOption;
 import com.codeconquer.server.model.BoardNodeType;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.Getter;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
@@ -21,7 +21,6 @@ import java.util.Objects;
 /**
  * Loads the board graph from resources at startup.
  */
-@Getter
 @Service
 public class BoardGraphService {
 
@@ -29,6 +28,10 @@ public class BoardGraphService {
 
     public BoardGraphService(ObjectMapper objectMapper) {
         this.board = loadFromJson(objectMapper);
+    }
+
+    public BoardGraph getBoard() {
+        return board;
     }
 
     public String getStartNodeId() {
@@ -41,6 +44,56 @@ public class BoardGraphService {
 
     public String getJailNodeId() {
         return board.getJailNodeId();
+    }
+
+    /**
+     * Returns labeled fork options for UI. If the fork is a known board fork,
+     * we label the two outgoing edges as "Go straight" vs "Take shortcut".
+     * Otherwise we fall back to generic labels.
+     */
+    public List<ForkOption> getForkOptions(String forkNodeId) {
+        if (forkNodeId == null || forkNodeId.isBlank()) return List.of();
+        List<String> outs = board.outgoing(forkNodeId);
+        if (outs == null || outs.isEmpty()) return List.of();
+
+        // Hard-coded mapping (from design doc). If your board JSON changes, update here.
+        // fork -> {straightTo, shortcutTo}
+        Map<String, String> straight = Map.of(
+                "n12", "n13",
+                "n21", "n20",
+                "n48", "n49",
+                "n59", "n58"
+        );
+        Map<String, String> shortcut = Map.of(
+                "n12", "n16",
+                "n21", "n35",
+                "n48", "n52",
+                "n59", "n69"
+        );
+
+        List<ForkOption> options = new ArrayList<>();
+        String straightTo = straight.get(forkNodeId);
+        String shortcutTo = shortcut.get(forkNodeId);
+
+        for (String to : outs) {
+            if (to == null) continue;
+            if (shortcutTo != null && shortcutTo.equals(to)) {
+                options.add(new ForkOption(to, "Take shortcut"));
+            } else if (straightTo != null && straightTo.equals(to)) {
+                options.add(new ForkOption(to, "Go straight"));
+            } else {
+                options.add(new ForkOption(to, "Choose path"));
+            }
+        }
+
+        // Prefer showing shortcut first (nice UX).
+        options.sort((a, b) -> {
+            if ("Take shortcut".equals(a.getLabel()) && !"Take shortcut".equals(b.getLabel())) return -1;
+            if (!"Take shortcut".equals(a.getLabel()) && "Take shortcut".equals(b.getLabel())) return 1;
+            return a.getTo().compareTo(b.getTo());
+        });
+
+        return options;
     }
 
     private BoardGraph loadFromJson(ObjectMapper objectMapper) {

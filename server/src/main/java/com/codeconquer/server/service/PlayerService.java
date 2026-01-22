@@ -73,6 +73,14 @@ public class PlayerService {
         return playerRepository.findById(playerId);
     }
 
+    /**
+     * Internal helper for controllers/services that already validated the player.
+     * Keeps repository access centralized.
+     */
+    public Player save(Player p) {
+        return playerRepository.save(p);
+    }
+
     public Player setReady(String sessionId, String playerId, boolean ready) {
         Player p = playerRepository.findById(playerId).orElseThrow(() -> new IllegalArgumentException("player not found"));
         if (p.getSessionId() == null || !p.getSessionId().equals(sessionId)) throw new IllegalArgumentException("player not in session");
@@ -123,6 +131,13 @@ public class PlayerService {
         // Reset ready if player re-rolls (keeps flow consistent)
         p.setReady(false);
         playerRepository.save(p);
+
+        // Log the roll for the mini event feed.
+        try {
+            String nm = (p.getName() == null || p.getName().isBlank()) ? "Player" : p.getName().trim();
+            String ic = (p.getIcon() == null || p.getIcon().isBlank()) ? "🙂" : p.getIcon().trim();
+            sessionService.publishEvent(session, "D20_ROLL", "🎲 " + ic + " " + nm + " würfelt D20: " + roll);
+        } catch (Exception ignored) {}
 
         // Refresh rolls list and finalize turn order if possible (all rolled + no ties)
         List<Player> updated = playerRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);

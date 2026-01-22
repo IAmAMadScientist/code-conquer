@@ -612,8 +612,6 @@ export default function GraphPathfinderPage() {
                       y1={a.y}
                       x2={b.x}
                       y2={b.y}
-                      strokeWidth={onOptimal ? 5 : onUser ? 4 : 2.5}
-                      filter={onOptimal || onUser ? "url(#softGlow)" : undefined}
                       stroke={
                         onOptimal
                           ? "rgba(16,185,129,0.95)" // emerald shortest path

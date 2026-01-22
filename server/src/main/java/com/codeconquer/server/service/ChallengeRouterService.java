@@ -30,12 +30,17 @@ public class ChallengeRouterService {
         categoryToRoute.put(Category.QUEUE_COMMANDER, "/queuecommander");
     }
 
-    public ChallengeDescriptor pickRandom(Difficulty difficulty, Category categoryOrNull) {
+    public ChallengeDescriptor pickRandom(Difficulty difficulty, Category categoryOrNull, Category excludeCategoryOrNull) {
         if (difficulty == null) {
             throw new IllegalArgumentException("difficulty is required");
         }
 
-        Category chosenCategory = (categoryOrNull != null) ? categoryOrNull : pickRandomCategory();
+        Category chosenCategory;
+        if (categoryOrNull != null) {
+            chosenCategory = categoryOrNull;
+        } else {
+            chosenCategory = pickRandomCategory(excludeCategoryOrNull);
+        }
         String route = categoryToRoute.get(chosenCategory);
         if (route == null) {
             throw new IllegalStateException("No route configured for category " + chosenCategory);
@@ -54,8 +59,12 @@ public class ChallengeRouterService {
         );
     }
 
-    private Category pickRandomCategory() {
+    private Category pickRandomCategory(Category excludeOrNull) {
         List<Category> all = new ArrayList<>(categoryToRoute.keySet());
+        // Avoid immediate repeats if possible.
+        if (excludeOrNull != null && all.size() > 1) {
+            all.removeIf(c -> c == excludeOrNull);
+        }
         int idx = ThreadLocalRandom.current().nextInt(all.size());
         return all.get(idx);
     }

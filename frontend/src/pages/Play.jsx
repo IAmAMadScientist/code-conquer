@@ -237,6 +237,12 @@ useEffect(() => {
               {meState?.positionNodeId ? (
                 <Badge variant="outline">You at: {meState.positionNodeId}</Badge>
               ) : null}
+              {typeof state?.lastDiceRoll === "number" ? (
+                <Badge variant="outline">Last D6: {state.lastDiceRoll}</Badge>
+              ) : null}
+              {typeof meState?.lobbyRoll === "number" ? (
+                <Badge variant="outline">Your D20: {meState.lobbyRoll}</Badge>
+              ) : null}
             </div>
 
             {/* Phase 2B: D6 roll + fork choice */}
@@ -257,8 +263,8 @@ useEffect(() => {
                 <div className="muted">Fork! Choose your path:</div>
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                   {(pendingChoices?.options || []).map((opt) => (
-                    <Button key={opt} variant="secondary" onClick={() => doChoosePath(opt)}>
-                      Go to {opt}
+                    <Button key={opt?.to || opt} variant="secondary" onClick={() => doChoosePath(opt?.to || opt)}>
+                      {opt?.label ? opt.label : "Choose"}
                     </Button>
                   ))}
                   {!pendingChoices?.options?.length ? (
@@ -295,9 +301,6 @@ useEffect(() => {
             </div>
           </>
         )}
-
-        {/* Phase 3: Mini event feed (collapsible) */}
-        {session?.sessionId ? <EventFeed sessionId={session.sessionId} title="Game feed" limit={5} /> : null}
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
           <Link to="/leaderboard">

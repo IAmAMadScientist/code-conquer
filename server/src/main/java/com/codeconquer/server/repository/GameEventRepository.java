@@ -10,5 +10,7 @@ public interface GameEventRepository extends JpaRepository<GameEvent, Long> {
 
     List<GameEvent> findBySessionIdAndSeqGreaterThanOrderBySeqAsc(String sessionId, long afterSeq);
 
+    List<GameEvent> findBySessionIdAndSeqGreaterThanOrderBySeqAsc(String sessionId, long afterSeq, Pageable pageable);
+
     List<GameEvent> findBySessionIdOrderBySeqDesc(String sessionId, Pageable pageable);
 }

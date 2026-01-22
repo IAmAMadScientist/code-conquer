@@ -6,6 +6,7 @@ import { Badge } from "./ui/badge";
 // Mobile-friendly mini feed (collapsible) used in Play and Leaderboard.
 
 export default function EventFeed({ sessionId, title = "Events", limit = 5, pollMs = 1500 }) {
+  const MAX_ITEMS = 15;
   const storageKey = useMemo(() => (sessionId ? `cc_evtfeed_open_${sessionId}` : "cc_evtfeed_open"), [sessionId]);
   const [open, setOpen] = useState(() => {
     try {
@@ -25,7 +26,7 @@ export default function EventFeed({ sessionId, title = "Events", limit = 5, poll
     if (!sessionId) return;
     try {
       setErr(null);
-      const data = await fetchEvents(sessionId, null, Math.max(limit, 10));
+      const data = await fetchEvents(sessionId, null, Math.min(MAX_ITEMS, Math.max(limit, 10)));
       setEvents(data);
       const max = data.reduce((m, e) => Math.max(m, Number(e?.seq || 0)), 0);
       setLastSeq(max);
@@ -49,7 +50,8 @@ export default function EventFeed({ sessionId, title = "Events", limit = 5, poll
           bySeq.set(Number(e.seq), e);
         }
         const arr = Array.from(bySeq.values()).sort((a, b) => Number(a.seq) - Number(b.seq));
-        return arr;
+        // Keep only the newest MAX_ITEMS
+        return arr.slice(-MAX_ITEMS);
       });
       const max = data.reduce((m, e) => Math.max(m, Number(e?.seq || 0)), lastSeq || 0);
       setLastSeq(max);
@@ -80,8 +82,10 @@ export default function EventFeed({ sessionId, title = "Events", limit = 5, poll
     } catch {}
   }
 
-  const shown = open ? events.slice(-Math.max(limit, 1)) : events.slice(-1);
-  const last = events.length ? events[events.length - 1] : null;
+  // Hard-cap the feed for readability on mobile.
+  const bounded = events.slice(-MAX_ITEMS);
+  const shown = open ? bounded.slice(-Math.max(limit, 1)) : bounded.slice(-1);
+  const last = bounded.length ? bounded[bounded.length - 1] : null;
 
   return (
     <div className="panel" style={{ display: "grid", gap: 10 }}>
