@@ -1,8 +1,10 @@
 package com.codeconquer.server.service;
 
 import com.codeconquer.server.model.GameSession;
+import com.codeconquer.server.model.GameEvent;
 import com.codeconquer.server.model.Player;
 import com.codeconquer.server.repository.GameSessionRepository;
+import com.codeconquer.server.repository.GameEventRepository;
 import com.codeconquer.server.repository.PlayerRepository;
 import org.springframework.stereotype.Service;
 
@@ -32,11 +34,15 @@ public class GameSessionService {
 
     private final GameSessionRepository sessionRepository;
     private final PlayerRepository playerRepository;
+    private final GameEventRepository gameEventRepository;
     private final Random random = new Random();
 
-    public GameSessionService(GameSessionRepository sessionRepository, PlayerRepository playerRepository) {
+    public GameSessionService(GameSessionRepository sessionRepository,
+                              PlayerRepository playerRepository,
+                              GameEventRepository gameEventRepository) {
         this.sessionRepository = sessionRepository;
         this.playerRepository = playerRepository;
+        this.gameEventRepository = gameEventRepository;
     }
 
     public GameSession createNew() {
@@ -133,6 +139,8 @@ public class GameSessionService {
 
         // If the first player is supposed to skip (e.g. jailed), handle it immediately.
         advanceTurnConsideringSkips(sessionId);
+        // Announce whose turn it is (after auto-skips).
+        announceCurrentTurn(sessionId);
     }
 
     private boolean allHaveLobbyRoll(List<Player> players) {
@@ -222,6 +230,7 @@ public class GameSessionService {
         save(s);
 
         advanceTurnConsideringSkips(sessionId);
+        announceCurrentTurn(sessionId);
     }
 
     /**
@@ -245,6 +254,8 @@ public class GameSessionService {
         int n = players.size();
         int safety = n;
 
+        boolean skippedAny = false;
+
         while (safety-- > 0) {
             int curOrder = s.getCurrentTurnOrder();
             if (curOrder < 1 || curOrder > n) curOrder = 1;
@@ -252,6 +263,7 @@ public class GameSessionService {
             if (cur == null) break;
 
             if (cur.getSkipTurns() > 0) {
+                skippedAny = true;
                 // If the player was teleported to JAIL as a penalty, return them to their original node
                 // after the skipped turn is consumed.
                 if (cur.getJailReturnNodeId() != null && !cur.getJailReturnNodeId().isBlank()) {
@@ -285,6 +297,32 @@ public class GameSessionService {
             }
             break;
         }
+
+        if (skippedAny) {
+            // After automatically skipping players, announce who is up next.
+            announceCurrentTurn(sessionId);
+        }
+    }
+
+    /**
+     * Publishes a lightweight "next turn" event so all clients can show it in the event feed.
+     */
+    public void announceCurrentTurn(String sessionId) {
+        Optional<GameSession> opt = findById(sessionId);
+        if (opt.isEmpty()) return;
+        GameSession s = opt.get();
+        if (!s.isStarted()) return;
+        if (SESSION_FINISHED.equals(s.getStatus())) return;
+
+        normalizeTurnOrders(sessionId);
+        List<Player> players = playerRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
+        if (players.isEmpty()) return;
+        Player current = players.stream().filter(p -> p.getTurnOrder() == s.getCurrentTurnOrder()).findFirst().orElse(null);
+        if (current == null) return;
+
+        String nm = (current.getName() == null || current.getName().isBlank()) ? "Player" : current.getName().trim();
+        String ic = (current.getIcon() == null || current.getIcon().isBlank()) ? "🙂" : current.getIcon().trim();
+        publishEvent(s, "TURN_NEXT", "Nächster Zug: " + ic + " " + nm);
     }
 
     /**
@@ -335,13 +373,22 @@ public class GameSessionService {
         }
     }
 
-    private void publishEvent(GameSession s, String type, String message) {
+    public void publishEvent(GameSession s, String type, String message) {
         if (s == null) return;
-        s.setLastEventSeq(s.getLastEventSeq() + 1);
+        long newSeq = s.getLastEventSeq() + 1;
+        s.setLastEventSeq(newSeq);
         s.setLastEventType(type);
         s.setLastEventMessage(message);
         s.setLastEventAt(Instant.now());
         save(s);
+
+        // Persist to the session event log for polling clients.
+        try {
+            GameEvent evt = new GameEvent(s.getId(), newSeq, type, message, s.getLastEventAt());
+            gameEventRepository.save(evt);
+        } catch (Exception ignored) {
+            // Event feed is non-critical; never break core game flow if logging fails.
+        }
     }
 
     private String formatLeftMessage(String name, String icon) {

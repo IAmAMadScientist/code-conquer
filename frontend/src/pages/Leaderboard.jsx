@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import AppShell from "../components/AppShell";
+import EventFeed from "../components/EventFeed";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { getSession } from "../lib/session";
@@ -76,6 +77,8 @@ export default function Leaderboard() {
 
         {loading ? <div className="muted">Loading…</div> : null}
         {err ? <div style={{ opacity: 0.9 }}>⚠️ {err}</div> : null}
+
+        {session?.sessionId ? <EventFeed sessionId={session.sessionId} title="Game feed" limit={10} /> : null}
 
         {!loading && !err && rows.length === 0 ? (
           <div className="muted">No scores yet.</div>

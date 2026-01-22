@@ -6,6 +6,7 @@ import { Badge } from "../components/ui/badge";
 import { getSession, clearSession } from "../lib/session";
 import { getPlayer, fetchLobby, leaveSession, clearPlayer, rollTurnD6, chooseTurnPath, startTurnChallenge } from "../lib/player";
 import D6Die from "../components/D6Die";
+import EventFeed from "../components/EventFeed";
 
 export default function Play() {
   const nav = useNavigate();
@@ -14,7 +15,6 @@ export default function Play() {
   const me = useMemo(() => getPlayer(), []);
 
   const [state, setState] = useState(null);
-  const [eventMsg, setEventMsg] = useState(null);
   const [err, setErr] = useState(null);
   const [summary, setSummary] = useState(loc.state?.turnSummary || null);
   const [turnMsg, setTurnMsg] = useState(null);
@@ -59,16 +59,6 @@ export default function Play() {
 
       // Options are now included in lobby payload (pendingForkOptions) so refresh is safe.
 
-      // Lightweight event display (e.g. player left)
-      if (s?.lastEventSeq && s?.lastEventMessage) {
-        const key = `cc_evt_${session.sessionId}`;
-        const lastSeen = Number(sessionStorage.getItem(key) || "0");
-        if (s.lastEventSeq > lastSeen) {
-          sessionStorage.setItem(key, String(s.lastEventSeq));
-          setEventMsg(s.lastEventMessage);
-          setTimeout(() => setEventMsg(null), 4500);
-        }
-      }
     } catch (e) {
       setErr(e?.message || "Failed to load game state");
     }
@@ -209,11 +199,7 @@ useEffect(() => {
     >
       <div className="panel" style={{ display: "grid", gap: 12 }}>
         {err ? <div style={{ opacity: 0.9 }}>⚠️ {err}</div> : null}
-        {eventMsg ? (
-          <div className="panel" style={{ border: "1px solid rgba(148,163,184,0.22)" }}>
-            <div style={{ fontWeight: 800 }}>ℹ️ {eventMsg}</div>
-          </div>
-        ) : null}
+        <EventFeed sessionId={session.sessionId} title="Game feed" limit={5} />
 
         {turnMsg ? (
           <div className="panel" style={{ border: "1px solid rgba(148,163,184,0.22)" }}>
@@ -309,6 +295,9 @@ useEffect(() => {
             </div>
           </>
         )}
+
+        {/* Phase 3: Mini event feed (collapsible) */}
+        {session?.sessionId ? <EventFeed sessionId={session.sessionId} title="Game feed" limit={5} /> : null}
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
           <Link to="/leaderboard">

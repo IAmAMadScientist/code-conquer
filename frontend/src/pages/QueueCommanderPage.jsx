@@ -23,95 +23,139 @@ function shuffle(arr) {
   return a;
 }
 
-// Make a small FIFO puzzle:
-// - incoming: list of items arriving
-// - target: the exact output order you must produce by FIFO operations
-// - capacity: queue capacity
-function makeLevel(level) {
-  const L = clamp(level, 1, 8);
+function difficultyConfig(difficulty, level) {
+  // Keep it simple and very noticeable.
+  const L = clamp(level, 1, 10);
+  if (difficulty === "HARD") {
+    return {
+      n: clamp(10 + Math.floor(L / 2), 10, 12),
+      capacity: 3,
+      rotateTokens: clamp(5 - Math.floor(L / 4), 3, 5),
+    };
+  }
+  if (difficulty === "MEDIUM") {
+    return {
+      n: clamp(8 + Math.floor(L / 2), 8, 10),
+      capacity: 4,
+      rotateTokens: clamp(8 - Math.floor(L / 3), 5, 8),
+    };
+  }
+  // EASY default
+  return {
+    n: clamp(6 + Math.floor(L / 2), 6, 8),
+    capacity: 4,
+    rotateTokens: clamp(12 - Math.floor(L / 2), 8, 12),
+  };
+}
 
-  // difficulty knobs
-  const capacity = clamp(4 + Math.floor((L - 1) / 2), 4, 7);
-  const incomingCount = clamp(8 + (L - 1), 8, 14);
+// Generate a guaranteed-solvable "switchyard" puzzle:
+// - incoming is a fixed stream
+// - you have a FIFO queue buffer with limited capacity
+// - you can rotate (front -> back) with a limited token count
+// Target is created by simulating legal operations with the same constraints.
+function makeLevel({ difficulty, level, seed }) {
+  const cfg = difficultyConfig(difficulty, level);
+  const n = cfg.n;
 
-  // items are unique so it's easy to see correctness
-  const items = shuffle(Array.from({ length: incomingCount }, (_, i) => i + 1));
+  // pseudo-seed by consuming random a few times (cheap but good enough for this minigame)
+  for (let i = 0; i < (seed % 17); i++) Math.random();
 
-  // target pattern:
-  // Level 1-2: same as incoming (trivial)
-  // Level 3-4: chunked FIFO with pauses (still easy)
-  // Level 5+: "batching" — you must enqueue multiple before dequeue to match target
-  let target;
-  if (L <= 2) {
-    target = items.slice();
-  } else if (L <= 4) {
-    // reverse each chunk of 3? (still doable with FIFO by batching)
-    // Actually FIFO cannot reverse arbitrary chunks; so instead:
-    // target is produced by "enqueue 2, dequeue 1" repeating (a realistic scheduling pattern)
-    target = [];
-    const q = [];
-    let i = 0;
-    while (i < items.length) {
-      // enqueue up to 2 if possible
-      for (let k = 0; k < 2 && i < items.length; k++) {
-        q.push(items[i++]);
+  const incoming = shuffle(Array.from({ length: n }, (_, i) => i + 1));
+
+  function simulateTarget() {
+    const queue = [];
+    const target = [];
+    let idx = 0;
+    let rot = cfg.rotateTokens;
+
+    // Safety cap to avoid infinite loops (should never hit)
+    for (let step = 0; step < 5000 && target.length < n; step++) {
+      const canEnq = idx < n && queue.length < cfg.capacity;
+      const canRot = queue.length > 1 && rot > 0;
+      const canDeq = queue.length > 0;
+
+      // Weighted choices to make puzzles interesting but solvable.
+      // Prefer enqueue early, then rotate/dequeue mix.
+      let action = "";
+      const progress = target.length / n;
+      const wantEnq = canEnq && (queue.length === 0 || Math.random() < (0.55 - progress * 0.25));
+      const wantRot = canRot && Math.random() < (0.22 + progress * 0.12);
+      const wantDeq = canDeq && (!canEnq || Math.random() < 0.40);
+
+      if (wantEnq) action = "ENQ";
+      else if (wantRot) action = "ROT";
+      else if (wantDeq) action = "DEQ";
+      else if (canDeq) action = "DEQ";
+      else if (canEnq) action = "ENQ";
+      else break;
+
+      if (action === "ENQ") {
+        queue.push(incoming[idx++]);
+      } else if (action === "ROT") {
+        queue.push(queue.shift());
+        rot -= 1;
+      } else {
+        target.push(queue.shift());
       }
-      // dequeue 1
-      if (q.length) target.push(q.shift());
     }
+
     // flush
-    while (q.length) target.push(q.shift());
-  } else {
-    // harder: varying batch sizes 1..3
-    target = [];
-    const q = [];
-    let i = 0;
-    while (i < items.length) {
-      const batch = randInt(1, 3);
-      for (let k = 0; k < batch && i < items.length; k++) q.push(items[i++]);
-      const popCount = randInt(1, 2);
-      for (let k = 0; k < popCount; k++) if (q.length) target.push(q.shift());
+    while (target.length < n && queue.length) target.push(queue.shift());
+
+    // If we still haven't consumed all incoming (shouldn't happen often), enqueue & flush.
+    while (idx < n) {
+      if (queue.length < cfg.capacity) {
+        queue.push(incoming[idx++]);
+      } else {
+        target.push(queue.shift());
+      }
     }
-    while (q.length) target.push(q.shift());
+    while (queue.length) target.push(queue.shift());
+
+    return target.slice(0, n);
   }
 
-  // Ensure target length equals incomingCount
-  if (target.length !== incomingCount) {
-    // fallback to safe target
-    target = items.slice();
+  // Ensure non-trivial (target != incoming) while staying solvable.
+  let target = simulateTarget();
+  let guard = 0;
+  while (guard++ < 12 && target.join(",") === incoming.join(",")) {
+    target = simulateTarget();
   }
 
   return {
-    level: L,
-    capacity,
-    incoming: items,
+    level: clamp(level, 1, 10),
+    capacity: cfg.capacity,
+    rotateTokens: cfg.rotateTokens,
+    incoming,
     target,
   };
 }
 
-function tokenStyle(kind) {
-  // kind: "incoming" | "queue" | "output" | "target"
+function tokenStyle(kind, isActive = false) {
   const base = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    minWidth: 36,
-    height: 32,
-    padding: "0 10px",
-    borderRadius: 999,
-    border: "1px solid rgba(51,65,85,0.5)",
-    background: "rgba(15,23,42,0.35)",
+    minWidth: 42,
+    height: 34,
+    padding: "0 12px",
+    borderRadius: 14,
+    border: "1px solid rgba(51,65,85,0.55)",
+    background: "rgba(2,6,23,0.25)",
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
     fontSize: 13,
-    fontWeight: 700,
+    fontWeight: 800,
     userSelect: "none",
+    transition: "transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease",
   };
 
-  if (kind === "incoming") return { ...base, borderColor: "rgba(129,140,248,0.35)", background: "rgba(99,102,241,0.10)" };
-  if (kind === "queue") return { ...base, borderColor: "rgba(252,211,77,0.35)", background: "rgba(245,158,11,0.10)" };
-  if (kind === "output") return { ...base, borderColor: "rgba(52,211,153,0.35)", background: "rgba(16,185,129,0.10)" };
-  if (kind === "target") return { ...base, borderColor: "rgba(148,163,184,0.40)", background: "rgba(2,6,23,0.18)" };
-  return base;
+  const glow = isActive ? { boxShadow: "0 0 0 3px rgba(99,102,241,0.18)", transform: "translateY(-1px)" } : {};
+
+  if (kind === "incoming") return { ...base, ...glow, borderColor: "rgba(129,140,248,0.55)", background: "rgba(99,102,241,0.12)" };
+  if (kind === "queue") return { ...base, ...glow, borderColor: "rgba(252,211,77,0.55)", background: "rgba(245,158,11,0.10)" };
+  if (kind === "output") return { ...base, ...glow, borderColor: "rgba(52,211,153,0.55)", background: "rgba(16,185,129,0.10)" };
+  if (kind === "target") return { ...base, ...glow, borderColor: "rgba(148,163,184,0.50)", background: "rgba(15,23,42,0.18)" };
+  return { ...base, ...glow };
 }
 
 export default function QueueCommanderPage() {
@@ -122,15 +166,17 @@ export default function QueueCommanderPage() {
   const [seed, setSeed] = useState(0);
   const [level, setLevel] = useState(1);
 
-  const data = useMemo(() => makeLevel(level + seed * 0), [level, seed]); // seed included for "new level" reroll
-  const { capacity, incoming, target } = data;
+  const data = useMemo(() => makeLevel({ difficulty, level, seed }), [difficulty, level, seed]);
+  const { capacity, rotateTokens: rotateStart, incoming, target } = data;
 
   const [incomingIdx, setIncomingIdx] = useState(0);
   const [queue, setQueue] = useState([]);
   const [output, setOutput] = useState([]);
+  const [rotLeft, setRotLeft] = useState(rotateStart);
 
   const [status, setStatus] = useState("playing"); // playing | won | lost
   const [msg, setMsg] = useState("");
+  const [shake, setShake] = useState(false);
 
   const startRef = useRef(Date.now());
   const [timeMs, setTimeMs] = useState(0);
@@ -149,78 +195,99 @@ export default function QueueCommanderPage() {
     setIncomingIdx(0);
     setQueue([]);
     setOutput([]);
+    setRotLeft(rotateStart);
     setStatus("playing");
     setMsg("");
   }
 
   function newLevel() {
-    // reroll same difficulty by bumping seed (optional); simplest: just reset with same pattern
     setSeed((s) => s + 1);
+    // rotateStart depends on seed, so reset after new data computed
+    setTimeout(() => {
+      hardReset();
+    }, 0);
+  }
+
+  // When difficulty/level changes, refresh the whole state.
+  useEffect(() => {
     hardReset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [difficulty, level, seed]);
+
+  function bumpError(text) {
+    setErrors((e) => e + 1);
+    setMsg(text);
+    setShake(true);
+    window.setTimeout(() => setShake(false), 280);
   }
 
   function enqueue() {
     if (status !== "playing") return;
-    if (nextIncoming == null) {
-      setErrors((e) => e + 1);
-      setMsg("No more incoming items.");
-      return;
-    }
-    if (queue.length >= capacity) {
-      setErrors((e) => e + 1);
-      setMsg(`Queue full (capacity ${capacity}). Dequeue first.`);
-      return;
-    }
+    if (nextIncoming == null) return bumpError("No more incoming items.");
+    if (queue.length >= capacity) return bumpError(`Queue full (capacity ${capacity}).`);
     setMsg("");
     setQueue((q) => q.concat(nextIncoming));
     setIncomingIdx((i) => i + 1);
   }
 
-  function dequeue() {
+  function rotate() {
     if (status !== "playing") return;
-    if (queue.length === 0) {
-      setErrors((e) => e + 1);
-      setMsg("Queue empty. Enqueue something first.");
-      return;
-    }
-    const front = queue[0];
+    if (queue.length < 2) return bumpError("Need at least 2 items to rotate.");
+    if (rotLeft <= 0) return bumpError("No rotate tokens left.");
+    setMsg("");
+    setRotLeft((r) => r - 1);
+    setQueue((q) => q.slice(1).concat(q[0]));
+  }
 
-    // must match expected target output
+  function dequeueToOutput() {
+    if (status !== "playing") return;
+    if (queue.length === 0) return bumpError("Queue empty. Enqueue first.");
+    const front = queue[0];
     if (front !== expectedNext) {
       setErrors((e) => e + 1);
       setStatus("lost");
       setTimeMs(Date.now() - startRef.current);
-      setMsg(`❌ Wrong! You dequeued ${front}, but expected ${expectedNext}.`);
+      setMsg(`❌ Wrong! Front is ${front}, but next target is ${expectedNext}.`);
+      setShake(true);
+      window.setTimeout(() => setShake(false), 280);
       return;
     }
-
     setMsg("");
     setQueue((q) => q.slice(1));
     setOutput((o) => o.concat(front));
   }
 
-  function checkWinIfDone() {
+  // Auto-detect deadlocks: no legal moves left and not done.
+  useEffect(() => {
+    if (status !== "playing") return;
+    if (done) return;
+
+    const canEnq = nextIncoming != null && queue.length < capacity;
+    const canRot = rotLeft > 0 && queue.length > 1;
+    const canDeq = queue.length > 0 && queue[0] === expectedNext;
+    if (!canEnq && !canRot && !canDeq) {
+      setStatus("lost");
+      setTimeMs(Date.now() - startRef.current);
+      setMsg("❌ Stuck! No legal moves left. Try a new level.");
+    }
+  }, [status, done, nextIncoming, queue, capacity, rotLeft, expectedNext]);
+
+  useEffect(() => {
+    if (status !== "playing") return;
     if (!done) return;
     setStatus("won");
     setTimeMs(Date.now() - startRef.current);
-    const bonus = Math.max(0, (incoming.length - incomingIdx) * 5) + Math.max(0, (capacity - queue.length) * 8);
-    setMsg(`✅ Perfect schedule! Bonus moves: ${Math.round(bonus)}.`);
-  }
-
-  // if done becomes true, finish
-  if (status === "playing" && done) {
-    // safe: sync-set during render isn't ideal; but it’s stable here.
-    // If you want perfect React style, convert to useEffect([done]).
-    checkWinIfDone();
-  }
+    setMsg("✅ Perfect routing! You matched the target output.");
+  }, [done, status]);
 
   const canEnqueue = status === "playing" && nextIncoming != null && queue.length < capacity;
-  const canDequeue = status === "playing" && queue.length > 0;
+  const canRotate = status === "playing" && queue.length > 1 && rotLeft > 0;
+  const canDequeue = status === "playing" && queue.length > 0 && queue[0] === expectedNext;
 
   return (
     <AppShell
       title="Code & Conquer"
-      subtitle="Queue Commander (FIFO) — schedule items in the correct output order"
+      subtitle="Queue Switchyard (FIFO) — route crates using a limited buffer"
       headerBadges={
         <>
           <Badge>Category: QUEUE_COMMANDER</Badge>
@@ -228,21 +295,29 @@ export default function QueueCommanderPage() {
           <Badge>Diff: {difficulty}</Badge>
           <Badge>Errors: {errors}</Badge>
           <Badge>Cap: {capacity}</Badge>
+          <Badge>Rot: {rotLeft}/{rotateStart}</Badge>
           {status === "won" && <Badge style={{ borderColor: "rgba(52,211,153,0.45)" }}>WON</Badge>}
           {status === "lost" && <Badge style={{ borderColor: "rgba(251,113,133,0.45)" }}>LOST</Badge>}
         </>
       }
       rightPanel={
         <div className="panel">
-          <div style={{ fontSize: 16, fontWeight: 650 }}>Hint: Queue (FIFO)</div>
+          <div style={{ fontSize: 16, fontWeight: 750 }}>How it works</div>
           <div className="muted" style={{ marginTop: 10, fontSize: 14, lineHeight: 1.45 }}>
-            <div><strong>FIFO:</strong> First In, First Out.</div>
-            <div style={{ marginTop: 8 }}>
-              <strong>Enqueue</strong> adds to the <em>back</em>.<br />
-              <strong>Dequeue</strong> removes from the <em>front</em>.
+            <div style={{ marginTop: 6 }}>
+              You must build the <strong>Target Output</strong> exactly.
             </div>
             <div style={{ marginTop: 10 }}>
-              Your job: produce the <strong>Target Output</strong> exactly.
+              <strong>Enqueue</strong> takes the next incoming crate and puts it at the <em>back</em>.
+            </div>
+            <div style={{ marginTop: 6 }}>
+              <strong>Dequeue</strong> sends the <em>front</em> crate to output — <strong>only</strong> if it matches the next target.
+            </div>
+            <div style={{ marginTop: 6 }}>
+              <strong>Rotate</strong> moves <em>front → back</em> using a limited token.
+            </div>
+            <div style={{ marginTop: 10 }}>
+              Tip: plan around your buffer. Hard mode has less space and fewer rotates.
             </div>
           </div>
 
@@ -255,10 +330,10 @@ export default function QueueCommanderPage() {
       }
     >
       <div style={{ display: "grid", gap: 12 }}>
-        {/* progress */}
+        {/* Target */}
         <div className="panel">
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-            <div style={{ fontWeight: 650 }}>Target Output</div>
+            <div style={{ fontWeight: 750 }}>Target Output</div>
             <div className="muted" style={{ fontSize: 13 }}>
               Next expected: <strong style={{ color: "rgba(252,211,77,0.95)" }}>{expectedNext ?? "-"}</strong>
             </div>
@@ -273,15 +348,15 @@ export default function QueueCommanderPage() {
 
           <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 8 }}>
             {target.map((t, i) => {
-              const doneItem = i < output.length;
+              const isDone = i < output.length;
               return (
                 <span
                   key={`t-${t}-${i}`}
                   style={{
-                    ...tokenStyle("target"),
-                    opacity: doneItem ? 0.35 : 1,
-                    borderColor: doneItem ? "rgba(52,211,153,0.35)" : tokenStyle("target").borderColor,
-                    background: doneItem ? "rgba(16,185,129,0.08)" : tokenStyle("target").background,
+                    ...tokenStyle("target", i === output.length),
+                    opacity: isDone ? 0.35 : 1,
+                    borderColor: isDone ? "rgba(52,211,153,0.35)" : tokenStyle("target").borderColor,
+                    background: isDone ? "rgba(16,185,129,0.08)" : tokenStyle("target").background,
                   }}
                 >
                   {t}
@@ -315,32 +390,36 @@ export default function QueueCommanderPage() {
             errors={errors}
             won={status === "won"}
             onPlayAgain={hardReset}
-          challengeId={challenge?.challengeInstanceId}
-        />
+            challengeId={challenge?.challengeInstanceId}
+          />
         )}
 
-        {/* incoming + queue + output */}
+        {/* Switchyard */}
         <div className="panel">
-          <div style={{ display: "grid", gap: 14 }}>
+          <div
+            style={{
+              display: "grid",
+              gap: 14,
+            }}
+          >
             <div>
-              <div style={{ fontWeight: 650, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
-                <span>Incoming</span>
+              <div style={{ fontWeight: 750, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+                <span>Incoming Belt</span>
                 <span className="muted" style={{ fontSize: 13 }}>
-                  Next: {nextIncoming ?? "—"}
+                  Next: <strong style={{ color: "rgba(129,140,248,0.95)" }}>{nextIncoming ?? "—"}</strong>
                 </span>
               </div>
-
               <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {incoming.map((x, i) => {
-                  const isPassed = i < incomingIdx;
+                  const passed = i < incomingIdx;
                   const isNext = i === incomingIdx;
                   return (
                     <span
                       key={`in-${x}-${i}`}
                       style={{
-                        ...tokenStyle("incoming"),
-                        opacity: isPassed ? 0.22 : 1,
-                        borderColor: isNext ? "rgba(129,140,248,0.75)" : tokenStyle("incoming").borderColor,
+                        ...tokenStyle("incoming", isNext),
+                        opacity: passed ? 0.18 : 1,
+                        borderColor: isNext ? "rgba(129,140,248,0.85)" : tokenStyle("incoming").borderColor,
                       }}
                     >
                       {x}
@@ -351,58 +430,73 @@ export default function QueueCommanderPage() {
             </div>
 
             <div>
-              <div style={{ fontWeight: 650, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
-                <span>Your Queue (FIFO)</span>
+              <div style={{ fontWeight: 750, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+                <span>Your Buffer Queue (FIFO)</span>
                 <span className="muted" style={{ fontSize: 13 }}>
-                  Front = left • Back = right • {queue.length}/{capacity}
+                  Front = left • Back = right • {queue.length}/{capacity} • Rotates left: {rotLeft}
                 </span>
               </div>
 
-              <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <div
+                style={{
+                  marginTop: 10,
+                  display: "grid",
+                  gridTemplateColumns: `repeat(${capacity}, minmax(54px, 1fr))`,
+                  gap: 8,
+                  alignItems: "stretch",
+                }}
+                className={shake ? "qc-shake" : ""}
+              >
                 {Array.from({ length: capacity }).map((_, idx) => {
                   const v = queue[idx];
                   const isFront = idx === 0 && queue.length > 0;
+                  const isMatch = isFront && v === expectedNext;
                   return (
                     <div
                       key={`slot-${idx}`}
                       style={{
-                        width: 56,
-                        height: 46,
-                        borderRadius: 18,
-                        border: "1px solid rgba(51,65,85,0.45)",
-                        background: "rgba(2,6,23,0.18)",
+                        height: 54,
+                        borderRadius: 16,
+                        border: "1px solid rgba(51,65,85,0.55)",
+                        background: "rgba(2,6,23,0.20)",
                         display: "grid",
                         placeItems: "center",
                         position: "relative",
-                        outline: isFront ? "2px solid rgba(252,211,77,0.30)" : "none",
+                        outline: isFront ? "2px solid rgba(252,211,77,0.22)" : "none",
+                        boxShadow: isMatch ? "0 0 0 3px rgba(52,211,153,0.12)" : "none",
                       }}
                       title={isFront ? "FRONT (dequeue here)" : ""}
                     >
                       {typeof v === "number" ? (
-                        <span style={tokenStyle("queue")}>{v}</span>
+                        <span style={tokenStyle("queue", isFront)}>{v}</span>
                       ) : (
-                        <span className="muted" style={{ fontSize: 12 }}>empty</span>
+                        <span className="muted" style={{ fontSize: 12 }}>
+                          empty
+                        </span>
                       )}
                     </div>
                   );
                 })}
               </div>
+
+              <div className="muted" style={{ fontSize: 12, marginTop: 8, lineHeight: 1.35 }}>
+                Rule: You can only send to output if the <strong>front</strong> equals the next target value.
+              </div>
             </div>
 
             <div>
-              <div style={{ fontWeight: 650, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+              <div style={{ fontWeight: 750, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
                 <span>Output</span>
                 <span className="muted" style={{ fontSize: 13 }}>
                   Must match target exactly
                 </span>
               </div>
-
               <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {output.length === 0 ? (
                   <span className="muted">(empty)</span>
                 ) : (
                   output.map((x, i) => (
-                    <span key={`out-${x}-${i}`} style={tokenStyle("output")}>
+                    <span key={`out-${x}-${i}`} style={tokenStyle("output", i === output.length - 1)}>
                       {x}
                     </span>
                   ))
@@ -416,15 +510,18 @@ export default function QueueCommanderPage() {
         <div className="panel">
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10, justifyContent: "space-between", alignItems: "center" }}>
             <div className="muted" style={{ fontSize: 13 }}>
-              Tip: If the queue is full, you must dequeue — but only if the front equals the next target value.
+              Tip: Enqueue to buffer, rotate to bring the right crate to the front, then dequeue when it matches.
             </div>
 
             <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
               <Button variant="primary" onClick={enqueue} disabled={!canEnqueue}>
                 Enqueue
               </Button>
-              <Button variant="secondary" onClick={dequeue} disabled={!canDequeue}>
-                Dequeue
+              <Button variant="secondary" onClick={rotate} disabled={!canRotate}>
+                Rotate
+              </Button>
+              <Button variant="secondary" onClick={dequeueToOutput} disabled={!canDequeue}>
+                Dequeue → Output
               </Button>
 
               <Button variant="ghost" onClick={hardReset}>
@@ -434,9 +531,8 @@ export default function QueueCommanderPage() {
               <Button
                 variant="ghost"
                 onClick={() => {
-                  setLevel((l) => clamp(l + 1, 1, 8));
+                  setLevel((l) => clamp(l + 1, 1, 10));
                   setSeed((s) => s + 1);
-                  hardReset();
                 }}
                 disabled={status === "playing"}
               >
@@ -451,9 +547,24 @@ export default function QueueCommanderPage() {
         </div>
 
         <div className="muted" style={{ fontSize: 12 }}>
-          Skillcheck: Queue = FIFO. If you think in LIFO (like StackMaze), you’ll fail instantly.
+          Skillcheck: Queue = FIFO. Rotating is like a circular queue — limited tokens force you to plan.
         </div>
       </div>
+
+      {/* Tiny local CSS for shake + mobile safety */}
+      <style>{`
+        .qc-shake { animation: qcshake 260ms ease-in-out; }
+        @keyframes qcshake {
+          0% { transform: translateX(0); }
+          25% { transform: translateX(-3px); }
+          55% { transform: translateX(3px); }
+          85% { transform: translateX(-2px); }
+          100% { transform: translateX(0); }
+        }
+        @media (max-width: 520px) {
+          .panel { padding: 14px !important; }
+        }
+      `}</style>
     </AppShell>
   );
 }

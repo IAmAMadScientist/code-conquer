@@ -15,37 +15,83 @@ function randInt(a, b) {
   return Math.floor(Math.random() * (b - a + 1)) + a;
 }
 
-function makeMaze(size) {
-  const grid = Array.from({ length: size }, () => Array.from({ length: size }, () => 0));
-  const wallCount = Math.floor(size * size * 0.18);
-  for (let k = 0; k < wallCount; k++) {
-    const r = randInt(0, size - 1);
-    const c = randInt(0, size - 1);
-    grid[r][c] = 1;
+function hasPath(grid) {
+  const n = grid.length;
+  const q = [{ r: 0, c: 0 }];
+  const seen = new Set(["0,0"]);
+  const dirs = [
+    { dr: -1, dc: 0 },
+    { dr: 1, dc: 0 },
+    { dr: 0, dc: -1 },
+    { dr: 0, dc: 1 },
+  ];
+  while (q.length) {
+    const cur = q.shift();
+    if (cur.r === n - 1 && cur.c === n - 1) return true;
+    for (const d of dirs) {
+      const nr = cur.r + d.dr;
+      const nc = cur.c + d.dc;
+      if (nr < 0 || nc < 0 || nr >= n || nc >= n) continue;
+      if (grid[nr][nc] === 1) continue;
+      const key = `${nr},${nc}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      q.push({ r: nr, c: nc });
+    }
   }
-  grid[0][0] = 0;
-  grid[size - 1][size - 1] = 0;
-  if (size >= 2) {
-    grid[0][1] = 0;
-    grid[1][0] = 0;
-    grid[size - 2][size - 1] = 0;
-    grid[size - 1][size - 2] = 0;
+  return false;
+}
+
+function makeMaze(size, wallDensity) {
+  // Ensure the level is always solvable.
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const grid = Array.from({ length: size }, () => Array.from({ length: size }, () => 0));
+    const wallCount = Math.floor(size * size * wallDensity);
+    for (let k = 0; k < wallCount; k++) {
+      const r = randInt(0, size - 1);
+      const c = randInt(0, size - 1);
+      grid[r][c] = 1;
+    }
+    // Keep start/goal + a small safety corridor open.
+    grid[0][0] = 0;
+    grid[size - 1][size - 1] = 0;
+    if (size >= 2) {
+      grid[0][1] = 0;
+      grid[1][0] = 0;
+      grid[size - 2][size - 1] = 0;
+      grid[size - 1][size - 2] = 0;
+    }
+    if (hasPath(grid)) return grid;
   }
-  return grid;
+  // Fallback: empty grid.
+  return Array.from({ length: size }, () => Array.from({ length: size }, () => 0));
+}
+
+function getConfig(difficulty) {
+  const d = (difficulty || "EASY").toUpperCase();
+  if (d === "HARD") {
+    return { size: 10, wallDensity: 0.24, maxEnergy: 22, stepMs: 280 };
+  }
+  if (d === "MEDIUM") {
+    return { size: 8, wallDensity: 0.19, maxEnergy: 20, stepMs: 320 };
+  }
+  return { size: 6, wallDensity: 0.13, maxEnergy: 18, stepMs: 350 };
 }
 
 export default function StackMazePage() {
-  const size = 7;
   const loc = useLocation();
   const challenge = loc.state?.challenge;
   const difficulty = challenge?.difficulty || "EASY";
 
-  const [grid, setGrid] = useState(() => makeMaze(size));
+  const config = getConfig(difficulty);
+  const size = config.size;
+
+  const [grid, setGrid] = useState(() => makeMaze(size, config.wallDensity));
   const [pos, setPos] = useState({ r: 0, c: 0 });
   const [stack, setStack] = useState([]);
   const [running, setRunning] = useState(false);
   const [status, setStatus] = useState("playing"); // "playing" | "won" | "lost"
-  const [energy, setEnergy] = useState(14);
+  const [energy, setEnergy] = useState(config.maxEnergy);
   const [crashes, setCrashes] = useState(0);
 
   // timing
@@ -57,12 +103,12 @@ export default function StackMazePage() {
   function reset() {
     startRef.current = Date.now();
     setTimeMs(0);
-    setGrid(makeMaze(size));
+    setGrid(makeMaze(size, config.wallDensity));
     setPos({ r: 0, c: 0 });
     setStack([]);
     setRunning(false);
     setStatus("playing");
-    setEnergy(14);
+    setEnergy(config.maxEnergy);
     setCrashes(0);
   }
 
@@ -103,7 +149,7 @@ export default function StackMazePage() {
   useEffect(() => {
     if (!running) return;
     if (status !== "playing") return;
-    const t = setInterval(() => stepOnce(), 350);
+    const t = setInterval(() => stepOnce(), config.stepMs);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [running, status]);
@@ -133,7 +179,7 @@ export default function StackMazePage() {
     setTimeMs(Date.now() - startRef.current);
   }, [status]);
 
-  const energyPct = Math.round((energy / 14) * 100);
+  const energyPct = Math.round((energy / config.maxEnergy) * 100);
 
   return (
     <AppShell
@@ -163,35 +209,64 @@ export default function StackMazePage() {
       }
     >
       <div style={{ display: "grid", gap: 12 }}>
+        <style>{`
+          .sm-boardWrap{display:flex;justify-content:center;}
+          .sm-board{width:min(92vw, 640px);}
+          .sm-grid{display:grid;gap:8px;}
+          .sm-cell{aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;border-radius:18px;border:1px solid rgba(51,65,85,0.45);background:rgba(2,6,23,0.20);box-shadow:inset 0 0 0 1px rgba(255,255,255,0.02);position:relative;overflow:hidden;}
+          .sm-cellWall{background:linear-gradient(180deg, rgba(30,41,59,0.60), rgba(15,23,42,0.55));}
+          .sm-cellGoal{border-color:rgba(52,211,153,0.40);box-shadow:0 0 0 2px rgba(52,211,153,0.10), inset 0 0 0 1px rgba(255,255,255,0.02);}
+          .sm-cellMe{border-color:rgba(129,140,248,0.45);box-shadow:0 0 0 2px rgba(129,140,248,0.12), inset 0 0 0 1px rgba(255,255,255,0.02);}
+          .sm-spark{position:absolute;inset:-40%;background:radial-gradient(circle at 30% 30%, rgba(99,102,241,0.18), transparent 60%);filter:blur(6px);}
+          .sm-robot{font-size:22px;filter:drop-shadow(0 6px 14px rgba(0,0,0,0.45));animation:smBob 1.15s ease-in-out infinite;}
+          .sm-rock{font-size:18px;opacity:0.95;filter:drop-shadow(0 4px 10px rgba(0,0,0,0.45));}
+          .sm-flag{font-size:18px;filter:drop-shadow(0 4px 10px rgba(0,0,0,0.45));}
+          @keyframes smBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}
+          @media (max-width:520px){.sm-grid{gap:6px}.sm-cell{border-radius:16px}.sm-robot{font-size:20px}}
+        `}</style>
         <div className="muted" style={{ fontSize: 14 }}>
           Program the robot with a <strong style={{ color: "rgba(199,210,254,0.95)" }}>Stack</strong> (LIFO).
         </div>
 
         <Progress value={energyPct} />
 
-        <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(7, minmax(0, 1fr))" }}>
-          {grid.map((row, r) =>
-            row.map((cell, c) => {
-              const isWall = cell === 1;
-              const isMe = pos.r === r && pos.c === c;
-              const isGoal = goal.r === r && goal.c === c;
-              return (
-                <div
-                  key={`${r}-${c}`}
-                  className={cn(
-                    "h-11 rounded-2xl border flex items-center justify-center text-xs",
-                    isWall ? "panel" : "panel",
-                  )}
-                  style={{
-                    background: isWall ? "rgba(30,41,59,0.5)" : "rgba(2,6,23,0.22)",
-                    borderColor: isGoal ? "rgba(52,211,153,0.35)" : isMe ? "rgba(129,140,248,0.35)" : "rgba(51,65,85,0.4)",
-                  }}
-                >
-                  {isWall ? "█" : isMe ? "🤖" : isGoal ? "🏁" : ""}
-                </div>
-              );
-            })
-          )}
+        <div className="sm-boardWrap">
+          <div className="sm-board">
+            <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
+              Difficulty: <strong>{difficulty}</strong> · Size: <strong>{size}×{size}</strong>
+            </div>
+            <div className="sm-grid" style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))` }}>
+              {grid.map((row, r) =>
+                row.map((cell, c) => {
+                  const isWall = cell === 1;
+                  const isMe = pos.r === r && pos.c === c;
+                  const isGoal = goal.r === r && goal.c === c;
+                  return (
+                    <div
+                      key={`${r}-${c}`}
+                      className={cn(
+                        "sm-cell",
+                        isWall && "sm-cellWall",
+                        isGoal && "sm-cellGoal",
+                        isMe && "sm-cellMe",
+                      )}
+                    >
+                      {!isWall && <div className="sm-spark" />}
+                      {isWall ? (
+                        <span className="sm-rock">🪨</span>
+                      ) : isMe ? (
+                        <span className="sm-robot">🤖</span>
+                      ) : isGoal ? (
+                        <span className="sm-flag">🏁</span>
+                      ) : (
+                        ""
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
         </div>
 
         <div className="panel">

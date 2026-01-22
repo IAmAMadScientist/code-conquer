@@ -30,6 +30,13 @@ public class TurnService {
 
     private final Random random = new Random();
 
+    private String formatPlayer(Player p) {
+        if (p == null) return "🙂 Player";
+        String nm = (p.getName() == null || p.getName().isBlank()) ? "Player" : p.getName().trim();
+        String ic = (p.getIcon() == null || p.getIcon().isBlank()) ? "🙂" : p.getIcon().trim();
+        return ic + " " + nm;
+    }
+
     public TurnService(GameSessionService sessionService,
                        BoardGraphService boardService,
                        PlayerRepository playerRepository,
@@ -136,6 +143,7 @@ public class TurnService {
         if (landed == BoardNodeType.SPECIAL) {
             // SPECIAL: send player to JAIL for one turn, then return to this node.
             sendToJailForOneTurn(p, toNodeId);
+            sessionService.publishEvent(s, "JAIL", formatPlayer(p) + " muss ins Gefängnis und setzt 1 Runde aus. ⛓️");
             // Clear fork state and end turn immediately.
             s.setPendingForkNodeId(null);
             s.setPendingRemainingSteps(null);
@@ -258,11 +266,13 @@ public class TurnService {
             if (landedType == BoardNodeType.SPECIAL) {
                 // SPECIAL: send player to JAIL for one turn, then return to this node.
                 sendToJailForOneTurn(p, next);
+                sessionService.publishEvent(s, "JAIL", formatPlayer(p) + " muss ins Gefängnis und setzt 1 Runde aus. ⛓️");
                 mr.turnEnded = true;
                 return mr;
             }
             if (landedType == BoardNodeType.JAIL) {
                 p.setSkipTurns(1);
+                sessionService.publishEvent(s, "JAIL", formatPlayer(p) + " ist im Gefängnis und setzt 1 Runde aus. ⛓️");
                 mr.turnEnded = true;
                 return mr;
             }

@@ -72,7 +72,13 @@ public class ScoreService {
         Score saved = scoreRepository.save(score);
 
         // Update running total score for the player (used by leaderboard).
-        playerService.addToTotalScore(score.getSessionId(), score.getPlayerId(), score.getPoints());
+        Player updated = playerService.addToTotalScore(score.getSessionId(), score.getPlayerId(), score.getPoints());
+
+        // Phase 3: Log a score event for the session event feed.
+        int delta = score.getPoints();
+        String nm = (updated.getName() == null || updated.getName().isBlank()) ? "Player" : updated.getName().trim();
+        String ic = (updated.getIcon() == null || updated.getIcon().isBlank()) ? "🙂" : updated.getIcon().trim();
+        sessionService.publishEvent(s, "SCORE", ic + " " + nm + " hat " + (delta >= 0 ? "+" : "") + delta + " Punkte bekommen (Total: " + updated.getTotalScore() + ").");
 
         // Unlock challenge and advance the turn immediately.
         // Your game uses "each player on their own phone", so there is no handover confirm.
@@ -80,9 +86,8 @@ public class ScoreService {
         s.setActiveChallengeId(null);
         sessionService.save(s);
 
-        // Advance to next player and automatically consume any skipTurns.
+        // Advance to next player (includes auto-skip + TURN_NEXT event).
         sessionService.advanceTurn(score.getSessionId());
-        sessionService.advanceTurnConsideringSkips(score.getSessionId());
 
         return saved;
     }

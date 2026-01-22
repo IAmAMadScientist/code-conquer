@@ -18,6 +18,10 @@ function shuffle(arr) {
   return a;
 }
 
+function clamp(n, a, b) {
+  return Math.max(a, Math.min(b, n));
+}
+
 // ------------------------
 // BST helpers
 // ------------------------
@@ -26,6 +30,21 @@ function bstInsert(root, value) {
   if (value < root.value) root.left = bstInsert(root.left, value);
   else root.right = bstInsert(root.right, value);
   return root;
+}
+
+function height(root) {
+  if (!root) return 0;
+  return 1 + Math.max(height(root.left), height(root.right));
+}
+
+function buildBalancedBST(sorted, lo = 0, hi = sorted.length - 1) {
+  if (lo > hi) return null;
+  const mid = Math.floor((lo + hi) / 2);
+  return {
+    value: sorted[mid],
+    left: buildBalancedBST(sorted, lo, mid - 1),
+    right: buildBalancedBST(sorted, mid + 1, hi),
+  };
 }
 
 function cloneTree(t) {
@@ -60,16 +79,17 @@ function buildLayout(root) {
   const slots = []; // empty child slots as drop targets
 
   let xIndex = 0;
-  const X_STEP = 70;
-  const Y_STEP = 90;
+  // Tuned for readability; the SVG uses viewBox to fit any resulting bounds.
+  const X_STEP = 78;
+  const Y_STEP = 98;
 
   function walk(node, depth) {
     if (!node) return;
 
     walk(node.left, depth + 1);
 
-    const x = 60 + xIndex * X_STEP;
-    const y = 70 + depth * Y_STEP;
+    const x = 70 + xIndex * X_STEP;
+    const y = 80 + depth * Y_STEP;
     nodes.push({ value: node.value, x, y, depth });
     xIndex++;
 
@@ -77,8 +97,8 @@ function buildLayout(root) {
     if (node.right) edges.push({ from: node.value, to: node.right.value });
 
     // create visible "empty slots" if child is missing
-    if (!node.left) slots.push({ parent: node.value, side: "L", x: x - 35, y: y + 60 });
-    if (!node.right) slots.push({ parent: node.value, side: "R", x: x + 35, y: y + 60 });
+    if (!node.left) slots.push({ parent: node.value, side: "L", x: x - 38, y: y + 64 });
+    if (!node.right) slots.push({ parent: node.value, side: "R", x: x + 38, y: y + 64 });
 
     walk(node.right, depth + 1);
   }
@@ -86,20 +106,76 @@ function buildLayout(root) {
   walk(root, 0);
 
   const map = new Map(nodes.map((n) => [n.value, n]));
-  return { nodes, edges, slots, map };
+
+  // Compute bounds (include empty slots) for responsive viewBox.
+  const allPoints = [
+    ...nodes.map((n) => ({ x: n.x, y: n.y })),
+    ...slots.map((s) => ({ x: s.x, y: s.y })),
+  ];
+  const minX = Math.min(...allPoints.map((p) => p.x));
+  const maxX = Math.max(...allPoints.map((p) => p.x));
+  const minY = Math.min(...allPoints.map((p) => p.y));
+  const maxY = Math.max(...allPoints.map((p) => p.y));
+  const pad = 70;
+  const bounds = {
+    x: minX - pad,
+    y: minY - pad,
+    w: (maxX - minX) + pad * 2,
+    h: (maxY - minY) + pad * 2,
+  };
+
+  return { nodes, edges, slots, map, bounds };
 }
 
-function makePuzzle() {
-  // Make a BST with 7 nodes; then pick a new value not in the tree
-  const values = shuffle(Array.from({ length: 28 }, (_, i) => i + 1)); // 1..28
-  const base = values.slice(0, 7);
-  const newValue = values[7];
+function makePuzzle(difficulty) {
+  // Difficulty impacts tree size + shape (balanced vs random vs skewed).
+  const cfg = {
+    EASY: { n: 7, maxH: 4, shape: "balanced" },
+    MEDIUM: { n: 11, maxH: 6, shape: "random" },
+    HARD: { n: 15, maxH: 9, shape: "skew" },
+  }[difficulty] || { n: 11, maxH: 6, shape: "random" };
 
+  const poolMax = 60;
+  let attempt = 0;
+  while (attempt++ < 80) {
+    const values = shuffle(Array.from({ length: poolMax }, (_, i) => i + 1));
+    const base = values.slice(0, cfg.n);
+    const newValue = values[cfg.n];
+
+    let root = null;
+    if (cfg.shape === "balanced") {
+      const sorted = base.slice().sort((a, b) => a - b);
+      root = buildBalancedBST(sorted);
+    } else if (cfg.shape === "skew") {
+      // Intentionally skew: mostly sorted inserts with tiny randomness.
+      const sorted = base.slice().sort((a, b) => a - b);
+      const noisy = sorted.slice();
+      // swap a few entries to avoid a perfectly trivial line
+      for (let i = 0; i < Math.min(3, noisy.length - 1); i++) {
+        const a = randInt(0, noisy.length - 1);
+        const b = randInt(0, noisy.length - 1);
+        [noisy[a], noisy[b]] = [noisy[b], noisy[a]];
+      }
+      for (const v of noisy) root = bstInsert(root, v);
+    } else {
+      // random
+      for (const v of base) root = bstInsert(root, v);
+    }
+
+    if (height(root) <= cfg.maxH) {
+      const answer = findInsertionSlot(root, newValue);
+      return { root, base, newValue, answer, cfg };
+    }
+  }
+
+  // Fallback (should be rare)
+  const values = shuffle(Array.from({ length: 50 }, (_, i) => i + 1));
+  const base = values.slice(0, 11);
+  const newValue = values[11];
   let root = null;
   for (const v of base) root = bstInsert(root, v);
-
   const answer = findInsertionSlot(root, newValue);
-  return { root, base, newValue, answer };
+  return { root, base, newValue, answer, cfg: { n: 11, maxH: 6, shape: "random" } };
 }
 
 // ------------------------
@@ -108,10 +184,10 @@ function makePuzzle() {
 export default function BSTInsertPage() {
   const loc = useLocation();
   const challenge = loc.state?.challenge;
-  const difficulty = challenge?.difficulty || "EASY";
+  const difficulty = (challenge?.difficulty || "EASY").toUpperCase();
 
   const [seed, setSeed] = useState(0);
-  const puzzle = useMemo(() => makePuzzle(), [seed]);
+  const puzzle = useMemo(() => makePuzzle(difficulty), [seed, difficulty]);
 
   const [dropped, setDropped] = useState(null); // { parent, side }
   const [status, setStatus] = useState("playing"); // playing | won
@@ -169,8 +245,9 @@ export default function BSTInsertPage() {
     }
   }
 
-  const W = 900;
-  const H = 420;
+  const viewBox = `${layout.bounds.x} ${layout.bounds.y} ${layout.bounds.w} ${layout.bounds.h}`;
+  // Let the SVG grow with the tree so nothing gets clipped. The page can scroll vertically.
+  const idealHeight = clamp(layout.bounds.h, 420, 980);
 
   return (
     <AppShell
@@ -278,22 +355,66 @@ export default function BSTInsertPage() {
         )}
 
         {/* tree svg */}
-        <div className="panel" style={{ overflowX: "auto" }}>
-          <svg width={W} height={H} style={{ display: "block" }}>
+        <div
+          className="panel"
+          style={{
+            overflowX: "hidden",
+            overflowY: "visible",
+            padding: 12,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+            <div className="muted" style={{ fontSize: 12 }}>
+              Tree size: <strong>{puzzle.cfg?.n ?? 0}</strong> nodes • Shape: <strong>{puzzle.cfg?.shape}</strong>
+            </div>
+            <div className="muted" style={{ fontSize: 12 }}>
+              Drag <strong>{puzzle.newValue}</strong> onto a dotted slot.
+            </div>
+          </div>
+
+          <svg
+            viewBox={viewBox}
+            preserveAspectRatio="xMidYMid meet"
+            style={{
+              width: "100%",
+              height: idealHeight,
+              display: "block",
+              borderRadius: 14,
+              background:
+                "radial-gradient(900px 420px at 50% 0%, rgba(99,102,241,0.10), rgba(2,6,23,0.35) 55%, rgba(2,6,23,0.25))",
+              border: "1px solid rgba(148,163,184,0.14)",
+            }}
+          >
+            <defs>
+              <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="3" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+
+              <linearGradient id="nodeFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="rgba(15,23,42,0.75)" />
+                <stop offset="100%" stopColor="rgba(2,6,23,0.55)" />
+              </linearGradient>
+            </defs>
             {/* edges */}
             {layout.edges.map((e) => {
               const a = layout.map.get(e.from);
               const b = layout.map.get(e.to);
               if (!a || !b) return null;
+              const mx = (a.x + b.x) / 2;
+              const my = (a.y + b.y) / 2;
+              const curve = `M ${a.x} ${a.y} Q ${mx} ${my - 18} ${b.x} ${b.y}`;
               return (
-                <line
+                <path
                   key={`${e.from}-${e.to}`}
-                  x1={a.x}
-                  y1={a.y}
-                  x2={b.x}
-                  y2={b.y}
-                  stroke="rgba(148,163,184,0.35)"
-                  strokeWidth="2"
+                  d={curve}
+                  fill="none"
+                  stroke="rgba(148,163,184,0.32)"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
                 />
               );
             })}
@@ -318,10 +439,11 @@ export default function BSTInsertPage() {
                     cx={s.x}
                     cy={s.y}
                     r="16"
-                    fill={isSelected ? "rgba(245,158,11,0.18)" : "rgba(2,6,23,0.20)"}
-                    stroke={isSelected ? "rgba(252,211,77,0.55)" : "rgba(129,140,248,0.35)"}
+                    fill={isSelected ? "rgba(245,158,11,0.20)" : "rgba(2,6,23,0.18)"}
+                    stroke={isSelected ? "rgba(252,211,77,0.65)" : "rgba(129,140,248,0.45)"}
                     strokeWidth="2"
                     strokeDasharray="5 4"
+                    filter={isSelected ? "url(#softGlow)" : undefined}
                   />
                   <text
                     x={s.x}
@@ -345,9 +467,10 @@ export default function BSTInsertPage() {
                     cx={n.x}
                     cy={n.y}
                     r="18"
-                    fill="rgba(15,23,42,0.35)"
-                    stroke="rgba(51,65,85,0.55)"
-                    strokeWidth="2"
+                    fill="url(#nodeFill)"
+                    stroke={status === "won" ? "rgba(52,211,153,0.55)" : "rgba(148,163,184,0.35)"}
+                    strokeWidth="2.5"
+                    filter="url(#softGlow)"
                   />
                   <text
                     x={n.x}

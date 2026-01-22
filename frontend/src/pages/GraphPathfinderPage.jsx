@@ -97,106 +97,209 @@ function pickStartGoalFar(nodes, minSep) {
 }
 
 // Build a small connected weighted graph with readable node spacing
-function makeGraph() {
-  const W = 600;
-  const H = 400;
-  const nodeCount = 9;
+function makeGraph(difficulty = "EASY") {
+  // Larger logical canvas; SVG scales responsively to the container.
+  const W = 900;
+  const H = 560;
 
-  // circle radius is 18; keep distance >= ~2R + margin
-  const MIN_DIST = 58;
-  const PADDING = 40;
-
-  const nodes = generateNodesNoOverlap(nodeCount, W, H, PADDING, MIN_DIST);
-
-  const { start, goal } = pickStartGoalFar(nodes, 280);
-
-  const edges = [];
-  const seen = new Set();
-
-  function addEdge(u, v) {
-    if (u === v) return false;
-    const k = edgeKey(u, v);
-    if (seen.has(k)) return false;
-    seen.add(k);
-
-    const w = clamp(Math.round(dist(nodes[u], nodes[v]) / 40), 1, 9);
-    edges.push({ u, v, w });
-    return true;
-  }
-
-  // connect each node to its 2 nearest neighbors
-  for (let i = 0; i < nodeCount; i++) {
-    const dists = [];
-    for (let j = 0; j < nodeCount; j++) {
-      if (i === j) continue;
-      dists.push({ j, d: dist(nodes[i], nodes[j]) });
-    }
-    dists.sort((a, b) => a.d - b.d);
-    addEdge(i, dists[0].j);
-    addEdge(i, dists[1].j);
-  }
-
-  // union-find to ensure connected
-  const parent = Array.from({ length: nodeCount }, (_, i) => i);
-  const find = (x) => (parent[x] === x ? x : (parent[x] = find(parent[x])));
-  const unite = (a, b) => {
-    a = find(a);
-    b = find(b);
-    if (a !== b) parent[b] = a;
+  const cfgByDiff = {
+    EASY:   { nodeCount: 8,  kNearest: 2, extraEdges: 1, weightMax: 9,  minStartGoal: 520 },
+    MEDIUM: { nodeCount: 10, kNearest: 2, extraEdges: 3, weightMax: 11, minStartGoal: 560 },
+    HARD:   { nodeCount: 12, kNearest: 3, extraEdges: 6, weightMax: 14, minStartGoal: 600 },
   };
+  const cfg = cfgByDiff[difficulty] || cfgByDiff.EASY;
 
-  for (const e of edges) unite(e.u, e.v);
+  // Keep nodes well spaced, especially for mobile readability.
+  const MIN_DIST = 78;
+  const PADDING = 64;
 
-  function components() {
-    const groups = new Map();
-    for (let i = 0; i < nodeCount; i++) {
-      const r = find(i);
-      if (!groups.has(r)) groups.set(r, []);
-      groups.get(r).push(i);
-    }
-    return [...groups.values()];
-  }
+  // Try multiple layouts and pick the one with the fewest crossings + farthest start/goal.
+  let best = null;
 
-  // connect closest pair across components until connected
-  let guard = 0;
-  while (components().length > 1 && guard < 200) {
-    guard++;
-    const comps = components();
+  for (let attempt = 0; attempt < 28; attempt++) {
+    const nodes = generateNodesNoOverlap(cfg.nodeCount, W, H, PADDING, MIN_DIST);
 
-    let best = null;
-    for (let a = 0; a < comps.length; a++) {
-      for (let b = a + 1; b < comps.length; b++) {
-        for (const i of comps[a]) {
-          for (const j of comps[b]) {
-            const d = dist(nodes[i], nodes[j]);
-            if (!best || d < best.d) best = { i, j, d };
-          }
+    // pick start/goal as the farthest pair (max euclidean distance)
+    let start = 0;
+    let goal = 1;
+    let bestD = -1;
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        const d = dist(nodes[i], nodes[j]);
+        if (d > bestD) {
+          bestD = d;
+          start = i;
+          goal = j;
         }
       }
     }
 
-    if (!best) break;
-    addEdge(best.i, best.j);
-    unite(best.i, best.j);
+    const edges = [];
+    const seen = new Set();
+
+    function segIntersects(a, b, c, d) {
+      // proper segment intersection (excluding shared endpoints)
+      const o = (p, q, r) => {
+        const v = (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+        if (Math.abs(v) < 1e-9) return 0;
+        return v > 0 ? 1 : -1;
+      };
+      const onSeg = (p, q, r) =>
+        Math.min(p.x, r.x) - 1e-9 <= q.x && q.x <= Math.max(p.x, r.x) + 1e-9 &&
+        Math.min(p.y, r.y) - 1e-9 <= q.y && q.y <= Math.max(p.y, r.y) + 1e-9;
+
+      const o1 = o(a, b, c);
+      const o2 = o(a, b, d);
+      const o3 = o(c, d, a);
+      const o4 = o(c, d, b);
+
+      if (o1 !== o2 && o3 !== o4) return true;
+      if (o1 === 0 && onSeg(a, c, b)) return true;
+      if (o2 === 0 && onSeg(a, d, b)) return true;
+      if (o3 === 0 && onSeg(c, a, d)) return true;
+      if (o4 === 0 && onSeg(c, b, d)) return true;
+      return false;
+    }
+
+    function wouldCross(u, v) {
+      const A = nodes[u];
+      const B = nodes[v];
+      for (const e of edges) {
+        // ignore edges that share an endpoint
+        if (e.u === u || e.v === u || e.u === v || e.v === v) continue;
+        const C = nodes[e.u];
+        const D = nodes[e.v];
+        if (segIntersects(A, B, C, D)) return true;
+      }
+      return false;
+    }
+
+    function addEdge(u, v, allowCrossing = false) {
+      if (u === v) return false;
+      const k = edgeKey(u, v);
+      if (seen.has(k)) return false;
+      if (!allowCrossing && wouldCross(u, v)) return false;
+
+      seen.add(k);
+      // weight based on distance, clamped
+      const raw = Math.round(dist(nodes[u], nodes[v]) / 55);
+      const w = clamp(raw, 1, cfg.weightMax);
+      edges.push({ u, v, w });
+      return true;
+    }
+
+    // Connect each node to its k nearest neighbors (prefer non-crossing edges)
+    for (let i = 0; i < cfg.nodeCount; i++) {
+      const dists = [];
+      for (let j = 0; j < cfg.nodeCount; j++) {
+        if (i === j) continue;
+        dists.push({ j, d: dist(nodes[i], nodes[j]) });
+      }
+      dists.sort((a, b) => a.d - b.d);
+
+      let added = 0;
+      for (let idx = 0; idx < dists.length && added < cfg.kNearest; idx++) {
+        if (addEdge(i, dists[idx].j, false)) added++;
+      }
+      // if we couldn't add enough without crossing, allow crossing as fallback
+      for (let idx = 0; idx < dists.length && added < cfg.kNearest; idx++) {
+        if (addEdge(i, dists[idx].j, true)) added++;
+      }
+    }
+
+    // Union-find to ensure connected; connect components with the closest non-crossing edges if possible.
+    const parent = Array.from({ length: cfg.nodeCount }, (_, i) => i);
+    const find = (x) => (parent[x] === x ? x : (parent[x] = find(parent[x])));
+    const unite = (a, b) => {
+      a = find(a);
+      b = find(b);
+      if (a !== b) parent[b] = a;
+    };
+    for (const e of edges) unite(e.u, e.v);
+
+    function components() {
+      const groups = new Map();
+      for (let i = 0; i < cfg.nodeCount; i++) {
+        const r = find(i);
+        if (!groups.has(r)) groups.set(r, []);
+        groups.get(r).push(i);
+      }
+      return [...groups.values()];
+    }
+
+    let guard = 0;
+    while (components().length > 1 && guard < 240) {
+      guard++;
+      const comps = components();
+      let bestPair = null;
+
+      for (let a = 0; a < comps.length; a++) {
+        for (let b = a + 1; b < comps.length; b++) {
+          for (const i of comps[a]) {
+            for (const j of comps[b]) {
+              const d = dist(nodes[i], nodes[j]);
+              const crosses = wouldCross(i, j);
+              // Prefer non-crossing, then shorter distances
+              const score = (crosses ? 1e9 : 0) + d;
+              if (!bestPair || score < bestPair.score) bestPair = { i, j, score };
+            }
+          }
+        }
+      }
+
+      if (!bestPair) break;
+
+      // If only crossing edges are possible, allow crossing to connect the graph.
+      const allow = bestPair.score >= 1e9;
+      if (addEdge(bestPair.i, bestPair.j, allow)) {
+        unite(bestPair.i, bestPair.j);
+      } else {
+        // as a last resort, connect with crossing allowed
+        addEdge(bestPair.i, bestPair.j, true);
+        unite(bestPair.i, bestPair.j);
+      }
+    }
+
+    // Add a few extra edges to create alternate routes, still preferring no crossings.
+    const pairs = [];
+    for (let i = 0; i < cfg.nodeCount; i++) {
+      for (let j = i + 1; j < cfg.nodeCount; j++) {
+        pairs.push({ i, j, d: dist(nodes[i], nodes[j]) });
+      }
+    }
+    pairs.sort((a, b) => a.d - b.d);
+
+    let extras = 0;
+    for (const p of pairs) {
+      if (extras >= cfg.extraEdges) break;
+      if (addEdge(p.i, p.j, false)) extras++;
+    }
+
+    // Count crossings for scoring.
+    let crossings = 0;
+    for (let a = 0; a < edges.length; a++) {
+      for (let b = a + 1; b < edges.length; b++) {
+        const e1 = edges[a], e2 = edges[b];
+        if (e1.u === e2.u || e1.u === e2.v || e1.v === e2.u || e1.v === e2.v) continue;
+        if (segIntersects(nodes[e1.u], nodes[e1.v], nodes[e2.u], nodes[e2.v])) crossings++;
+      }
+    }
+
+    const startGoalDist = bestD;
+    const score = crossings * 10000 - startGoalDist; // fewer crossings dominates; then maximize distance
+
+    if (!best || score < best.score) {
+      best = { nodes, edges, start, goal, score, crossings, startGoalDist };
+    }
+
+    // Early accept if it's very clean and far apart.
+    if (crossings === 0 && startGoalDist >= cfg.minStartGoal) {
+      best = { nodes, edges, start, goal, score, crossings, startGoalDist };
+      break;
+    }
   }
 
-  // Add extra edges for multiple routes (but keep readable)
-  const extrasTarget = 5;
-  let extras = 0;
-  let tries = 0;
-  while (extras < extrasTarget && tries < 2000) {
-    tries++;
-    const u = randInt(0, nodeCount - 1);
-    const v = randInt(0, nodeCount - 1);
-    if (u === v) continue;
-
-    const d = dist(nodes[u], nodes[v]);
-    if (d < 130 || d > 430) continue;
-
-    if (addEdge(u, v)) extras++;
-  }
-
-  return { nodes, edges, start, goal };
+  return { nodes: best.nodes, edges: best.edges, start: best.start, goal: best.goal, W, H };
 }
 
 function buildAdj(nodes, edges) {
@@ -260,7 +363,7 @@ export default function GraphPathfinderPage() {
 
   const [seed, setSeed] = useState(0);
 
-  const { nodes, edges, start, goal } = useMemo(() => makeGraph(), [seed]);
+  const { nodes, edges, start, goal, W: layoutW, H: layoutH } = useMemo(() => makeGraph(difficulty), [seed, difficulty]);
   const adj = useMemo(() => buildAdj(nodes, edges), [nodes, edges]);
 
   const { distArr: distFromStart, prev } = useMemo(() => dijkstraWithPrev(adj, start), [adj, start]);
@@ -477,7 +580,23 @@ export default function GraphPathfinderPage() {
           </div>
 
           <div style={{ marginTop: 12, overflowX: "auto" }}>
-            <svg width="600" height="400" style={{ display: "block" }}>
+            <svg viewBox={`0 0 ${layoutW} ${layoutH}`} preserveAspectRatio="xMidYMid meet" style={{ width: "100%", height: "auto", display: "block" }}>
+              <defs>
+  <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
+    <feGaussianBlur stdDeviation="2.2" result="blur" />
+    <feColorMatrix in="blur" type="matrix"
+      values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.9 0" result="glow" />
+    <feMerge>
+      <feMergeNode in="glow" />
+      <feMergeNode in="SourceGraphic" />
+    </feMerge>
+  </filter>
+  <linearGradient id="edgeGrad" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0%" stopColor="rgba(255,255,255,0.22)" />
+    <stop offset="50%" stopColor="rgba(255,255,255,0.42)" />
+    <stop offset="100%" stopColor="rgba(255,255,255,0.22)" />
+  </linearGradient>
+</defs>
               {/* edges */}
               {edges.map((e) => {
                 const a = nodes[e.u];
@@ -493,14 +612,17 @@ export default function GraphPathfinderPage() {
                       y1={a.y}
                       x2={b.x}
                       y2={b.y}
+                      strokeWidth={onOptimal ? 5 : onUser ? 4 : 2.5}
+                      filter={onOptimal || onUser ? "url(#softGlow)" : undefined}
                       stroke={
                         onOptimal
                           ? "rgba(16,185,129,0.95)" // emerald shortest path
                           : onUser
-                            ? "rgba(99,102,241,0.95)" // indigo user path
+                            ? "url(#edgeGrad)" // user path (gradient)
                             : "rgba(148,163,184,0.35)"
                       }
-                      strokeWidth={onOptimal ? 5 : onUser ? 4 : 2}
+                      filter={onOptimal || onUser ? "url(#softGlow)" : undefined}
+                      strokeWidth={onOptimal ? 5 : onUser ? 4 : 2.5}
                     />
                     <text
                       x={(a.x + b.x) / 2}

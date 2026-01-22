@@ -112,3 +112,13 @@ export async function startTurnChallenge(sessionId, playerId, category) {
   const data = await parseJsonOrThrow(res);
   return data;
 }
+
+// Phase 3: poll game events for a session.
+export async function fetchEvents(sessionId, afterSeq, limit) {
+  const qs = new URLSearchParams();
+  if (afterSeq != null) qs.set("afterSeq", String(afterSeq));
+  if (limit != null) qs.set("limit", String(limit));
+  const res = await fetch(`${API_BASE}/sessions/${encodeURIComponent(sessionId)}/events?${qs.toString()}`);
+  const data = await parseJsonOrThrow(res);
+  return Array.isArray(data) ? data : [];
+}
