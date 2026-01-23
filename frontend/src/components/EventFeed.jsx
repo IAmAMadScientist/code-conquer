@@ -7,6 +7,13 @@ import { Badge } from "./ui/badge";
 
 export default function EventFeed({ sessionId, title = "Events", limit = 5, pollMs = 1500 }) {
   const MAX_ITEMS = 15;
+  const isSmall = useMemo(() => {
+    try {
+      return window.matchMedia && window.matchMedia("(max-width: 520px)").matches;
+    } catch {
+      return false;
+    }
+  }, []);
   const storageKey = useMemo(() => (sessionId ? `cc_evtfeed_open_${sessionId}` : "cc_evtfeed_open"), [sessionId]);
   const [open, setOpen] = useState(() => {
     try {
@@ -17,6 +24,12 @@ export default function EventFeed({ sessionId, title = "Events", limit = 5, poll
       return false;
     }
   });
+
+  // On small screens, start compact/collapsed even if it was open before.
+  useEffect(() => {
+    if (!isSmall) return;
+    setOpen(false);
+  }, [isSmall]);
 
   const [events, setEvents] = useState([]);
   const [lastSeq, setLastSeq] = useState(0);
@@ -84,7 +97,9 @@ export default function EventFeed({ sessionId, title = "Events", limit = 5, poll
 
   // Hard-cap the feed for readability on mobile.
   const bounded = events.slice(-MAX_ITEMS);
-  const shown = open ? bounded.slice(-Math.max(limit, 1)) : bounded.slice(-1);
+  // On small screens keep it compact even when expanded.
+  const effectiveLimit = isSmall ? Math.min(Math.max(limit, 1), 3) : Math.max(limit, 1);
+  const shown = open ? bounded.slice(-Math.max(effectiveLimit, 1)) : bounded.slice(-1);
   const last = bounded.length ? bounded[bounded.length - 1] : null;
 
   return (

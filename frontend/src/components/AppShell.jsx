@@ -16,8 +16,8 @@ export default function AppShell({
       <div className="maxW gridShell">
         <Card>
           <CardContent>
-            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-              <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+            <div className="appHeader" style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+              <div className="appBrand" style={{ display: "flex", gap: 12, alignItems: "center" }}>
                 <div
                   style={{
                     height: 40,
@@ -46,7 +46,7 @@ export default function AppShell({
                 </div>
               </div>
 
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              <div className="appBadges" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {headerBadges}
               </div>
             </div>
@@ -57,7 +57,7 @@ export default function AppShell({
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="sideCard">
           <CardContent>
             {rightPanel ? rightPanel : (
               <div className="panel">

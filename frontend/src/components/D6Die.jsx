@@ -1,119 +1,87 @@
-import React, { useEffect, useState } from "react";
+import React, { useMemo, useState } from "react";
+import "./dice/dice.css";
 
-// Minimal visual D6 with pips on the front face.
-// No external CSS (keeps project simple).
-export default function D6Die({ value, onRoll, disabled }) {
+// Neon-ish 3D-ish D6.
+// Uses a CSS cube tumble animation and shows the rolled value as pips on the front face.
+export default function D6Die({ value, onRoll, disabled, soundEnabled = false, onSfxRoll, onSfxLand }) {
   const [rolling, setRolling] = useState(false);
 
   async function handleClick() {
     if (disabled || rolling) return;
     setRolling(true);
+    if (soundEnabled) onSfxRoll?.();
     try {
       await (onRoll?.());
     } finally {
-      // let the anim play a bit even if request returns fast
-      setTimeout(() => setRolling(false), 520);
+      // Let the tumble finish even if the request returns fast.
+      setTimeout(() => {
+        setRolling(false);
+        if (soundEnabled) onSfxLand?.();
+      }, 980);
     }
   }
 
-  const size = 72;
-  const pip = (x, y) => (
-    <div
-      key={`${x}-${y}`}
-      style={{
-        position: "absolute",
-        width: 10,
-        height: 10,
-        borderRadius: 999,
-        background: "rgba(226,232,240,0.92)",
-        left: x,
-        top: y,
-        transform: "translate(-50%, -50%)",
-        boxShadow: "0 1px 8px rgba(0,0,0,0.35)",
-      }}
-    />
-  );
+  // Slight deterministic tilt per value so it doesn't look identical every time.
+  const tilts = useMemo(() => {
+    const v = Number(value) || 0;
+    const rx = -18 + (v % 3) * 6; // -18, -12, -6
+    const ry = 24 + (v % 4) * 10; // 24..54
+    return { rx: `${rx}deg`, ry: `${ry}deg` };
+  }, [value]);
 
-  // 3x3 grid positions
-  const pos = {
-    tl: [18, 18],
-    tc: [36, 18],
-    tr: [54, 18],
-    cl: [18, 36],
-    cc: [36, 36],
-    cr: [54, 36],
-    bl: [18, 54],
-    bc: [36, 54],
-    br: [54, 54],
-  };
-
-  const pipsFor = (v) => {
-    const vv = Number(v) || 0;
-    if (vv === 1) return [pos.cc];
-    if (vv === 2) return [pos.tl, pos.br];
-    if (vv === 3) return [pos.tl, pos.cc, pos.br];
-    if (vv === 4) return [pos.tl, pos.tr, pos.bl, pos.br];
-    if (vv === 5) return [pos.tl, pos.tr, pos.cc, pos.bl, pos.br];
-    if (vv === 6) return [pos.tl, pos.tr, pos.cl, pos.cr, pos.bl, pos.br];
-    return [];
-  };
-
-  const pips = pipsFor(value).map(([x, y]) => pip(x, y));
+  const pips = useMemo(() => pipsFor(value), [value]);
 
   return (
     <button
       type="button"
       onClick={handleClick}
       disabled={disabled}
-      style={{
-        border: "1px solid rgba(148,163,184,0.20)",
-        background: "rgba(15,23,42,0.35)",
-        borderRadius: 16,
-        padding: 10,
-        minWidth: 90,
-        minHeight: 90,
-        cursor: disabled ? "not-allowed" : "pointer",
-        opacity: disabled ? 0.55 : 1,
-        touchAction: "manipulation",
-      }}
+      className={`cc-diceBtn ${rolling ? "cc-diceRolling" : ""}`}
       aria-label="Roll D6"
     >
-      <div
-        style={{
-          width: size,
-          height: size,
-          position: "relative",
-          display: "grid",
-          placeItems: "center",
-          transform: rolling ? "rotate(15deg)" : "rotate(0deg)",
-          transition: "transform 120ms ease",
-          animation: rolling ? "cc_d6shake 520ms ease-in-out" : "none",
-        }}
-      >
-        <div
-          style={{
-            width: 64,
-            height: 64,
-            borderRadius: 14,
-            background: "rgba(30,41,59,0.95)",
-            border: "2px solid rgba(148,163,184,0.65)",
-            position: "relative",
-          }}
-        >
-          {pips}
+      <div className="cc-diceScene">
+        <div className="cc-d6Cube" style={{ "--rx": tilts.rx, "--ry": tilts.ry }}>
+          <div className="cc-d6Face cc-d6Face--front">
+            <div className="cc-d6Pips">
+              {pips.map((p) => (
+                <span key={p.key} className="cc-pip" style={{ left: p.x, top: p.y }} />
+              ))}
+            </div>
+          </div>
+          {/* The other faces are subtle (purely visual). */}
+          <div className="cc-d6Face cc-d6Face--back" />
+          <div className="cc-d6Face cc-d6Face--right" />
+          <div className="cc-d6Face cc-d6Face--left" />
+          <div className="cc-d6Face cc-d6Face--top" />
+          <div className="cc-d6Face cc-d6Face--bottom" />
         </div>
       </div>
-
-      <style>{`
-        @keyframes cc_d6shake {
-          0%   { transform: translateY(0) rotate(0deg); }
-          20%  { transform: translateY(-2px) rotate(8deg); }
-          40%  { transform: translateY(1px) rotate(-10deg); }
-          60%  { transform: translateY(-1px) rotate(12deg); }
-          80%  { transform: translateY(1px) rotate(-8deg); }
-          100% { transform: translateY(0) rotate(0deg); }
-        }
-      `}</style>
     </button>
   );
+}
+
+function pipsFor(value) {
+  const v = Number(value) || 0;
+  // percent coordinates inside cc-d6Pips box
+  const pos = {
+    tl: { x: "12%", y: "12%" },
+    tr: { x: "88%", y: "12%" },
+    cl: { x: "12%", y: "50%" },
+    cr: { x: "88%", y: "50%" },
+    bl: { x: "12%", y: "88%" },
+    br: { x: "88%", y: "88%" },
+    cc: { x: "50%", y: "50%" },
+    tc: { x: "50%", y: "12%" },
+    bc: { x: "50%", y: "88%" },
+  };
+
+  const mk = (p, i) => ({ key: `${v}-${i}`, x: p.x, y: p.y });
+
+  if (v === 1) return [mk(pos.cc, 0)];
+  if (v === 2) return [mk(pos.tl, 0), mk(pos.br, 1)];
+  if (v === 3) return [mk(pos.tl, 0), mk(pos.cc, 1), mk(pos.br, 2)];
+  if (v === 4) return [mk(pos.tl, 0), mk(pos.tr, 1), mk(pos.bl, 2), mk(pos.br, 3)];
+  if (v === 5) return [mk(pos.tl, 0), mk(pos.tr, 1), mk(pos.cc, 2), mk(pos.bl, 3), mk(pos.br, 4)];
+  if (v === 6) return [mk(pos.tl, 0), mk(pos.tr, 1), mk(pos.cl, 2), mk(pos.cr, 3), mk(pos.bl, 4), mk(pos.br, 5)];
+  return [];
 }

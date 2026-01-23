@@ -7,6 +7,8 @@ import { getSession, clearSession } from "../lib/session";
 import { getPlayer, fetchLobby, leaveSession, clearPlayer, rollTurnD6, chooseTurnPath, startTurnChallenge } from "../lib/player";
 import D6Die from "../components/D6Die";
 import EventFeed from "../components/EventFeed";
+import DiceSoundToggle from "../components/dice/DiceSoundToggle";
+import { playDiceLandSfx, playDiceRollSfx, useDiceSoundSetting } from "../lib/diceSound";
 
 export default function Play() {
   const nav = useNavigate();
@@ -19,6 +21,7 @@ export default function Play() {
   const [summary, setSummary] = useState(loc.state?.turnSummary || null);
   const [turnMsg, setTurnMsg] = useState(null);
   const [pendingChoices, setPendingChoices] = useState(null);
+  const [soundEnabled, setSoundEnabled] = useDiceSoundSetting();
 
   const canView = !!(session?.sessionId && me?.playerId);
 
@@ -197,7 +200,7 @@ useEffect(() => {
         </div>
       }
     >
-      <div className="panel" style={{ display: "grid", gap: 12 }}>
+      <div className="panel mobileCenter" style={{ display: "grid", gap: 12 }}>
         {err ? <div style={{ opacity: 0.9 }}>⚠️ {err}</div> : null}
         <EventFeed sessionId={session.sessionId} title="Game feed" limit={5} />
 
@@ -249,8 +252,16 @@ useEffect(() => {
             {isMyTurn && waitingForDice ? (
               <div style={{ display: "grid", gap: 10, marginTop: 6 }}>
                 <div className="muted">Roll the D6 to move on the board:</div>
-                <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-                  <D6Die value={state?.lastDiceRoll || null} onRoll={doRollD6} disabled={!isMyTurn} />
+                <div className="mobileRow" style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                  <D6Die
+                    value={state?.lastDiceRoll || null}
+                    onRoll={doRollD6}
+                    disabled={!isMyTurn}
+                    soundEnabled={soundEnabled}
+                    onSfxRoll={playDiceRollSfx}
+                    onSfxLand={playDiceLandSfx}
+                  />
+                  <DiceSoundToggle enabled={soundEnabled} setEnabled={setSoundEnabled} compact />
                   <div className="muted" style={{ lineHeight: 1.4 }}>
                     {state?.lastDiceRoll ? <>Last roll: <strong>{state.lastDiceRoll}</strong></> : ""}
                   </div>
@@ -261,7 +272,7 @@ useEffect(() => {
             {isMyTurn && waitingForPath ? (
               <div style={{ display: "grid", gap: 10, marginTop: 6 }}>
                 <div className="muted">Fork! Choose your path:</div>
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <div className="mobileRow" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                   {(pendingChoices?.options || []).map((opt) => (
                     <Button key={opt?.to || opt} variant="secondary" onClick={() => doChoosePath(opt?.to || opt)}>
                       {opt?.label ? opt.label : "Choose"}
@@ -285,7 +296,7 @@ useEffect(() => {
                 {waitingForDice ? "Roll the D6 first." : waitingForPath ? "Finish the fork choice first." : ""}
               </div>
             ) : null}
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <div className="mobileRow" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <Button
                 variant="primary"
                 onClick={doStartChallenge}
@@ -302,7 +313,7 @@ useEffect(() => {
           </>
         )}
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
+        <div className="mobileRow" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
           <Link to="/leaderboard">
             <Button variant="ghost">Leaderboard</Button>
           </Link>

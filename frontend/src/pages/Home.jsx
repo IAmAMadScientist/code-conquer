@@ -111,31 +111,24 @@ export default function Home() {
         </div>
       }
     >
-      <div className="panel" style={{ display: "grid", gap: 12 }}>
+      <div className="panel mobileCenter" style={{ display: "grid", gap: 12 }}>
         {err ? <div style={{ opacity: 0.9 }}>⚠️ {err}</div> : null}
 
         {!session?.sessionId ? (
           <>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <div className="mobileRow" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <Button variant="primary" onClick={onCreate} disabled={busy}>Create match</Button>
             </div>
 
             <div style={{ display: "grid", gap: 8 }}>
               <div className="muted">Or join by code:</div>
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+              <div className="mobileRow" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                 <input
+                  className="ui-input"
                   value={joinCode}
                   onChange={(e) => setJoinCode(e.target.value)}
                   placeholder="6-digit code"
-                  style={{
-                    padding: "10px 12px",
-                    borderRadius: 10,
-                    border: "1px solid rgba(148,163,184,0.35)",
-                    background: "rgba(15,23,42,0.35)",
-                    color: "inherit",
-                    minWidth: 220,
-                    textTransform: "uppercase",
-                  }}
+                  style={{ minWidth: 220, textTransform: "uppercase" }}
                 />
                 <Button variant="secondary" onClick={onJoinByCode} disabled={busy || !joinCode.trim()}>
                   Join
@@ -145,7 +138,7 @@ export default function Home() {
           </>
         ) : (
           <>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            <div className="mobileRow" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
               <Badge>Active match: {session.sessionCode}</Badge>
               <Button variant="secondary" onClick={onLeave} disabled={busy}>Leave match</Button>
             </div>
@@ -153,19 +146,13 @@ export default function Home() {
             {!player?.playerId ? (
               <div style={{ display: "grid", gap: 10 }}>
                 <div className="muted">Set your player profile:</div>
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                <div className="mobileRow" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                   <input
+                    className="ui-input"
                     value={playerName}
                     onChange={(e) => setPlayerName(e.target.value)}
                     placeholder="e.g. Alex"
-                    style={{
-                      padding: "10px 12px",
-                      borderRadius: 10,
-                      border: "1px solid rgba(148,163,184,0.35)",
-                      background: "rgba(15,23,42,0.35)",
-                      color: "inherit",
-                      minWidth: 220,
-                    }}
+                    style={{ minWidth: 220 }}
                   />
                   <Button variant="primary" onClick={onSaveProfileAndGoLobby} disabled={busy || !playerName.trim()}>
                     Save & go to Lobby
@@ -199,7 +186,7 @@ export default function Home() {
                 </div>
               </div>
             ) : (
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <div className="mobileRow" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <Button variant="primary" onClick={() => nav("/lobby")}>Go to Lobby</Button>
                 <Button variant="secondary" onClick={() => nav("/play")}>Play</Button>
                 <Button variant="ghost" onClick={() => nav("/leaderboard")}>Leaderboard</Button>

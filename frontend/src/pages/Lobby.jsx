@@ -7,6 +7,8 @@ import QRCode from "react-qr-code";
 import { getSession, clearSession } from "../lib/session";
 import { getPlayer, fetchLobby, setReady, leaveSession, clearPlayer, rollLobbyD20 } from "../lib/player";
 import D20Die from "../components/D20Die";
+import DiceSoundToggle from "../components/dice/DiceSoundToggle";
+import { playDiceLandSfx, playDiceRollSfx, useDiceSoundSetting } from "../lib/diceSound";
 
 export default function Lobby() {
   const nav = useNavigate();
@@ -17,6 +19,7 @@ export default function Lobby() {
   const [eventMsg, setEventMsg] = useState(null);
   const [busy, setBusy] = useState(false);
   const [rolling, setRolling] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useDiceSoundSetting();
   const [err, setErr] = useState(null);
 
   const canView = !!(session?.sessionId && me?.playerId);
@@ -83,6 +86,7 @@ export default function Lobby() {
     setRolling(true);
     setBusy(true);
     setErr(null);
+    if (soundEnabled) playDiceRollSfx();
     // small client-side animation: flash random values while waiting for server
     const start = Date.now();
     const t = setInterval(() => {
@@ -106,6 +110,7 @@ export default function Lobby() {
       // keep animation visible at least ~420ms
       const wait = Math.max(0, 420 - elapsed);
       setTimeout(() => setRolling(false), wait);
+      if (soundEnabled) setTimeout(() => playDiceLandSfx(), Math.max(0, wait) + 560);
       setBusy(false);
     }
   }
@@ -145,8 +150,14 @@ export default function Lobby() {
   const tiedPlayers = players.filter((p) => p.tied);
   const hasTies = tiedPlayers.length > 0;
 
-  // Display list for rolls: sort by roll desc, unrolled last.
-  const rollRanking = playersRaw.slice().sort((a, b) => {
+  // Single lobby list:
+  // - while rolling, we rank by roll desc (unrolled last)
+  // - once order is locked, we show turnOrder as the source of truth
+  const lobbyList = playersRaw.slice().sort((a, b) => {
+    const aHasOrder = a.turnOrder != null;
+    const bHasOrder = b.turnOrder != null;
+    if (state?.turnOrderLocked && aHasOrder && bHasOrder) return a.turnOrder - b.turnOrder;
+
     const ar = a.lobbyRoll ?? -1;
     const br = b.lobbyRoll ?? -1;
     if (br !== ar) return br - ar;
@@ -209,8 +220,17 @@ export default function Lobby() {
                 Everyone rolls once. If there is a tie, only tied players roll again.
               </div>
             </div>
-            <div style={{ display: "grid", justifyItems: "center", gap: 6 }}>
-              <D20Die value={meRow?.lobbyRoll ?? "?"} rolling={rolling} disabled={!canRoll || busy} onClick={doLobbyRoll} />
+            <div style={{ display: "grid", justifyItems: "center", gap: 8 }}>
+              <D20Die
+                value={meRow?.lobbyRoll ?? "?"}
+                rolling={rolling}
+                disabled={!canRoll || busy}
+                onClick={doLobbyRoll}
+                soundEnabled={soundEnabled}
+                onSfxRoll={playDiceRollSfx}
+                onSfxLand={playDiceLandSfx}
+              />
+              <DiceSoundToggle enabled={soundEnabled} setEnabled={setSoundEnabled} compact />
               <div className="muted" style={{ fontSize: 12 }}>
                 {state?.turnOrderLocked ? "Locked" : canRoll ? (meRow?.tied ? "Tie – reroll" : "Tap to roll") : (meRow?.lobbyRoll ? "Rolled" : "Waiting")}
               </div>
@@ -225,75 +245,59 @@ export default function Lobby() {
               </div>
             </div>
           ) : null}
+        </div>
 
-          <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
-            {rollRanking.map((p) => (
+        {/* Single player list: roll + rank + ready in one row */}
+        <div style={{ display: "grid", gap: 8 }}>
+          {lobbyList.map((p, idx) => {
+            const rank = p.turnOrder ?? (allRolled && !hasTies ? (idx + 1) : null);
+            return (
               <div
                 key={p.id}
                 style={{
-                  display: "flex",
+                  display: "grid",
+                  gridTemplateColumns: "1fr auto",
                   alignItems: "center",
-                  justifyContent: "space-between",
+                  gap: 10,
                   padding: "10px 12px",
                   borderRadius: 12,
                   border: "1px solid rgba(148,163,184,0.18)",
-                  background: p.tied ? "rgba(251,191,36,0.10)" : (p.id === me.playerId ? "rgba(59,130,246,0.10)" : "rgba(15,23,42,0.25)"),
+                  background: p.tied
+                    ? "rgba(251,191,36,0.10)"
+                    : (p.id === me.playerId ? "rgba(59,130,246,0.10)" : "rgba(15,23,42,0.25)"),
                 }}
               >
-                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <div style={{ display: "flex", gap: 10, alignItems: "center", minWidth: 0 }}>
                   <div style={{ fontSize: 20, width: 26, textAlign: "center" }}>{p.icon || "🙂"}</div>
-                  <div>
-                    <div style={{ fontWeight: 700 }}>
-                      {p.name}{p.id === me.playerId ? " (You)" : ""}
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 750, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                      <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {rank ? `#${rank} ` : ""}{p.name}{p.id === me.playerId ? " (You)" : ""}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 12,
+                          padding: "2px 8px",
+                          borderRadius: 999,
+                          border: "1px solid rgba(148,163,184,0.20)",
+                          opacity: p.lobbyRoll == null ? 0.7 : 0.95,
+                        }}
+                      >
+                        D20: {p.lobbyRoll == null ? "–" : `${p.lobbyRoll}${p.tied ? " (tie)" : ""}`}
+                      </span>
                     </div>
                     <div className="muted" style={{ fontSize: 12 }}>
-                      {p.lobbyRoll == null ? "Not rolled yet" : `Rolled: ${p.lobbyRoll}${p.tied ? " (tie)" : ""}`}
+                      {p.lobbyRoll == null ? "Roll required" : (p.ready ? "Ready" : "Not ready")}
                     </div>
                   </div>
                 </div>
-                <Badge variant={p.lobbyRoll == null ? "outline" : (p.tied ? "outline" : "secondary")}>
-                  {p.lobbyRoll == null ? "—" : p.lobbyRoll}
-                </Badge>
-              </div>
-            ))}
-          </div>
-        </div>
 
-        <div style={{ display: "grid", gap: 8 }}>
-          {players.map((p) => (
-            <div
-              key={p.id}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "10px 12px",
-                borderRadius: 12,
-                border: "1px solid rgba(148,163,184,0.18)",
-                background: p.id === me.playerId ? "rgba(59,130,246,0.10)" : "rgba(15,23,42,0.25)",
-              }}
-            >
-              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                <div style={{ fontSize: 20, width: 26, textAlign: "center" }}>{p.icon || "🙂"}</div>
-                <div>
-                  <div style={{ fontWeight: 700, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                    <span>{p.turnOrder}. {p.name}</span>
-                    {p.lobbyRoll != null ? (
-                      <span style={{ fontSize: 12, padding: "2px 8px", borderRadius: 999, border: "1px solid rgba(148,163,184,0.20)", opacity: 0.95 }}>
-                        D20: {p.lobbyRoll}{p.tied ? " (tie)" : ""}
-                      </span>
-                    ) : (
-                      <span style={{ fontSize: 12, padding: "2px 8px", borderRadius: 999, border: "1px solid rgba(148,163,184,0.14)", opacity: 0.6 }}>
-                        D20: –
-                      </span>
-                    )}
-                  </div>
-                  <div className="muted" style={{ fontSize: 12 }}>{p.id === me.playerId ? "You" : "Player"}</div>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <Badge variant={p.ready ? "secondary" : "outline"}>{p.ready ? "Ready" : "Not ready"}</Badge>
                 </div>
               </div>
-              <Badge variant={p.ready ? "secondary" : "outline"}>{p.ready ? "Ready" : "Not ready"}</Badge>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
