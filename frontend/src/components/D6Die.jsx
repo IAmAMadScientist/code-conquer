@@ -1,22 +1,23 @@
 import React, { useMemo, useState } from "react";
 import "./dice/dice.css";
+import { useDiceOverlay } from "./dice/DiceOverlayProvider";
 
 // Neon-ish 3D-ish D6.
 // Uses a CSS cube tumble animation and shows the rolled value as pips on the front face.
-export default function D6Die({ value, onRoll, disabled, soundEnabled = false, onSfxRoll, onSfxLand }) {
+export default function D6Die({ value, onRoll, disabled }) {
   const [rolling, setRolling] = useState(false);
+  const diceOverlay = useDiceOverlay();
 
   async function handleClick() {
     if (disabled || rolling) return;
     setRolling(true);
-    if (soundEnabled) onSfxRoll?.();
     try {
-      await (onRoll?.());
+      // Show the global overlay and await the server result.
+      await diceOverlay.rollD6(() => onRoll?.());
     } finally {
       // Let the tumble finish even if the request returns fast.
       setTimeout(() => {
         setRolling(false);
-        if (soundEnabled) onSfxLand?.();
       }, 980);
     }
   }
@@ -32,31 +33,33 @@ export default function D6Die({ value, onRoll, disabled, soundEnabled = false, o
   const pips = useMemo(() => pipsFor(value), [value]);
 
   return (
-    <button
-      type="button"
-      onClick={handleClick}
-      disabled={disabled}
-      className={`cc-diceBtn ${rolling ? "cc-diceRolling" : ""}`}
-      aria-label="Roll D6"
-    >
-      <div className="cc-diceScene">
-        <div className="cc-d6Cube" style={{ "--rx": tilts.rx, "--ry": tilts.ry }}>
-          <div className="cc-d6Face cc-d6Face--front">
-            <div className="cc-d6Pips">
-              {pips.map((p) => (
-                <span key={p.key} className="cc-pip" style={{ left: p.x, top: p.y }} />
-              ))}
+    <>
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={disabled}
+        className={`cc-diceBtn ${rolling ? "cc-diceRolling" : ""}`}
+        aria-label="Roll D6"
+      >
+        <div className="cc-diceScene">
+          <div className="cc-d6Cube" style={{ "--rx": tilts.rx, "--ry": tilts.ry }}>
+            <div className="cc-d6Face cc-d6Face--front">
+              <div className="cc-d6Pips">
+                {pips.map((p) => (
+                  <span key={p.key} className="cc-pip" style={{ left: p.x, top: p.y }} />
+                ))}
+              </div>
             </div>
+            {/* The other faces are subtle (purely visual). */}
+            <div className="cc-d6Face cc-d6Face--back" />
+            <div className="cc-d6Face cc-d6Face--right" />
+            <div className="cc-d6Face cc-d6Face--left" />
+            <div className="cc-d6Face cc-d6Face--top" />
+            <div className="cc-d6Face cc-d6Face--bottom" />
           </div>
-          {/* The other faces are subtle (purely visual). */}
-          <div className="cc-d6Face cc-d6Face--back" />
-          <div className="cc-d6Face cc-d6Face--right" />
-          <div className="cc-d6Face cc-d6Face--left" />
-          <div className="cc-d6Face cc-d6Face--top" />
-          <div className="cc-d6Face cc-d6Face--bottom" />
         </div>
-      </div>
-    </button>
+      </button>
+    </>
   );
 }
 

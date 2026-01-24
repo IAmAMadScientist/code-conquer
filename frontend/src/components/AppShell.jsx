@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "./ui/button";
-import { Badge } from "./ui/badge";
 import { Separator } from "./ui/separator";
+import { useHapticsSetting, useSoundSetting } from "../lib/diceSound";
 
 /**
  * Mobile-first app shell.
@@ -25,15 +25,26 @@ export default function AppShell({
   const nav = useNavigate();
   const loc = useLocation();
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useSoundSetting();
+  const [hapticsEnabled, setHapticsEnabled] = useHapticsSetting();
 
   const showBack = backTo !== false && (loc?.pathname || "/") !== "/";
 
   const tabs = useMemo(
-    () => [
-      { key: "play", label: "Play", icon: "🎲", to: "/play" },
-      { key: "leaderboard", label: "Scores", icon: "🏆", to: "/leaderboard" },
-    ],
-    []
+    () => {
+      const base = [
+        { key: "play", label: "Play", icon: "🎲", to: "/play" },
+        { key: "leaderboard", label: "Scores", icon: "🏆", to: "/leaderboard" },
+      ];
+
+      // If a screen provides an info/rightPanel bottom sheet, expose it as a dedicated tab button.
+      if (rightPanel) {
+        base.push({ key: "info", label: "Info", icon: "ℹ️", to: null });
+      }
+
+      return base;
+    },
+    [rightPanel]
   );
 
   const resolvedActiveTab = useMemo(() => {
@@ -66,25 +77,39 @@ export default function AppShell({
           <div className="topBarCenter">
             <div className="topBarTitleRow">
               <div className="topBarTitle">{title}</div>
-              {rightPanel ? (
-                <button className="iconBtn" aria-label="Info" onClick={() => setSheetOpen(true)}>
-                  ⓘ
-                </button>
-              ) : null}
             </div>
             {subtitle ? <div className="topBarSubtitle">{subtitle}</div> : null}
           </div>
 
           <div className="topBarRight">
-            {headerBadges ? (
-              <div className="badgeRow">
-                {headerBadges}
-              </div>
-            ) : (
-              <Badge variant="secondary">CC</Badge>
-            )}
+            <div className="topBarControls">
+              <button
+                type="button"
+                className={hapticsEnabled ? "soundBtn on" : "soundBtn"}
+                aria-label={hapticsEnabled ? "Haptics on" : "Haptics off"}
+                title={hapticsEnabled ? "Haptics: On" : "Haptics: Off"}
+                onClick={() => setHapticsEnabled((v) => !v)}
+              >
+                <span className="soundIcon" aria-hidden="true">
+                  {hapticsEnabled ? "📳" : "🚫"}
+                </span>
+              </button>
+              <button
+                type="button"
+                className={soundEnabled ? "soundBtn on" : "soundBtn"}
+                aria-label={soundEnabled ? "Sound on" : "Sound off"}
+                title={soundEnabled ? "Sound: On" : "Sound: Off"}
+                onClick={() => setSoundEnabled((v) => !v)}
+              >
+                <span className="soundIcon" aria-hidden="true">
+                  {soundEnabled ? "🔊" : "🔇"}
+                </span>
+              </button>
+            </div>
           </div>
         </div>
+
+        {headerBadges ? <div className="topBarPills">{headerBadges}</div> : null}
       </header>
 
       <main className={showTabs ? "appMain hasTabs" : "appMain"}>
@@ -102,7 +127,13 @@ export default function AppShell({
               <button
                 key={t.key}
                 className={active ? "tabBtn active" : "tabBtn"}
-                onClick={() => nav(t.to)}
+                onClick={() => {
+                  if (t.key === "info") {
+                    setSheetOpen(true);
+                    return;
+                  }
+                  if (t.to) nav(t.to);
+                }}
               >
                 <div className="tabIcon">{t.icon}</div>
                 <div className="tabLabel">{t.label}</div>

@@ -7,8 +7,8 @@ import QRCode from "react-qr-code";
 import { getSession, clearSession } from "../lib/session";
 import { getPlayer, fetchLobby, setReady, leaveSession, clearPlayer, rollLobbyD20 } from "../lib/player";
 import D20Die from "../components/D20Die";
-import DiceSoundToggle from "../components/dice/DiceSoundToggle";
-import { playDiceLandSfx, playDiceRollSfx, useDiceSoundSetting } from "../lib/diceSound";
+import { useDiceOverlay } from "../components/dice/DiceOverlayProvider";
+// Sound toggle is global (AppShell header) and dice SFX timing is handled by the dice overlay.
 
 export default function Lobby() {
   const nav = useNavigate();
@@ -19,7 +19,7 @@ export default function Lobby() {
   const [eventMsg, setEventMsg] = useState(null);
   const [busy, setBusy] = useState(false);
   const [rolling, setRolling] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useDiceSoundSetting();
+  const diceOverlay = useDiceOverlay();
   const [err, setErr] = useState(null);
 
   const canView = !!(session?.sessionId && me?.playerId);
@@ -86,31 +86,14 @@ export default function Lobby() {
     setRolling(true);
     setBusy(true);
     setErr(null);
-    if (soundEnabled) playDiceRollSfx();
-    // small client-side animation: flash random values while waiting for server
-    const start = Date.now();
-    const t = setInterval(() => {
-      setState((prev) => {
-        if (!prev) return prev;
-        const players = (prev.players || []).map((p) =>
-          p.id === me.playerId ? { ...p, lobbyRoll: Math.floor(Math.random() * 20) + 1 } : p
-        );
-        return { ...prev, players };
-      });
-    }, 70);
     try {
-      await rollLobbyD20(session.sessionId, me.playerId);
+      await diceOverlay.rollD20(() => rollLobbyD20(session.sessionId, me.playerId));
       await load();
     } catch (e) {
       setErr(e?.message || "Failed to roll");
       await load();
     } finally {
-      clearInterval(t);
-      const elapsed = Date.now() - start;
-      // keep animation visible at least ~420ms
-      const wait = Math.max(0, 420 - elapsed);
-      setTimeout(() => setRolling(false), wait);
-      if (soundEnabled) setTimeout(() => playDiceLandSfx(), Math.max(0, wait) + 560);
+      setTimeout(() => setRolling(false), 980);
       setBusy(false);
     }
   }
@@ -229,11 +212,7 @@ export default function Lobby() {
                 rolling={rolling}
                 disabled={!canRoll || busy}
                 onClick={doLobbyRoll}
-                soundEnabled={soundEnabled}
-                onSfxRoll={playDiceRollSfx}
-                onSfxLand={playDiceLandSfx}
               />
-              <DiceSoundToggle enabled={soundEnabled} setEnabled={setSoundEnabled} compact />
               <div className="muted" style={{ fontSize: 12 }}>
                 {state?.turnOrderLocked ? "Locked" : canRoll ? (meRow?.tied ? "Tie – reroll" : "Tap to roll") : (meRow?.lobbyRoll ? "Rolled" : "Waiting")}
               </div>

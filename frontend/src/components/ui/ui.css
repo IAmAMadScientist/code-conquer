@@ -104,13 +104,44 @@ button, input { font: inherit; }
   text-overflow: ellipsis;
 }
 
-.badgeRow{
+.topBarControls{
   display: flex;
   gap: 8px;
   align-items: center;
-  flex-wrap: wrap;
   justify-content: flex-end;
 }
+
+/* A single horizontal row of "pills" (match, player, state, etc.).
+   Keeps the very top row clean and prevents overlap on small screens. */
+.topBarPills{
+  padding: 0 12px 10px 12px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.topBarPills::-webkit-scrollbar{ display: none; }
+
+.soundBtn{
+  height: 38px;
+  width: 38px;
+  border-radius: 12px;
+  border: 1px solid rgba(148,163,184,0.18);
+  background: rgba(2,6,23,0.22);
+  display: grid;
+  place-items: center;
+  box-shadow: 0 10px 24px rgba(0,0,0,0.22);
+}
+
+.soundBtn.on{
+  border-color: rgba(99,102,241,0.30);
+  background: rgba(99,102,241,0.10);
+}
+
+.soundIcon{ font-size: 18px; line-height: 1; }
 
 .appMain{
   padding: 12px;

@@ -8,8 +8,7 @@ import { getPlayer, fetchLobby, leaveSession, clearPlayer, rollTurnD6, chooseTur
 import D6Die from "../components/D6Die";
 import EventFeed from "../components/EventFeed";
 import PullToRefresh from "../components/PullToRefresh";
-import DiceSoundToggle from "../components/dice/DiceSoundToggle";
-import { playDiceLandSfx, playDiceRollSfx, useDiceSoundSetting } from "../lib/diceSound";
+// Sound toggle is global (AppShell header) and dice SFX timing is handled by the dice overlay.
 
 export default function Play() {
   const nav = useNavigate();
@@ -22,7 +21,6 @@ export default function Play() {
   const [summary, setSummary] = useState(loc.state?.turnSummary || null);
   const [turnMsg, setTurnMsg] = useState(null);
   const [pendingChoices, setPendingChoices] = useState(null);
-  const [soundEnabled, setSoundEnabled] = useDiceSoundSetting();
 
   const canView = !!(session?.sessionId && me?.playerId);
 
@@ -114,8 +112,10 @@ useEffect(() => {
       // Refresh lobby state so other UI updates (turnStatus/position) are shown.
       load();
       setTimeout(() => setTurnMsg(null), 4500);
+      return r;
     } catch (e) {
       setErr(e?.message || "Roll failed");
+      throw e;
     }
   }
 
@@ -262,11 +262,7 @@ useEffect(() => {
                     value={state?.lastDiceRoll || null}
                     onRoll={doRollD6}
                     disabled={!isMyTurn}
-                    soundEnabled={soundEnabled}
-                    onSfxRoll={playDiceRollSfx}
-                    onSfxLand={playDiceLandSfx}
                   />
-                  <DiceSoundToggle enabled={soundEnabled} setEnabled={setSoundEnabled} compact />
                   <div className="muted" style={{ lineHeight: 1.4 }}>
                     {state?.lastDiceRoll ? <>Last roll: <strong>{state.lastDiceRoll}</strong></> : ""}
                   </div>

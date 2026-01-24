@@ -17,6 +17,7 @@ import QueueCommanderPage from "./pages/QueueCommanderPage";
 import { getSession } from "./lib/session";
 import { getPlayer, leaveSessionBeacon, registerPlayer } from "./lib/player";
 import { API_BASE } from "./lib/api";
+import { DiceOverlayProvider } from "./components/dice/DiceOverlayProvider";
 
 export default function App() {
   // Best-effort: when the tab/window is closed, remove the player from the match.
@@ -54,8 +55,9 @@ export default function App() {
   }, []);
 
   return (
-    <Router>
-      <Routes>
+    <DiceOverlayProvider>
+      <Router>
+        <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/challenge" element={<Challenge />} />
         <Route path="/join/:code" element={<Join />} />
@@ -68,7 +70,8 @@ export default function App() {
         <Route path="/graphpath" element={<GraphPathfinderPage />} />
         <Route path="/bstinsert" element={<BSTInsertPage />} />
         <Route path="/queuecommander" element={<QueueCommanderPage />} />
-      </Routes>
-    </Router>
+        </Routes>
+      </Router>
+    </DiceOverlayProvider>
   );
 }

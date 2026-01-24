@@ -1,13 +1,14 @@
 import React from "react";
 
-// Tiny WebAudio SFX for dice rolls (no assets, works offline).
+// Tiny WebAudio SFX for the whole game (no assets, works offline).
 // Sound is optional and controlled via localStorage.
 
-const KEY = "cc_dice_sound_enabled";
+const KEY_SOUND = "cc_sound_enabled";
+const KEY_HAPTICS = "cc_haptics_enabled";
 
-export function getDiceSoundEnabled() {
+export function getSoundEnabled() {
   try {
-    const v = localStorage.getItem(KEY);
+    const v = localStorage.getItem(KEY_SOUND);
     if (v == null) return false; // default OFF
     return v === "true";
   } catch {
@@ -15,9 +16,27 @@ export function getDiceSoundEnabled() {
   }
 }
 
-export function setDiceSoundEnabled(enabled) {
+export function setSoundEnabled(enabled) {
   try {
-    localStorage.setItem(KEY, String(Boolean(enabled)));
+    localStorage.setItem(KEY_SOUND, String(Boolean(enabled)));
+  } catch {
+    // ignore
+  }
+}
+
+export function getHapticsEnabled() {
+  try {
+    const v = localStorage.getItem(KEY_HAPTICS);
+    if (v == null) return true; // default ON
+    return v === "true";
+  } catch {
+    return true;
+  }
+}
+
+export function setHapticsEnabled(enabled) {
+  try {
+    localStorage.setItem(KEY_HAPTICS, String(Boolean(enabled)));
   } catch {
     // ignore
   }
@@ -63,24 +82,81 @@ function playTone({ freq = 220, durationMs = 120, type = "sine", gain = 0.06, de
   osc.stop(now + dur + 0.02);
 }
 
+function playNoise({ durationMs = 120, gain = 0.06, bandpassHz = 900, q = 0.8 }) {
+  const ctx = ensureCtx();
+  if (!ctx) return;
+  if (ctx.state === "suspended") ctx.resume().catch(() => {});
+
+  const now = ctx.currentTime;
+  const dur = durationMs / 1000;
+
+  // White noise buffer.
+  const buf = ctx.createBuffer(1, Math.max(1, Math.floor(ctx.sampleRate * dur)), ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * 0.85;
+
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+
+  const bp = ctx.createBiquadFilter();
+  bp.type = "bandpass";
+  bp.frequency.value = bandpassHz;
+  bp.Q.value = q;
+
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, now);
+  g.gain.exponentialRampToValueAtTime(gain, now + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+
+  src.connect(bp);
+  bp.connect(g);
+  g.connect(ctx.destination);
+  src.start(now);
+  src.stop(now + dur + 0.02);
+}
+
 export function playDiceRollSfx() {
-  // A short "rattle" made of 3 quick tones.
-  playTone({ freq: 160, durationMs: 70, type: "triangle", gain: 0.05, detune: -20 });
-  setTimeout(() => playTone({ freq: 210, durationMs: 70, type: "triangle", gain: 0.05, detune: 10 }), 55);
-  setTimeout(() => playTone({ freq: 260, durationMs: 90, type: "triangle", gain: 0.05, detune: 0 }), 110);
+  // A more dice-like "rattle": short bandpassed noise bursts + tiny clicks.
+  // (No assets needed, works offline.)
+  const clicks = [0, 70, 140, 220, 320];
+  clicks.forEach((t, i) => {
+    setTimeout(() => {
+      playNoise({ durationMs: 85, gain: 0.045, bandpassHz: 850 + i * 140, q: 0.9 });
+      playTone({ freq: 120 + i * 22, durationMs: 18, type: "square", gain: 0.02, ramp: true });
+    }, t);
+  });
 }
 
 export function playDiceLandSfx() {
-  // Neon-ish "ping".
-  playTone({ freq: 640, durationMs: 140, type: "sine", gain: 0.06, detune: 0 });
-  setTimeout(() => playTone({ freq: 880, durationMs: 120, type: "sine", gain: 0.035, detune: 0 }), 40);
+  // A short "thud" with a crisp click.
+  playTone({ freq: 96, durationMs: 140, type: "sine", gain: 0.06, detune: -5 });
+  playNoise({ durationMs: 70, gain: 0.03, bandpassHz: 520, q: 0.7 });
+  setTimeout(() => playTone({ freq: 320, durationMs: 22, type: "square", gain: 0.02, detune: 0 }), 22);
 }
 
-export function useDiceSoundSetting() {
+export function useSoundSetting() {
   // Tiny hook helper without adding dependencies.
-  const [enabled, setEnabled] = React.useState(getDiceSoundEnabled());
+  const [enabled, setEnabled] = React.useState(getSoundEnabled());
   React.useEffect(() => {
-    setDiceSoundEnabled(enabled);
+    setSoundEnabled(enabled);
   }, [enabled]);
   return [enabled, setEnabled];
 }
+
+export function useHapticsSetting() {
+  const [enabled, setEnabled] = React.useState(getHapticsEnabled());
+  React.useEffect(() => {
+    setHapticsEnabled(enabled);
+  }, [enabled]);
+  return [enabled, setEnabled];
+}
+
+// Backwards-compatible exports (older components may still import these names).
+export const getDiceSoundEnabled = getSoundEnabled;
+export const setDiceSoundEnabled = setSoundEnabled;
+export const useDiceSoundSetting = useSoundSetting;
+
+// New exports
+export const getDiceHapticsEnabled = getHapticsEnabled;
+export const setDiceHapticsEnabled = setHapticsEnabled;
+export const useDiceHapticsSetting = useHapticsSetting;

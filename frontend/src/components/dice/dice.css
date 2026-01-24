@@ -196,3 +196,292 @@
   background: rgba(99,102,241,0.95);
   box-shadow: 0 0 0 3px rgba(99,102,241,0.16), 0 0 18px rgba(99,102,241,0.28);
 }
+
+/* -------- Full-screen D6 roll overlay ("real" rolling dice) -------- */
+.cc-diceOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+
+.cc-diceOverlayBackdrop {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 40%, rgba(2,6,23,0.10), rgba(2,6,23,0.68));
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+.cc-diceOverlay.is-open .cc-diceOverlayBackdrop {
+  opacity: 1;
+}
+
+.cc-diceOverlay.is-open {
+  opacity: 1;
+}
+
+.cc-diceOverlayTrack {
+  width: min(220px, 72vw);
+  height: min(220px, 72vw);
+  perspective: 900px;
+  transform-style: preserve-3d;
+  filter: drop-shadow(0 24px 34px rgba(0, 0, 0, 0.55));
+  /* Travel path uses CSS vars (set from JS) for a more natural roll drift/bounce */
+  animation: cc_overlay_travel 2400ms cubic-bezier(0.12, 0.92, 0.18, 1) both;
+}
+
+.cc-diceOverlay.is-landed .cc-diceOverlayTrack {
+  /* hold position; the cube still settles inside */
+  animation: cc_overlay_travel 2400ms cubic-bezier(0.12, 0.92, 0.18, 1) both;
+}
+
+.cc-d6Model {
+  width: min(110px, 34vw);
+  height: min(110px, 34vw);
+  position: relative;
+  transform-style: preserve-3d;
+  /* The animation drives the cube. At rest we keep it face-on so only the rolled
+     face is readable (no multi-face tilt). */
+  transform: rotateX(0deg) rotateY(0deg);
+}
+
+.cc-diceOverlayTrack .cc-d6Model {
+  animation: cc_overlay_cube 2400ms cubic-bezier(0.12, 0.92, 0.18, 1) both;
+}
+
+.cc-d6ModelFace {
+  position: absolute;
+  inset: 0;
+  border-radius: 20px;
+  border: 2px solid rgba(226, 232, 240, 0.40);
+  background: linear-gradient(150deg, rgba(30, 41, 59, 0.98), rgba(2, 6, 23, 0.96));
+  box-shadow:
+    inset 0 0 0 1px rgba(226, 232, 240, 0.06),
+    inset 0 18px 28px rgba(0,0,0,0.26);
+  backface-visibility: hidden;
+}
+
+.cc-d6ModelPips {
+  position: absolute;
+  inset: 16px;
+}
+
+.cc-d6ModelPips .cc-pip {
+  width: 14px;
+  height: 14px;
+}
+
+.cc-d6ModelFace.front  { transform: translateZ(calc(min(110px, 34vw) / 2)); }
+.cc-d6ModelFace.back   { transform: rotateY(180deg) translateZ(calc(min(110px, 34vw) / 2)); }
+.cc-d6ModelFace.right  { transform: rotateY(90deg) translateZ(calc(min(110px, 34vw) / 2)); }
+.cc-d6ModelFace.left   { transform: rotateY(-90deg) translateZ(calc(min(110px, 34vw) / 2)); }
+.cc-d6ModelFace.top    { transform: rotateX(90deg) translateZ(calc(min(110px, 34vw) / 2)); }
+.cc-d6ModelFace.bottom { transform: rotateX(-90deg) translateZ(calc(min(110px, 34vw) / 2)); }
+
+@keyframes cc_overlay_travel {
+  0% {
+    transform: translate3d(var(--sx), var(--sy), 0) rotateZ(var(--rz0, 0deg)) scale(0.78);
+    opacity: 0.0;
+  }
+  10% { opacity: 1.0; }
+  /* Big first bounce */
+  28% {
+    transform: translate3d(var(--mx1), calc(var(--my1) - 8vh), 0) rotateZ(var(--rz0, 0deg)) scale(1.06);
+  }
+  40% {
+    /* Edge hit #1: change heading */
+    transform: translate3d(var(--mx1), var(--my1), 0) rotateZ(var(--rz1, 0deg)) scale(1.02);
+  }
+  /* Smaller second bounce */
+  58% {
+    transform: translate3d(var(--mx2), calc(var(--my2) - 5vh), 0) rotateZ(var(--rz1, 0deg)) scale(1.01);
+  }
+  68% {
+    /* Edge hit #2: change heading */
+    transform: translate3d(var(--mx2), var(--my2), 0) rotateZ(var(--rz2, 0deg)) scale(0.99);
+  }
+  /* Final settle */
+  84% {
+    transform: translate3d(var(--ex), calc(var(--ey) - 3vh), 0) rotateZ(var(--rz2, 0deg)) scale(1.01);
+  }
+  100% {
+    transform: translate3d(var(--ex), var(--ey), 0) rotateZ(0deg) scale(1.0);
+    opacity: 1.0;
+  }
+}
+
+/* Impact FX (sparks + dust ring on land) */
+.cc-impact {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 1px;
+  height: 1px;
+  transform: translate(-50%, -50%);
+}
+
+.cc-impactRing {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  border: 2px solid rgba(226,232,240,0.55);
+  box-shadow:
+    0 0 22px rgba(99, 102, 241, 0.40),
+    inset 0 0 18px rgba(226,232,240,0.18);
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.35);
+  animation: cc_impact_ring 520ms cubic-bezier(0.12, 0.92, 0.18, 1) both;
+}
+
+@keyframes cc_impact_ring {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.35); filter: blur(0px); }
+  12% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(6.2); filter: blur(0.8px); }
+}
+
+.cc-impactSparks, .cc-impactDust {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+.cc-impactSpark {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--l);
+  height: var(--w);
+  border-radius: 999px;
+  background: rgba(226,232,240,0.92);
+  box-shadow: 0 0 18px rgba(99, 102, 241, 0.55);
+  transform: rotate(var(--a)) translateX(0) translateY(-50%);
+  opacity: 0;
+  animation: cc_impact_spark 420ms cubic-bezier(0.12, 0.92, 0.18, 1) both;
+  animation-delay: var(--pd);
+}
+
+@keyframes cc_impact_spark {
+  0% { opacity: 0; transform: rotate(var(--a)) translateX(0) translateY(-50%) scaleX(0.25); filter: blur(0px); }
+  18% { opacity: 1; }
+  100% { opacity: 0; transform: rotate(var(--a)) translateX(calc(var(--l) * 1.05)) translateY(-50%) scaleX(0.15); filter: blur(0.6px); }
+}
+
+.cc-impactDustPuff {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(226,232,240,0.22);
+  box-shadow: 0 0 16px rgba(2, 6, 23, 0.35);
+  transform: rotate(var(--a)) translateX(0) translateY(-50%) scale(var(--ps));
+  opacity: 0;
+  filter: blur(1px);
+  animation: cc_impact_dust 760ms cubic-bezier(0.12, 0.92, 0.18, 1) both;
+  animation-delay: var(--pd);
+}
+
+@keyframes cc_impact_dust {
+  0% { opacity: 0; transform: rotate(var(--a)) translateX(0) translateY(-50%) scale(calc(var(--ps) * 0.65)); }
+  15% { opacity: 1; }
+  100% { opacity: 0; transform: rotate(var(--a)) translateX(var(--d)) translateY(-50%) scale(0.12); }
+}
+
+@keyframes cc_overlay_cube {
+  0% {
+    transform:
+      rotateX(var(--r1x))
+      rotateY(var(--r1y))
+      rotateZ(var(--r1z))
+      scale(0.98);
+  }
+  25% {
+    transform:
+      rotateX(calc(var(--r1x) + 420deg))
+      rotateY(calc(var(--r1y) + 260deg))
+      rotateZ(calc(var(--r1z) + 160deg))
+      scale(1.04);
+  }
+  55% {
+    transform:
+      rotateX(calc(var(--r1x) + 900deg))
+      rotateY(calc(var(--r1y) + 700deg))
+      rotateZ(calc(var(--r1z) + 420deg))
+      scale(1.02);
+  }
+  72% {
+    transform:
+      rotateX(calc(var(--fx) + 18deg))
+      rotateY(calc(var(--fy) - 12deg))
+      rotateZ(calc(var(--fz) + 8deg))
+      scale(0.99);
+  }
+  100% {
+    transform:
+      rotateX(var(--fx))
+      rotateY(var(--fy))
+      rotateZ(var(--fz))
+      scale(1);
+  }
+}
+
+/* -------- Full-screen D20 roll overlay -------- */
+.cc-d20OverlayTrack {
+  width: min(260px, 80vw);
+  height: min(260px, 80vw);
+}
+
+.cc-d20Overlay {
+  width: min(220px, 68vw);
+  height: min(220px, 68vw);
+  position: relative;
+  display: grid;
+  place-items: center;
+  filter: drop-shadow(0 22px 32px rgba(0,0,0,0.58));
+  animation: cc_d20_spin 900ms linear infinite;
+}
+
+.cc-diceOverlay.is-landed .cc-d20Overlay {
+  animation: cc_d20_land 760ms cubic-bezier(0.10, 0.92, 0.20, 1) both;
+}
+
+.cc-d20OverlaySvg {
+  width: 100%;
+  height: 100%;
+}
+
+.cc-d20OverlayNumber {
+  position: absolute;
+  font-weight: 900;
+  font-size: min(62px, 18vw);
+  letter-spacing: -0.5px;
+  color: rgba(226,232,240,0.98);
+  text-shadow: 0 10px 28px rgba(0,0,0,0.55);
+  transform: translateY(-2px);
+}
+
+@keyframes cc_d20_spin {
+  0% { transform: rotate(var(--s1)) scale(0.98); }
+  35% { transform: rotate(calc(var(--s1) + 210deg)) scale(1.05); }
+  70% { transform: rotate(calc(var(--s1) + 510deg)) scale(1.02); }
+  100% { transform: rotate(calc(var(--s1) + 720deg)) scale(0.99); }
+}
+
+@keyframes cc_d20_land {
+  0% { transform: rotate(calc(var(--s1) + 420deg)) scale(1.05); }
+  55% { transform: rotate(calc(var(--s2) + 18deg)) scale(0.96); }
+  80% { transform: rotate(calc(var(--s3) - 8deg)) scale(1.02); }
+  100% { transform: rotate(var(--s3)) scale(1.0); }
+}
+
+

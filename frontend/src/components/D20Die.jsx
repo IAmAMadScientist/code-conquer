@@ -5,13 +5,10 @@ import "./dice/dice.css";
  * Neon-ish D20 (SVG) with a spin/tumble animation + number overlay.
  * Intentionally lightweight (no 3D assets) but reads as a D20.
  */
-export default function D20Die({ value, rolling = false, disabled = false, onClick, soundEnabled = false, onSfxRoll, onSfxLand }) {
+export default function D20Die({ value, rolling = false, disabled = false, onClick }) {
   function handleClick() {
     if (disabled) return;
-    if (soundEnabled) onSfxRoll?.();
     onClick?.();
-    // Land sfx slightly after (parent controls rolling).
-    if (soundEnabled) setTimeout(() => onSfxLand?.(), 980);
   }
 
   return (
