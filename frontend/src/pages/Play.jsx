@@ -7,6 +7,7 @@ import { getSession, clearSession } from "../lib/session";
 import { getPlayer, fetchLobby, leaveSession, clearPlayer, rollTurnD6, chooseTurnPath, startTurnChallenge } from "../lib/player";
 import D6Die from "../components/D6Die";
 import EventFeed from "../components/EventFeed";
+import PullToRefresh from "../components/PullToRefresh";
 import DiceSoundToggle from "../components/dice/DiceSoundToggle";
 import { playDiceLandSfx, playDiceRollSfx, useDiceSoundSetting } from "../lib/diceSound";
 
@@ -159,7 +160,7 @@ useEffect(() => {
 
   if (!canView) {
     return (
-      <AppShell title="Play" subtitle="Join a match and set your profile first.">
+      <AppShell title="Play" subtitle="Join a match and set your profile first." showTabs activeTab="play" backTo="/">
         <div className="panel">
           <div style={{ fontWeight: 750, marginBottom: 8 }}>Not ready</div>
           <div className="muted">You need to be in a match and have a player profile.</div>
@@ -182,6 +183,9 @@ useEffect(() => {
     <AppShell
       title="Play"
       subtitle="Roll the D6 to move. Difficulty comes from the board."
+      showTabs
+      activeTab="play"
+      backTo="/lobby"
       headerBadges={
         <>
           {session?.sessionCode ? <Badge variant="secondary">Match: {session.sessionCode}</Badge> : null}
@@ -200,6 +204,7 @@ useEffect(() => {
         </div>
       }
     >
+      <PullToRefresh onRefresh={load}>
       <div className="panel mobileCenter" style={{ display: "grid", gap: 12 }}>
         {err ? <div style={{ opacity: 0.9 }}>⚠️ {err}</div> : null}
         <EventFeed sessionId={session.sessionId} title="Game feed" limit={5} />
@@ -296,19 +301,22 @@ useEffect(() => {
                 {waitingForDice ? "Roll the D6 first." : waitingForPath ? "Finish the fork choice first." : ""}
               </div>
             ) : null}
-            <div className="mobileRow" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <Button
-                variant="primary"
-                onClick={doStartChallenge}
-                disabled={!canStartChallenge || !hasChallengeOnField}
-              >
-                Start challenge
-              </Button>
-              {canStartChallenge && !hasChallengeOnField ? (
-                <div className="muted" style={{ alignSelf: "center", fontSize: 13 }}>
-                  No challenge on this field.
-                </div>
-              ) : null}
+            <div className={"stickyActions hasTabs"}>
+              <div className="stickyActionsRow">
+                <Button
+                  className="fullWidthBtn"
+                  variant="primary"
+                  onClick={doStartChallenge}
+                  disabled={!canStartChallenge || !hasChallengeOnField}
+                >
+                  Start challenge
+                </Button>
+                {canStartChallenge && !hasChallengeOnField ? (
+                  <div className="muted" style={{ fontSize: 12, textAlign: "center" }}>
+                    No challenge on this field.
+                  </div>
+                ) : null}
+              </div>
             </div>
           </>
         )}
@@ -320,6 +328,7 @@ useEffect(() => {
           <Button variant="ghost" onClick={leaveGame}>Leave game</Button>
         </div>
       </div>
+      </PullToRefresh>
     </AppShell>
   );
 }

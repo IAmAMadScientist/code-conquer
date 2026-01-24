@@ -1,4 +1,4 @@
-const API_BASE = "http://localhost:8080/api";
+import { API_BASE } from "./api";
 
 const STORAGE_ID = "cc_sessionId";
 const STORAGE_CODE = "cc_sessionCode";

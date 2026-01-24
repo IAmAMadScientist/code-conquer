@@ -2,16 +2,13 @@ import React, { useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 
 import Home from "./pages/Home";
-import Categories from "./pages/Categories";
-import Difficulty from "./pages/Difficulty";
 import Challenge from "./pages/Challenge";
-import Qr from "./pages/Qr";
 import Leaderboard from "./pages/Leaderboard";
 import Join from "./pages/Join";
 import Play from "./pages/Play";
 import Lobby from "./pages/Lobby";
 import TurnSummary from "./pages/TurnSummary";
-import Endscreen from "./pages/Endscreen";
+import EndScreen from "./pages/EndScreen";
 import StackMazePage from "./pages/StackMazePage";
 import GraphPathfinderPage from "./pages/GraphPathfinderPage";
 import BSTInsertPage from "./pages/BSTInsertPage";
@@ -19,6 +16,7 @@ import QueueCommanderPage from "./pages/QueueCommanderPage";
 
 import { getSession } from "./lib/session";
 import { getPlayer, leaveSessionBeacon, registerPlayer } from "./lib/player";
+import { API_BASE } from "./lib/api";
 
 export default function App() {
   // Best-effort: when the tab/window is closed, remove the player from the match.
@@ -32,7 +30,7 @@ export default function App() {
       if (!s?.sessionId || !p?.playerId) return;
 
       try {
-        const res = await fetch(`http://localhost:8080/api/sessions/${encodeURIComponent(s.sessionId)}/players`);
+        const res = await fetch(`${API_BASE}/sessions/${encodeURIComponent(s.sessionId)}/players`);
         const players = res.ok ? await res.json() : [];
         const stillThere = Array.isArray(players) && players.some((pl) => pl.id === p.playerId);
         if (!stillThere && p.playerName) {
@@ -59,15 +57,12 @@ export default function App() {
     <Router>
       <Routes>
         <Route path="/" element={<Home />} />
-        <Route path="/categories" element={<Categories />} />
-        <Route path="/difficulty" element={<Difficulty />} />
         <Route path="/challenge" element={<Challenge />} />
-        <Route path="/qr/:level" element={<Qr />} />
         <Route path="/join/:code" element={<Join />} />
         <Route path="/play" element={<Play />} />
         <Route path="/lobby" element={<Lobby />} />
         <Route path="/turn-summary" element={<TurnSummary />} />
-        <Route path="/end" element={<Endscreen />} />
+        <Route path="/end" element={<EndScreen />} />
         <Route path="/leaderboard" element={<Leaderboard />} />
         <Route path="/stackmaze" element={<StackMazePage />} />
         <Route path="/graphpath" element={<GraphPathfinderPage />} />

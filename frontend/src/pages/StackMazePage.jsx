@@ -201,8 +201,8 @@ export default function StackMazePage() {
             You build a stack of moves. On Run, moves are popped from the top (LIFO).
           </div>
           <div style={{ marginTop: 12 }}>
-            <Link to="/categories">
-              <Button variant="ghost">Back to categories</Button>
+            <Link to="/play">
+              <Button variant="ghost">Back to game</Button>
             </Link>
           </div>
         </div>

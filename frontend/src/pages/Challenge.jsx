@@ -5,8 +5,7 @@ import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { getSession } from "../lib/session";
 import { getPlayer } from "../lib/player";
-
-const API_BASE = "http://localhost:8080/api";
+import { API_BASE } from "../lib/api";
 
 async function parseJsonOrThrow(res) {
   let data = null;
@@ -113,7 +112,7 @@ export default function Challenge() {
               <div className="muted" style={{ marginBottom: 12 }}>{err}</div>
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <Link to="/play">
-                  <Button variant="primary">Back to Difficulty</Button>
+                  <Button variant="primary">Back to game</Button>
                 </Link>
                 <Link to="/leaderboard">
                   <Button variant="ghost">Leaderboard</Button>

@@ -279,8 +279,8 @@ export default function BSTInsertPage() {
           </div>
 
           <div style={{ marginTop: 12 }}>
-            <Link to="/categories">
-              <Button variant="ghost">Back to categories</Button>
+            <Link to="/play">
+              <Button variant="ghost">Back to game</Button>
             </Link>
           </div>
         </div>

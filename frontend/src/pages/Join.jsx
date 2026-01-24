@@ -71,6 +71,8 @@ export default function Join() {
     <AppShell
       title="Join Match"
       subtitle="Scan → join → pick name + emoji → lobby."
+      activeTab="play"
+      backTo="/"
       headerBadges={
         <>
           <Badge>Join</Badge>

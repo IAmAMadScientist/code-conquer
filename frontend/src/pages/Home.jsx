@@ -94,6 +94,7 @@ export default function Home() {
     <AppShell
       title="Code & Conquer"
       subtitle="Create a match, set your player profile, then go to the lobby."
+      backTo={false}
       headerBadges={
         <>
           {session?.sessionCode ? <Badge variant="secondary">Match: {session.sessionCode}</Badge> : <Badge>Not in match</Badge>}

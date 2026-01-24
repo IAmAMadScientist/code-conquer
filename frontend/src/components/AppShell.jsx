@@ -1,75 +1,131 @@
-import React from "react";
-import { Card, CardContent } from "./ui/card";
+import React, { useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { Separator } from "./ui/separator";
-import "./ui/ui.css";
 
+/**
+ * Mobile-first app shell.
+ *
+ * Goals:
+ * - Full-screen "native app" look (no centered web card)
+ * - Safe-area padding + sticky bottom tab bar
+ * - Optional rightPanel rendered as a bottom sheet ("Info")
+ */
 export default function AppShell({
   title = "Code & Conquer",
-  subtitle = "Hybrid coding challenges + minigames",
-  rightPanel = null,
+  subtitle = null,
   headerBadges = null,
+  rightPanel = null,
+  showTabs = false,
+  activeTab = null,
+  backTo = null,
   children,
 }) {
-  return (
-    <div className="containerShell">
-      <div className="maxW gridShell">
-        <Card>
-          <CardContent>
-            <div className="appHeader" style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-              <div className="appBrand" style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                <div
-                  style={{
-                    height: 40,
-                    width: 40,
-                    borderRadius: 18,
-                    display: "grid",
-                    placeItems: "center",
-                    background: "rgba(79,70,229,0.15)",
-                    border: "1px solid rgba(129,140,248,0.35)",
-                    fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-                    fontSize: 13,
-                  }}
-                >
-                  CC
-                </div>
-                <div>
-                  <div style={{ fontSize: 18, fontWeight: 650, letterSpacing: "-0.02em" }}>
-                    {title}{" "}
-                    <Badge style={{ marginLeft: 8 }}>
-                      UI · Slate
-                    </Badge>
-                  </div>
-                  <div className="muted" style={{ fontSize: 14, marginTop: 4 }}>
-                    {subtitle}
-                  </div>
-                </div>
-              </div>
+  const nav = useNavigate();
+  const loc = useLocation();
+  const [sheetOpen, setSheetOpen] = useState(false);
 
-              <div className="appBadges" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+  const showBack = backTo !== false && (loc?.pathname || "/") !== "/";
+
+  const tabs = useMemo(
+    () => [
+      { key: "play", label: "Play", icon: "🎲", to: "/play" },
+      { key: "leaderboard", label: "Scores", icon: "🏆", to: "/leaderboard" },
+    ],
+    []
+  );
+
+  const resolvedActiveTab = useMemo(() => {
+    if (activeTab) return activeTab;
+    const p = loc?.pathname || "";
+    if (p.startsWith("/leaderboard")) return "leaderboard";
+    return "play";
+  }, [activeTab, loc?.pathname]);
+
+  function goBack() {
+    if (backTo) nav(backTo);
+    else nav(-1);
+  }
+
+  return (
+    <div className="appRoot">
+      <header className="topBar">
+        <div className="topBarRow">
+          <div className="topBarLeft">
+            <button
+              className="iconBtn"
+              aria-label="Back"
+              onClick={goBack}
+              style={{ visibility: showBack ? "visible" : "hidden" }}
+            >
+              ‹
+            </button>
+          </div>
+
+          <div className="topBarCenter">
+            <div className="topBarTitleRow">
+              <div className="topBarTitle">{title}</div>
+              {rightPanel ? (
+                <button className="iconBtn" aria-label="Info" onClick={() => setSheetOpen(true)}>
+                  ⓘ
+                </button>
+              ) : null}
+            </div>
+            {subtitle ? <div className="topBarSubtitle">{subtitle}</div> : null}
+          </div>
+
+          <div className="topBarRight">
+            {headerBadges ? (
+              <div className="badgeRow">
                 {headerBadges}
               </div>
-            </div>
-
-            <Separator />
-
-            {children}
-          </CardContent>
-        </Card>
-
-        <Card className="sideCard">
-          <CardContent>
-            {rightPanel ? rightPanel : (
-              <div className="panel">
-                <div style={{ fontSize: 16, fontWeight: 650 }}>Controls</div>
-                <div className="muted" style={{ fontSize: 14, marginTop: 10 }}>
-                  Use the buttons to navigate. StackMaze is playable like a category.
-                </div>
-              </div>
+            ) : (
+              <Badge variant="secondary">CC</Badge>
             )}
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </div>
+      </header>
+
+      <main className={showTabs ? "appMain hasTabs" : "appMain"}>
+        <div className="screenSurface">
+          <Separator />
+          {children}
+        </div>
+      </main>
+
+      {showTabs ? (
+        <nav className="tabBar" aria-label="Primary">
+          {tabs.map((t) => {
+            const active = resolvedActiveTab === t.key;
+            return (
+              <button
+                key={t.key}
+                className={active ? "tabBtn active" : "tabBtn"}
+                onClick={() => nav(t.to)}
+              >
+                <div className="tabIcon">{t.icon}</div>
+                <div className="tabLabel">{t.label}</div>
+              </button>
+            );
+          })}
+        </nav>
+      ) : null}
+
+      {rightPanel ? (
+        <div className={sheetOpen ? "sheetOverlay open" : "sheetOverlay"} onClick={() => setSheetOpen(false)}>
+          <div className={sheetOpen ? "sheet open" : "sheet"} onClick={(e) => e.stopPropagation()}>
+            <div className="sheetHandle" />
+            <div className="sheetHeader">
+              <div style={{ fontWeight: 800 }}>Info</div>
+              <Button variant="ghost" onClick={() => setSheetOpen(false)}>
+                Close
+              </Button>
+            </div>
+            <div className="sheetBody">{rightPanel}</div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

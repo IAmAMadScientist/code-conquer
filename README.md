@@ -247,3 +247,16 @@ Big-screen leaderboard mode
 📜 License
 
 To be defined.
+
+
+## Dev Tools (nur im `dev`-Profile)
+
+Für schnelles QA gibt es Dev-Endpoints unter `/api/dev/*` (Teleport, Force Fork, skipTurns, Force Finish, Set Active Player).
+Diese sind **nur aktiv**, wenn das Backend mit Spring-Profil `dev` gestartet wird:
+
+- macOS/Linux:
+  - `SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run`
+- Windows PowerShell:
+  - `$env:SPRING_PROFILES_ACTIVE="dev"; ./mvnw spring-boot:run`
+
+Im Frontend erscheint im Vite-Dev-Modus automatisch ein kleines **🛠️ Dev Panel** (unten rechts).

@@ -5,8 +5,7 @@ import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { getSession } from "../lib/session";
 import { fetchLobby, getPlayer } from "../lib/player";
-
-const API_BASE = "http://localhost:8080/api";
+import { API_BASE } from "../lib/api";
 
 async function parseJsonOrThrow(res) {
   let data = null;
@@ -82,7 +81,7 @@ export default function TurnSummary() {
 
   if (!canView) {
     return (
-      <AppShell title="Turn Summary" subtitle="Join a match and set your profile first.">
+      <AppShell title="Turn Summary" subtitle="Join a match and set your profile first." showTabs activeTab="play" backTo="/">
         <div className="panel">
           <div style={{ fontWeight: 750, marginBottom: 8 }}>Not ready</div>
           <div className="muted">You need an active match and a player profile.</div>
@@ -97,6 +96,9 @@ export default function TurnSummary() {
     <AppShell
       title="Turn Summary"
       subtitle="Pass the phone to the next player."
+      showTabs
+      activeTab="play"
+      backTo="/play"
       headerBadges={
         <>
           {session?.sessionCode ? <Badge variant="secondary">Match: {session.sessionCode}</Badge> : null}

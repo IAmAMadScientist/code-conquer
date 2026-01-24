@@ -131,7 +131,7 @@ export default function Lobby() {
 
   if (!canView) {
     return (
-      <AppShell title="Lobby" subtitle="Join a match and set your profile first.">
+      <AppShell title="Lobby" subtitle="Join a match and set your profile first." showTabs activeTab="play" backTo="/">
         <div className="panel">
           <div style={{ fontWeight: 750, marginBottom: 8 }}>Not ready</div>
           <div className="muted" style={{ marginBottom: 12 }}>
@@ -171,6 +171,9 @@ export default function Lobby() {
     <AppShell
       title="Lobby"
       subtitle="Scan to join, then everyone presses Ready. Lobby is only for the start."
+      showTabs
+      activeTab="play"
+      backTo="/"
       headerBadges={
         <>
           <Badge>Lobby</Badge>
@@ -247,52 +250,33 @@ export default function Lobby() {
           ) : null}
         </div>
 
-        {/* Single player list: roll + rank + ready in one row */}
-        <div style={{ display: "grid", gap: 8 }}>
+        {/* Single player list: native list items */}
+        <div className="nativeList">
           {lobbyList.map((p, idx) => {
             const rank = p.turnOrder ?? (allRolled && !hasTies ? (idx + 1) : null);
+            const cls = [
+              "nativeItem",
+              p.id === me.playerId ? "isMe" : "",
+              p.tied ? "isWarn" : "",
+            ]
+              .filter(Boolean)
+              .join(" ");
             return (
-              <div
-                key={p.id}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr auto",
-                  alignItems: "center",
-                  gap: 10,
-                  padding: "10px 12px",
-                  borderRadius: 12,
-                  border: "1px solid rgba(148,163,184,0.18)",
-                  background: p.tied
-                    ? "rgba(251,191,36,0.10)"
-                    : (p.id === me.playerId ? "rgba(59,130,246,0.10)" : "rgba(15,23,42,0.25)"),
-                }}
-              >
-                <div style={{ display: "flex", gap: 10, alignItems: "center", minWidth: 0 }}>
-                  <div style={{ fontSize: 20, width: 26, textAlign: "center" }}>{p.icon || "🙂"}</div>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 750, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                      <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {rank ? `#${rank} ` : ""}{p.name}{p.id === me.playerId ? " (You)" : ""}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: 12,
-                          padding: "2px 8px",
-                          borderRadius: 999,
-                          border: "1px solid rgba(148,163,184,0.20)",
-                          opacity: p.lobbyRoll == null ? 0.7 : 0.95,
-                        }}
-                      >
-                        D20: {p.lobbyRoll == null ? "–" : `${p.lobbyRoll}${p.tied ? " (tie)" : ""}`}
-                      </span>
+              <div key={p.id} className={cls}>
+                <div className="nativeLeft">
+                  <div className="nativeAvatar">{p.icon || "🙂"}</div>
+                  <div className="nativeText">
+                    <div className="nativeTitle">
+                      {rank ? `#${rank} ` : ""}
+                      {p.name}
+                      {p.id === me.playerId ? " (You)" : ""}
                     </div>
-                    <div className="muted" style={{ fontSize: 12 }}>
-                      {p.lobbyRoll == null ? "Roll required" : (p.ready ? "Ready" : "Not ready")}
+                    <div className="nativeSub">
+                      D20: {p.lobbyRoll == null ? "–" : `${p.lobbyRoll}${p.tied ? " (tie)" : ""}`} • {p.lobbyRoll == null ? "Roll required" : (p.ready ? "Ready" : "Not ready")}
                     </div>
                   </div>
                 </div>
-
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <div className="nativeTrail">
                   <Badge variant={p.ready ? "secondary" : "outline"}>{p.ready ? "Ready" : "Not ready"}</Badge>
                 </div>
               </div>
@@ -300,15 +284,18 @@ export default function Lobby() {
           })}
         </div>
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <Button
-            variant={meRow?.ready ? "secondary" : "primary"}
-            onClick={toggleReady}
-            disabled={busy || (!meRow?.ready && !canReady)}
-          >
-            {meRow?.ready ? "Unready" : "Ready"}
-          </Button>
-          <Button variant="ghost" onClick={leaveLobby}>Leave lobby</Button>
+        <div className={"stickyActions hasTabs"}>
+          <div className="stickyActionsRow">
+            <Button
+              className="fullWidthBtn"
+              variant={meRow?.ready ? "secondary" : "primary"}
+              onClick={toggleReady}
+              disabled={busy || (!meRow?.ready && !canReady)}
+            >
+              {meRow?.ready ? "Unready" : "Ready"}
+            </Button>
+            <Button className="fullWidthBtn" variant="ghost" onClick={leaveLobby}>Leave lobby</Button>
+          </div>
         </div>
 
         <div className="muted" style={{ fontSize: 13, lineHeight: 1.5 }}>

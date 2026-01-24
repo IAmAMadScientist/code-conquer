@@ -5,7 +5,7 @@ import { computePoints, formatTime, normalizeDifficulty } from "../lib/scoring";
 import { getSession } from "../lib/session";
 import { getPlayer } from "../lib/player";
 
-const API_BASE = "http://localhost:8080/api";
+import { API_BASE } from "../lib/api";
 
 async function parseJsonOrThrow(res) {
   let data = null;

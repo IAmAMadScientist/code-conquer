@@ -1,16 +1,32 @@
-/* src/components/ui/ui.css */
+/* src/components/ui/ui.css
+   Mobile-first "native app" styling.
 
-/* App background + typography */
+   Design goals:
+   - Full-screen surfaces (no centered web card)
+   - Large tap targets + readable typography
+   - Safe-area padding for notches and home indicator
+   - Sticky tab bar + bottom-sheet panels
+*/
+
 :root{
-  --bg0: #020617; /* slate-950-ish */
+  --bg0: #020617;
   --bg1: #0b1220;
-  --card: rgba(15, 23, 42, 0.5); /* slate-900/50 */
-  --cardBorder: rgba(51, 65, 85, 0.4); /* slate-700/40 */
-  /* Readability bump (mobile + dark bg): */
-  --muted: rgba(226, 232, 240, 0.82); /* slate-200/82 */
-  --muted2: rgba(226, 232, 240, 0.74);
-  --text: #f8fafc; /* slate-50 */
-  --shadow: 0 20px 45px rgba(0,0,0,0.35);
+  --bg2: #0f172a;
+
+  --text: #f8fafc;
+  --muted: rgba(226, 232, 240, 0.86);
+  --muted2: rgba(226, 232, 240, 0.72);
+
+  --surface: rgba(15, 23, 42, 0.68);
+  --surface2: rgba(2, 6, 23, 0.35);
+  --border: rgba(71, 85, 105, 0.38);
+
+  --shadow: 0 18px 38px rgba(0,0,0,0.35);
+  --shadow2: 0 10px 24px rgba(0,0,0,0.25);
+
+  --r-lg: 22px;
+  --r-md: 18px;
+  --r-sm: 14px;
 }
 
 html, body, #root {
@@ -21,59 +37,364 @@ body{
   margin: 0;
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
   color: var(--text);
-  background: linear-gradient(to bottom, var(--bg0), var(--bg0), #0f172a);
-  overflow-x: hidden; /* prevent accidental horizontal scroll on mobile */
+  background: radial-gradient(1200px 700px at 10% 0%, rgba(79,70,229,0.22), rgba(2,6,23,0) 60%),
+              radial-gradient(1200px 700px at 90% 18%, rgba(16,185,129,0.14), rgba(2,6,23,0) 55%),
+              linear-gradient(to bottom, var(--bg0), var(--bg0), var(--bg2));
+  overflow-x: hidden;
 }
 
 a{ color: inherit; text-decoration: none; }
 button, input { font: inherit; }
 
-/* Layout helpers */
-.containerShell{
+/* ===== App Shell (phone-like) ===== */
+.appRoot{
   min-height: 100vh;
-  padding: 16px;
-  padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.topBar{
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  background: rgba(2, 6, 23, 0.55);
+  border-bottom: 1px solid rgba(71, 85, 105, 0.28);
+}
+
+.topBarRow{
+  display: grid;
+  grid-template-columns: 52px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+}
+
+.topBarLeft{ display: flex; justify-content: flex-start; }
+.topBarRight{ display: flex; justify-content: flex-end; }
+
+.topBarCenter{
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.topBarTitleRow{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.topBarTitle{
+  font-weight: 820;
+  font-size: 16px;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.topBarSubtitle{
+  font-size: 12px;
+  color: var(--muted2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.badgeRow{
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.appMain{
+  padding: 12px;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+}
+
+.appMain.hasTabs{
+  padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+}
+
+.screenSurface{
+  border-radius: var(--r-lg);
+  border: 1px solid rgba(71, 85, 105, 0.28);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  padding: 14px;
 }
 
 @media (min-width: 768px){
-  .containerShell{ padding: 32px; }
+  .appMain{ max-width: 780px; margin: 0 auto; }
 }
 
-.maxW{
-  max-width: 1100px;
-  margin: 0 auto;
-}
-
-/* App header: center on small screens */
-@media (max-width: 520px){
-  .appHeader{ justify-content: center !important; text-align: center; }
-  .appBrand{ width: 100%; justify-content: center !important; }
-  .appBadges{ width: 100%; justify-content: center !important; }
-}
-
-.gridShell{
+.iconBtn{
+  height: 44px;
+  width: 44px;
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 16px;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(71, 85, 105, 0.38);
+  background: rgba(15, 23, 42, 0.35);
+  color: var(--text);
+  font-size: 22px;
+  cursor: pointer;
 }
 
-@media (min-width: 1024px){
-  .gridShell{
-    grid-template-columns: 1.35fr 0.9fr;
-  }
+.iconBtn:active{ transform: translateY(1px); }
+
+/* ===== Tab Bar ===== */
+.tabBar{
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  padding: 10px 12px;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  background: rgba(2, 6, 23, 0.62);
+  border-top: 1px solid rgba(71, 85, 105, 0.28);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
 }
 
-/* Mobile-first: hide the secondary right panel card to reduce vertical scrolling. */
-@media (max-width: 768px){
-  .sideCard{ display: none; }
+.tabBtn{
+  border: 1px solid rgba(71, 85, 105, 0.28);
+  background: rgba(15, 23, 42, 0.25);
+  color: var(--muted);
+  border-radius: 16px;
+  padding: 10px 10px;
+  min-height: 54px;
+  display: grid;
+  place-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.tabBtn.active{
+  background: rgba(79, 70, 229, 0.26);
+  border-color: rgba(129, 140, 248, 0.38);
+  color: var(--text);
+}
+
+.tabIcon{ font-size: 18px; line-height: 1; }
+.tabLabel{ font-size: 11px; font-weight: 700; letter-spacing: -0.01em; }
+
+/* ===== Bottom sheet ===== */
+.sheetOverlay{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0);
+  pointer-events: none;
+  transition: background 160ms ease;
+  z-index: 60;
+}
+
+.sheetOverlay.open{
+  pointer-events: auto;
+  background: rgba(0,0,0,0.45);
+}
+
+.sheet{
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  max-height: min(70vh, 540px);
+  border-radius: 26px;
+  border: 1px solid rgba(71, 85, 105, 0.30);
+  background: rgba(2,6,23,0.86);
+  box-shadow: var(--shadow);
+  transform: translateY(18px);
+  opacity: 0;
+  transition: transform 160ms ease, opacity 160ms ease;
+  overflow: hidden;
+}
+
+.sheet.open{
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.sheetHandle{
+  width: 46px;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(226, 232, 240, 0.22);
+  margin: 10px auto 8px;
+}
+
+.sheetHeader{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+}
+
+/* ===== Native lists ===== */
+.nativeList{
+  display: grid;
+  gap: 10px;
+}
+
+.nativeItem{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(71, 85, 105, 0.30);
+  background: rgba(15, 23, 42, 0.26);
+}
+
+.nativeItem.isMe{
+  background: rgba(79, 70, 229, 0.16);
+  border-color: rgba(129, 140, 248, 0.32);
+}
+
+.nativeItem.isWarn{
+  background: rgba(251, 191, 36, 0.10);
+  border-color: rgba(251, 191, 36, 0.22);
+}
+
+.nativeLeft{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.nativeAvatar{
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid rgba(71, 85, 105, 0.38);
+  background: rgba(2, 6, 23, 0.25);
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  flex: 0 0 auto;
+}
+
+.nativeText{
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.nativeTitle{
+  font-weight: 820;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nativeSub{
+  font-size: 12px;
+  color: var(--muted2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nativeTrail{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+/* ===== Sticky action bar (primary CTA) ===== */
+.stickyActions{
+  position: sticky;
+  bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  z-index: 20;
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 20px;
+  border: 1px solid rgba(71, 85, 105, 0.28);
+  background: rgba(2, 6, 23, 0.62);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: var(--shadow2);
+}
+
+.stickyActions.hasTabs{
+  bottom: calc(10px + 84px + env(safe-area-inset-bottom, 0px));
+}
+
+.stickyActionsRow{
+  display: grid;
+  gap: 10px;
+}
+
+.fullWidthBtn{ width: 100%; }
+
+/* ===== Pull to refresh indicator ===== */
+.ptrIndicator{
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: calc(env(safe-area-inset-top, 0px) + 10px);
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+
+.ptrIndicator.visible{ opacity: 1; }
+
+.ptrPill{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(71, 85, 105, 0.30);
+  background: rgba(2, 6, 23, 0.72);
+  box-shadow: var(--shadow2);
+}
+
+.ptrSpinner{
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+}
+
+.ptrSpinner.spinning{
+  animation: spin 900ms linear infinite;
+}
+
+.ptrText{ font-size: 12px; color: var(--muted); font-weight: 750; }
+
+@keyframes spin{ from{ transform: rotate(0deg); } to{ transform: rotate(360deg); } }
+
+.sheetBody{
+  padding: 0 12px 14px;
+  overflow: auto;
 }
 
 /* Card */
 .ui-card{
-  background: var(--card);
-  border: 1px solid var(--cardBorder);
-  border-radius: 18px;
-  box-shadow: var(--shadow);
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(71, 85, 105, 0.32);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow2);
 }
 
 .ui-cardContent{
@@ -86,8 +407,8 @@ button, input { font: inherit; }
 
 /* Buttons */
 .ui-btn{
-  border-radius: 18px;
-  padding: 10px 14px;
+  border-radius: 16px;
+  padding: 12px 14px;
   min-height: 44px; /* tap target */
   border: 1px solid rgba(51, 65, 85, 0.4);
   background: rgba(30, 41, 59, 0.6);
@@ -196,9 +517,9 @@ button, input { font: inherit; }
 
 /* Small panels */
 .panel{
-  border-radius: 18px;
-  border: 1px solid rgba(51, 65, 85, 0.4);
-  background: rgba(2, 6, 23, 0.25);
+  border-radius: var(--r-lg);
+  border: 1px solid rgba(71, 85, 105, 0.28);
+  background: rgba(2, 6, 23, 0.30);
   padding: 14px;
 }
 .muted{ color: var(--muted2); }

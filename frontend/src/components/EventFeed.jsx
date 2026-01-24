@@ -125,24 +125,24 @@ export default function EventFeed({ sessionId, title = "Events", limit = 5, poll
       ) : null}
 
       {open ? (
-        <div
-          style={{
-            display: "grid",
-            gap: 8,
-            maxHeight: 180,
-            overflow: "auto",
-            paddingRight: 4,
-          }}
-        >
+        <div style={{ maxHeight: 200, overflow: "auto", paddingRight: 4 }}>
           {shown.length === 0 ? <div className="muted">No events yet.</div> : null}
-          {shown.map((e) => (
-            <div key={e.seq} style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
-              <div className="muted" style={{ minWidth: 44, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
-                #{e.seq}
+          <div className="nativeList">
+            {shown.map((e) => (
+              <div key={e.seq} className="nativeItem">
+                <div className="nativeLeft">
+                  <div className="nativeAvatar" style={{ fontSize: 14, fontVariantNumeric: "tabular-nums" }}>#{e.seq}</div>
+                  <div className="nativeText">
+                    <div className="nativeTitle" style={{ fontWeight: 750 }}>{e.message}</div>
+                    <div className="nativeSub">Feed</div>
+                  </div>
+                </div>
+                <div className="nativeTrail">
+                  <Badge variant="outline">{String(e.type || "evt")}</Badge>
+                </div>
               </div>
-              <div style={{ lineHeight: 1.35 }}>{e.message}</div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       ) : null}
     </div>

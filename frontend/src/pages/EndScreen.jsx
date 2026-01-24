@@ -5,8 +5,7 @@ import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { getSession, clearSession } from "../lib/session";
 import { clearPlayer, fetchLobby } from "../lib/player";
-
-const API_BASE = "http://localhost:8080/api";
+import { API_BASE } from "../lib/api";
 
 export default function Endscreen() {
   const nav = useNavigate();
@@ -56,6 +55,7 @@ export default function Endscreen() {
     <AppShell
       title="Game finished"
       subtitle={session?.sessionCode ? `Match: ${session.sessionCode}` : ""}
+      backTo="/"
       headerBadges={
         <>
           {session?.sessionCode ? <Badge variant="secondary">{session.sessionCode}</Badge> : null}

@@ -14,7 +14,10 @@ public class CorsConfig {
             @Override
             public void addCorsMappings(CorsRegistry registry) {
                 registry.addMapping("/api/**")
-                        .allowedOrigins("http://localhost:5173") // frontend vite
+                        // For deployment, the frontend is typically served from the same origin
+                        // and /api is reverse-proxied to this backend. For dev and flexible hosting,
+                        // allow any origin.
+                        .allowedOriginPatterns("*")
                         .allowedMethods("*");
             }
         };
