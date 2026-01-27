@@ -29,6 +29,7 @@ public class ChallengeRouterService {
         categoryToRoute.put(Category.GRAPH_PATH, "/graphpath");
         categoryToRoute.put(Category.BST_INSERT, "/bstinsert");
         categoryToRoute.put(Category.QUEUE_COMMANDER, "/queuecommander");
+        categoryToRoute.put(Category.BIT_JUMPER, "/bitjumper");
     }
 
     public ChallengeDescriptor pickRandom(Difficulty difficulty, Category categoryOrNull, Category excludeCategoryOrNull) {

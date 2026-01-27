@@ -31,6 +31,8 @@ public class GameSessionService {
     public static final String TURN_AWAITING_CONFIRM = "AWAITING_CONFIRM";
     public static final String TURN_AWAITING_D6_ROLL = "AWAITING_D6_ROLL";
     public static final String TURN_AWAITING_PATH_CHOICE = "AWAITING_PATH_CHOICE";
+    // Landing on a SPECIAL board field requires resolving a drawn Special Card before the turn can advance.
+    public static final String TURN_AWAITING_SPECIAL_CARD = "AWAITING_SPECIAL_CARD";
 
     private final GameSessionRepository sessionRepository;
     private final PlayerRepository playerRepository;
@@ -291,6 +293,7 @@ public class GameSessionService {
                     && !TURN_AWAITING_PATH_CHOICE.equals(s.getTurnStatus())
                     && !TURN_IN_CHALLENGE.equals(s.getTurnStatus())
                     && !TURN_AWAITING_CONFIRM.equals(s.getTurnStatus())
+                    && !TURN_AWAITING_SPECIAL_CARD.equals(s.getTurnStatus())
                     && !TURN_IDLE.equals(s.getTurnStatus())) {
                 s.setTurnStatus(TURN_AWAITING_D6_ROLL);
                 save(s);

@@ -51,5 +51,18 @@ public class Player {
     // we remember the node they came from so we can return them after the skip.
     private String jailReturnNodeId;
 
+    // --- Special-card effects (Special deck) ---
+    // If true, the next positive special card effect for this player is ignored.
+    private boolean ignoreNextPositiveSpecial;
+
+    // If true, the next D6 roll is rolled twice and the higher result counts.
+    private boolean nextDiceAdvantage;
+
+    // If true, the next HARD challenge for this player becomes MEDIUM.
+    private boolean nextHardBecomesMedium;
+
+    // If true, the next HARD challenge for this player becomes EASY.
+    private boolean nextHardBecomesEasy;
+
     private Instant createdAt;
 }

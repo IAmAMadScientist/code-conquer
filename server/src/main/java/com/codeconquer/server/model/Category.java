@@ -5,5 +5,6 @@ public enum Category {
     STACK_DROP,
     GRAPH_PATH,
     BST_INSERT,
-    QUEUE_COMMANDER
+    QUEUE_COMMANDER,
+    BIT_JUMPER
 }

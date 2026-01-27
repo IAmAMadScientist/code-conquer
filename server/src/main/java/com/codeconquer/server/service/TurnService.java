@@ -11,7 +11,6 @@ import com.codeconquer.server.repository.PlayerRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.Random;
 
 /**
@@ -66,7 +65,19 @@ public class TurnService {
             throw new IllegalArgumentException("Not waiting for dice roll");
         }
 
-        int roll = random.nextInt(6) + 1;
+        int roll;
+        // Special card: next dice roll advantage (roll twice, take higher)
+        if (p.isNextDiceAdvantage()) {
+            int r1 = random.nextInt(6) + 1;
+            int r2 = random.nextInt(6) + 1;
+            roll = Math.max(r1, r2);
+            p.setNextDiceAdvantage(false);
+            try {
+                sessionService.publishEvent(s, "DICE_ADV", "🎲✨ " + formatPlayer(p) + " würfelt zweimal: " + r1 + " & " + r2 + " → " + roll);
+            } catch (Exception ignored) {}
+        } else {
+            roll = random.nextInt(6) + 1;
+        }
         s.setLastDiceRoll(roll);
         s.setPendingForkNodeId(null);
         s.setPendingRemainingSteps(null);
@@ -85,6 +96,13 @@ public class TurnService {
             sessionService.advanceTurn(sessionId);
             sessionService.advanceTurnConsideringSkips(sessionId);
             return responseFor(sessionId, playerId, roll, p, s, mr, "Turn ended");
+        }
+
+        // SPECIAL card resolution blocks the turn until the player selects a card.
+        if (GameSessionService.TURN_AWAITING_SPECIAL_CARD.equals(s.getTurnStatus())) {
+            sessionRepository.save(s);
+            playerRepository.save(p);
+            return responseFor(sessionId, playerId, roll, p, s, mr, "SPECIAL: draw a card");
         }
 
         // If stopped at fork -> waiting for path choice.
@@ -147,20 +165,16 @@ public class TurnService {
         // Apply immediate landing effects for the chosen node before continuing.
         BoardNodeType landed = board.getType(toNodeId);
         if (landed == BoardNodeType.SPECIAL) {
-            // SPECIAL: send player to JAIL for one turn, then return to this node.
-            sendToJailForOneTurn(p, toNodeId);
-            sessionService.publishEvent(s, "JAIL", formatPlayer(p) + " muss ins Gefängnis und setzt 1 Runde aus. ⛓️");
-            // Clear fork state and end turn immediately.
+            // SPECIAL: player must draw a special card (real-life) and then select it in the app.
             s.setPendingForkNodeId(null);
             s.setPendingRemainingSteps(null);
-            s.setTurnStatus(GameSessionService.TURN_AWAITING_D6_ROLL);
+            s.setTurnStatus(GameSessionService.TURN_AWAITING_SPECIAL_CARD);
+            sessionService.publishEvent(s, "SPECIAL", "🃏 " + formatPlayer(p) + " zieht eine Special-Karte.");
             sessionRepository.save(s);
             playerRepository.save(p);
 
-            sessionService.advanceTurn(sessionId);
-            sessionService.advanceTurnConsideringSkips(sessionId);
             Integer roll = s.getLastDiceRoll();
-            return responseFor(sessionId, playerId, roll, p, s, new MoveResult(), "SPECIAL -> JAIL");
+            return responseFor(sessionId, playerId, roll, p, s, new MoveResult(), "SPECIAL: draw a card");
         }
         if (landed == BoardNodeType.JAIL) {
             p.setSkipTurns(1);
@@ -270,10 +284,12 @@ public class TurnService {
             // Landing effects
             BoardNodeType landedType = board.getType(next);
             if (landedType == BoardNodeType.SPECIAL) {
-                // SPECIAL: send player to JAIL for one turn, then return to this node.
-                sendToJailForOneTurn(p, next);
-                sessionService.publishEvent(s, "JAIL", formatPlayer(p) + " muss ins Gefängnis und setzt 1 Runde aus. ⛓️");
-                mr.turnEnded = true;
+                // SPECIAL: player must draw a special card (real-life) and then select it in the app.
+                s.setTurnStatus(GameSessionService.TURN_AWAITING_SPECIAL_CARD);
+                sessionService.publishEvent(s, "SPECIAL", "🃏 " + formatPlayer(p) + " zieht eine Special-Karte.");
+                // Stop movement immediately.
+                mr.turnEnded = false;
+                mr.awaitingChoice = false;
                 return mr;
             }
             if (landedType == BoardNodeType.JAIL) {

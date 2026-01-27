@@ -14,6 +14,7 @@ import StackDropPage from "./pages/StackDropPage";
 import GraphPathfinderPage from "./pages/GraphPathfinderPage";
 import BSTInsertPage from "./pages/BSTInsertPage";
 import QueueCommanderPage from "./pages/QueueCommanderPage";
+import BitJumperPage from "./pages/BitJumperPage";
 
 import { getSession } from "./lib/session";
 import { getPlayer, leaveSessionBeacon, registerPlayer } from "./lib/player";
@@ -74,6 +75,7 @@ export default function App() {
         <Route path="/graphpath" element={<GraphPathfinderPage />} />
         <Route path="/bstinsert" element={<BSTInsertPage />} />
         <Route path="/queuecommander" element={<QueueCommanderPage />} />
+        <Route path="/bitjumper" element={<BitJumperPage />} />
           </Routes>
         </Router>
       </MinigameResultToastProvider>

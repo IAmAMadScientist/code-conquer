@@ -131,6 +131,17 @@ public class ChallengeController {
         else if (nodeType == BoardNodeType.HARD) diff = Difficulty.HARD;
         else return ResponseEntity.status(409).build(); // no challenge on START/FORK/JAIL/SPECIAL/FINISH
 
+        // Special cards can downgrade the next hard challenge.
+        if (diff == Difficulty.HARD && p.isNextHardBecomesEasy()) {
+            p.setNextHardBecomesEasy(false);
+            playerService.save(p);
+            diff = Difficulty.EASY;
+        } else if (diff == Difficulty.HARD && p.isNextHardBecomesMedium()) {
+            p.setNextHardBecomesMedium(false);
+            playerService.save(p);
+            diff = Difficulty.MEDIUM;
+        }
+
         // Lock the turn to a single challenge instance
         String instanceId = UUID.randomUUID().toString();
         s.setTurnStatus(GameSessionService.TURN_IN_CHALLENGE);

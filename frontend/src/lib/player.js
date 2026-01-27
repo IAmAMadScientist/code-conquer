@@ -102,6 +102,20 @@ export async function chooseTurnPath(sessionId, playerId, toNodeId) {
   return data;
 }
 
+// Special deck: apply a drawn card (selected in-app)
+export async function applySpecialCard(sessionId, playerId, card, targetPlayerId) {
+  const qs = new URLSearchParams();
+  qs.set("sessionId", sessionId);
+  qs.set("playerId", playerId);
+  qs.set("card", String(card));
+  if (targetPlayerId) qs.set("targetPlayerId", String(targetPlayerId));
+  const res = await fetch(`${API_BASE}/special/apply?${qs.toString()}`, {
+    method: "POST",
+  });
+  const data = await parseJsonOrThrow(res);
+  return data;
+}
+
 // Board-driven challenge selection (Phase 2D)
 export async function startTurnChallenge(sessionId, playerId, category) {
   const qs = new URLSearchParams();

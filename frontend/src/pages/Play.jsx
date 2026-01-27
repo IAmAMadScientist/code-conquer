@@ -4,7 +4,7 @@ import AppShell from "../components/AppShell";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { getSession, clearSession } from "../lib/session";
-import { getPlayer, fetchLobby, leaveSession, clearPlayer, rollTurnD6, chooseTurnPath, startTurnChallenge } from "../lib/player";
+import { getPlayer, fetchLobby, leaveSession, clearPlayer, rollTurnD6, chooseTurnPath, startTurnChallenge, applySpecialCard } from "../lib/player";
 import D6Die from "../components/D6Die";
 import EventFeed from "../components/EventFeed";
 import PullToRefresh from "../components/PullToRefresh";
@@ -21,6 +21,11 @@ export default function Play() {
   const [summary, setSummary] = useState(loc.state?.turnSummary || null);
   const [turnMsg, setTurnMsg] = useState(null);
   const [pendingChoices, setPendingChoices] = useState(null);
+
+  // Special deck modal (when landing on SPECIAL)
+  const [specialOpen, setSpecialOpen] = useState(false);
+  const [specialCard, setSpecialCard] = useState("BOOST");
+  const [specialTarget, setSpecialTarget] = useState("");
 
   const canView = !!(session?.sessionId && me?.playerId);
 
@@ -79,6 +84,17 @@ useEffect(() => {
   const t = setTimeout(() => setSummary(null), 4500);
   return () => clearTimeout(t);
 }, [summary]);
+
+  // Auto-open the Special deck modal when the backend requests it.
+  useEffect(() => {
+    const isMine = !!(state?.currentPlayerId && me?.playerId && state.currentPlayerId === me.playerId);
+    if (isMine && state?.turnStatus === "AWAITING_SPECIAL_CARD") {
+      setSpecialOpen(true);
+    } else {
+      setSpecialOpen(false);
+      setSpecialTarget("");
+    }
+  }, [state?.turnStatus, state?.currentPlayerId, me?.playerId]);
 
 
   async function doStartChallenge() {
@@ -143,6 +159,37 @@ useEffect(() => {
     }
   }
 
+  const SPECIAL_CARDS = [
+    { id: "PERMISSION_DENIED", label: "Permission denied", img: "/specialcards/permission_denied.png", needsTarget: true },
+    { id: "RAGE_BAIT", label: "Rage Bait", img: "/specialcards/rage_bait.png", needsTarget: true },
+    { id: "REFACTOR", label: "Refactor", img: "/specialcards/refactor.png", needsTarget: false },
+    { id: "SECOND_CHANCE", label: "Second Chance", img: "/specialcards/second_chance.png", needsTarget: false },
+    { id: "SHORTCUT_FOUND", label: "Shortcut found", img: "/specialcards/shortcut_found.png", needsTarget: false },
+    { id: "ROLLBACK", label: "Rollback", img: "/specialcards/rollback.png", needsTarget: true },
+    { id: "BOOST", label: "Boost", img: "/specialcards/boost.png", needsTarget: false },
+    { id: "JAIL", label: "JAIL", img: "/specialcards/jail.png", needsTarget: false },
+  ];
+
+  async function doApplySpecial() {
+    if (!session?.sessionId || !me?.playerId) return;
+    setErr(null);
+    try {
+      const cardDef = SPECIAL_CARDS.find((c) => c.id === specialCard);
+      if (cardDef?.needsTarget && !specialTarget) {
+        setErr("Bitte wähle ein Ziel (Spieler) für diese Karte.");
+        return;
+      }
+      await applySpecialCard(session.sessionId, me.playerId, specialCard, specialTarget || undefined);
+      setSpecialOpen(false);
+      setSpecialTarget("");
+      setTurnMsg("🃏 Special-Karte aktiviert.");
+      load();
+      setTimeout(() => setTurnMsg(null), 3500);
+    } catch (e) {
+      setErr(e?.message || "Special-Karte fehlgeschlagen");
+    }
+  }
+
   async function leaveGame() {
     const ok = window.confirm(
       "Willst du das Spiel wirklich verlassen?\n\n" +
@@ -204,6 +251,94 @@ useEffect(() => {
         </div>
       }
     >
+      {specialOpen ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.55)",
+            zIndex: 80,
+            display: "grid",
+            placeItems: "center",
+            padding: 16,
+          }}
+          onClick={() => {
+            // Don't allow closing: special resolution is required to continue.
+          }}
+        >
+          <div
+            className="panel"
+            style={{
+              width: "min(520px, 94vw)",
+              border: "1px solid rgba(148,163,184,0.22)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ fontWeight: 900, fontSize: 18, marginBottom: 6 }}>🃏 Special Field</div>
+            <div className="muted" style={{ lineHeight: 1.5, marginBottom: 12 }}>
+              Ziehe <strong>eine Karte in real life</strong> vom Special-Stapel und wähle sie hier aus.
+            </div>
+
+            <div style={{ display: "grid", gap: 10 }}>
+              <label style={{ display: "grid", gap: 6 }}>
+                <div style={{ fontWeight: 700 }}>Welche Karte hast du gezogen?</div>
+                <select
+                  value={specialCard}
+                  onChange={(e) => setSpecialCard(e.target.value)}
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: 12,
+                    border: "1px solid rgba(148,163,184,0.25)",
+                    background: "rgba(15,23,42,0.35)",
+                    color: "inherit",
+                  }}
+                >
+                  {SPECIAL_CARDS.map((c) => (
+                    <option key={c.id} value={c.id}>{c.label}</option>
+                  ))}
+                </select>
+              </label>
+
+              {SPECIAL_CARDS.find((c) => c.id === specialCard)?.img ? (
+                <div style={{ display: "grid", placeItems: "center" }}>
+                  <img
+                    src={SPECIAL_CARDS.find((c) => c.id === specialCard).img}
+                    alt={specialCard}
+                    style={{ width: "min(260px, 70vw)", borderRadius: 12, border: "1px solid rgba(148,163,184,0.18)" }}
+                  />
+                </div>
+              ) : null}
+
+              {SPECIAL_CARDS.find((c) => c.id === specialCard)?.needsTarget ? (
+                <label style={{ display: "grid", gap: 6 }}>
+                  <div style={{ fontWeight: 700 }}>Ziel-Spieler</div>
+                  <select
+                    value={specialTarget}
+                    onChange={(e) => setSpecialTarget(e.target.value)}
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: 12,
+                      border: "1px solid rgba(148,163,184,0.25)",
+                      background: "rgba(15,23,42,0.35)",
+                      color: "inherit",
+                    }}
+                  >
+                    <option value="">Bitte wählen…</option>
+                    {(state?.players || []).filter((p) => p.id !== me?.playerId).map((p) => (
+                      <option key={p.id} value={p.id}>{(p.icon || "🙂") + " " + (p.name || "Player")}</option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+
+              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 6 }}>
+                <Button onClick={doApplySpecial}>Aktivieren</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <PullToRefresh onRefresh={load}>
       <div className="panel mobileCenter" style={{ display: "grid", gap: 12 }}>
         {err ? <div style={{ opacity: 0.9 }}>⚠️ {err}</div> : null}
