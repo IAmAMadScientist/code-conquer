@@ -4,6 +4,7 @@ import { Badge } from "./ui/badge";
 import { computePoints, formatTime, normalizeDifficulty } from "../lib/scoring";
 import { getSession } from "../lib/session";
 import { getPlayer } from "../lib/player";
+import { useMinigameResultToast } from "./MinigameResultToastProvider";
 
 import { API_BASE } from "../lib/api";
 
@@ -33,6 +34,7 @@ export default function ResultSubmitPanel({
   challengeId,
 }) {
   const nav = useNavigate();
+  const toast = useMinigameResultToast();
 
   const session = useMemo(() => getSession(), []);
   const player = useMemo(() => getPlayer(), []);
@@ -61,6 +63,17 @@ export default function ResultSubmitPanel({
     if (!challengeId) {
       setErr("Missing challengeId (turn token). Please start the challenge from /play again.");
       return;
+    }
+
+    // Show a global toast that stays visible even after we navigate back.
+    try {
+      toast.show({
+        won: Boolean(won),
+        title: Boolean(won) ? "You won!" : "You lost",
+        subtitle: `${category} · +${points} pts`,
+      });
+    } catch {
+      // ignore
     }
 
     setSaving(true);

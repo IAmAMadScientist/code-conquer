@@ -1,9 +1,16 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useLayoutEffect, useMemo, useRef, useState } from "react";
 import AppShell from "../components/AppShell";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { Link, useLocation } from "react-router-dom";
 import ResultSubmitPanel from "../components/ResultSubmitPanel";
+import {
+  getHapticsEnabled,
+  getSoundEnabled,
+  playFailSfx,
+  playUiTapSfx,
+  playWinSfx,
+} from "../lib/diceSound";
 
 function randInt(a, b) {
   return Math.floor(Math.random() * (b - a + 1)) + a;
@@ -70,6 +77,17 @@ function findInsertionSlot(root, value) {
   }
 
   return { parentValue: parent ? parent.value : null, side };
+}
+
+function insertionPath(root, value) {
+  // Values of nodes visited during deterministic BST insert.
+  const path = [];
+  let cur = root;
+  while (cur) {
+    path.push(cur.value);
+    cur = value < cur.value ? cur.left : cur.right;
+  }
+  return path;
 }
 
 function buildLayout(root) {
@@ -190,14 +208,61 @@ export default function BSTInsertPage() {
   const puzzle = useMemo(() => makePuzzle(difficulty), [seed, difficulty]);
 
   const [dropped, setDropped] = useState(null); // { parent, side }
-  const [status, setStatus] = useState("playing"); // playing | won
+  const [status, setStatus] = useState("playing"); // playing | won | lost
   const [msg, setMsg] = useState("");
+
+  const maxStrikes = useMemo(() => {
+    if (difficulty === "EASY") return Number.POSITIVE_INFINITY;
+    if (difficulty === "HARD") return 2;
+    return 3; // MEDIUM
+  }, [difficulty]);
+
+  const [hintOn, setHintOn] = useState(difficulty === "EASY");
+  const [hintUses, setHintUses] = useState(difficulty === "MEDIUM" ? 2 : 0);
 
   const startRef = useRef(Date.now());
   const [timeMs, setTimeMs] = useState(0);
   const [errors, setErrors] = useState(0);
 
+  const treeCardRef = useRef(null);
+  const bottomBarRef = useRef(null);
+  const [svgHeight, setSvgHeight] = useState(420);
+
   const layout = useMemo(() => buildLayout(puzzle.root), [puzzle.root]);
+  const pathNodes = useMemo(() => insertionPath(puzzle.root, puzzle.newValue), [puzzle.root, puzzle.newValue]);
+
+  function buzz(ms = 12) {
+    try {
+      if (getHapticsEnabled() && navigator.vibrate) navigator.vibrate(ms);
+    } catch {
+      // ignore
+    }
+  }
+
+  function sfx(fn) {
+    try {
+      if (getSoundEnabled()) fn();
+    } catch {
+      // ignore
+    }
+  }
+
+  useLayoutEffect(() => {
+    function recompute() {
+      const topBar = document.querySelector(".topBar");
+      const topH = topBar ? topBar.getBoundingClientRect().height : 0;
+      const barH = bottomBarRef.current ? bottomBarRef.current.getBoundingClientRect().height : 0;
+
+      // Keep the whole tree visible without scrolling on phones.
+      // We reserve a small buffer for paddings and the separator.
+      const avail = Math.max(240, window.innerHeight - topH - barH - 28);
+      setSvgHeight(avail);
+    }
+
+    recompute();
+    window.addEventListener("resize", recompute);
+    return () => window.removeEventListener("resize", recompute);
+  }, [difficulty, seed]);
 
   function newPuzzle() {
     startRef.current = Date.now();
@@ -207,24 +272,58 @@ export default function BSTInsertPage() {
     setDropped(null);
     setStatus("playing");
     setMsg("");
+    setHintOn(difficulty === "EASY");
+    setHintUses(difficulty === "MEDIUM" ? 2 : 0);
   }
 
   function resetTry() {
     setDropped(null);
-    setStatus("playing");
     setMsg("");
   }
 
-  function onDropSlot(slot) {
+  function onSelectSlot(slot) {
     if (status !== "playing") return;
     setDropped({ parent: slot.parent, side: slot.side });
     setMsg("");
+    buzz(10);
+    sfx(playUiTapSfx);
+  }
+
+  const hintTimerRef = useRef(null);
+  function toggleHint() {
+    if (difficulty === "HARD") return;
+    if (hintOn) {
+      setHintOn(false);
+      return;
+    }
+    if (difficulty === "MEDIUM") {
+      if (hintUses <= 0) {
+        buzz(16);
+        sfx(playFailSfx);
+        setMsg("No hints left.");
+        return;
+      }
+      setHintUses((u) => Math.max(0, u - 1));
+      setHintOn(true);
+      // Auto-hide hint quickly on MEDIUM so it feels like a consumable power-up.
+      clearTimeout(hintTimerRef.current);
+      hintTimerRef.current = setTimeout(() => setHintOn(false), 1600);
+      buzz(8);
+      sfx(playUiTapSfx);
+      return;
+    }
+    // EASY: free toggle
+    setHintOn(true);
+    buzz(8);
+    sfx(playUiTapSfx);
   }
 
   function check() {
     if (!dropped) {
       setErrors((e) => e + 1);
-      setMsg("Drag the new node onto a free slot first.");
+      setMsg("Tap a dotted slot to place the node.");
+      buzz(18);
+      sfx(playFailSfx);
       return;
     }
     const ok =
@@ -234,32 +333,57 @@ export default function BSTInsertPage() {
     if (ok) {
       setStatus("won");
       setTimeMs(Date.now() - startRef.current);
+      buzz(26);
+      sfx(playWinSfx);
       setMsg(
-        `✅ Correct! Insert ${puzzle.newValue} as ${puzzle.answer.side === "L" ? "LEFT" : "RIGHT"} child of ${puzzle.answer.parentValue}.`
+        `✅ Correct! ${puzzle.newValue} goes to the ${puzzle.answer.side === "L" ? "LEFT" : "RIGHT"} of ${puzzle.answer.parentValue}.`
       );
     } else {
-      setErrors((e) => e + 1);
-      setMsg(
-        `❌ Not quite. Follow BST insertion from the root: compare and go left/right until you hit an empty slot.`
-      );
+      setErrors((e) => {
+        const next = e + 1;
+        // On MEDIUM/HARD the game can fail (mobile arcade feel).
+        if (next >= maxStrikes) {
+          setStatus("lost");
+          setTimeMs(Date.now() - startRef.current);
+          setMsg("❌ You lost — too many mistakes.");
+        } else {
+          setMsg(`❌ Wrong slot. Follow the comparisons from the root. (${next}/${maxStrikes === Number.POSITIVE_INFINITY ? "∞" : maxStrikes})`);
+        }
+        return next;
+      });
+      buzz(20);
+      sfx(playFailSfx);
     }
   }
 
   const viewBox = `${layout.bounds.x} ${layout.bounds.y} ${layout.bounds.w} ${layout.bounds.h}`;
-  // Let the SVG grow with the tree so nothing gets clipped. The page can scroll vertically.
-  const idealHeight = clamp(layout.bounds.h, 420, 980);
+  const pathSet = useMemo(() => new Set(pathNodes), [pathNodes]);
+  const edgeSet = useMemo(() => {
+    const s = new Set();
+    for (let i = 0; i < pathNodes.length - 1; i++) s.add(`${pathNodes[i]}-${pathNodes[i + 1]}`);
+    return s;
+  }, [pathNodes]);
+
+  const selectedSlot = useMemo(() => {
+    if (!dropped) return null;
+    return layout.slots.find((s) => s.parent === dropped.parent && s.side === dropped.side) || null;
+  }, [dropped, layout.slots]);
 
   return (
     <AppShell
       title="Code & Conquer"
-      subtitle="BST Insert — drag the new node to the correct insertion position"
+      subtitle="BST Insert — tap the correct slot"
       headerBadges={
         <>
           <Badge>Category: BST_INSERT</Badge>
           <Badge>Diff: {difficulty}</Badge>
-          <Badge>Errors: {errors}</Badge>
-          <Badge>New node: {puzzle.newValue}</Badge>
-          {status === "won" && <Badge style={{ borderColor: "rgba(52,211,153,0.45)" }}>WON</Badge>}
+          <Badge>Value: {puzzle.newValue}</Badge>
+          <Badge>
+            Mistakes: {errors}/{maxStrikes === Number.POSITIVE_INFINITY ? "∞" : maxStrikes}
+          </Badge>
+          {difficulty === "MEDIUM" ? <Badge>Hints: {hintUses}</Badge> : null}
+          {status === "won" ? <Badge style={{ borderColor: "rgba(52,211,153,0.45)" }}>WON</Badge> : null}
+          {status === "lost" ? <Badge style={{ borderColor: "rgba(244,63,94,0.55)" }}>LOST</Badge> : null}
         </>
       }
       rightPanel={
@@ -274,7 +398,10 @@ export default function BSTInsertPage() {
               <li>Repeat until the child is <strong>null</strong> — insert there.</li>
             </ol>
             <div style={{ marginTop: 10 }}>
-              Drag the node onto one of the <strong>empty slots</strong> (dotted circles).
+              Tap one of the <strong>empty slots</strong> (dotted circles) to place the new node.
+            </div>
+            <div style={{ marginTop: 10 }}>
+              <strong>Medium</strong> gives you a few consumable hints. <strong>Hard</strong> gives no hints and fewer mistakes.
             </div>
           </div>
 
@@ -286,104 +413,25 @@ export default function BSTInsertPage() {
         </div>
       }
     >
-      <div style={{ display: "grid", gap: 12 }}>
-        {/* draggable node */}
-        <div className="panel" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-          <div>
-            <div style={{ fontWeight: 650 }}>Drag this node into the tree</div>
-            <div className="muted" style={{ marginTop: 6, fontSize: 13 }}>
-              Place <strong>{puzzle.newValue}</strong> where BST insertion would put it.
-            </div>
-          </div>
+      <div className="bstScreen">
+        {msg ? <div className="bstToast">{msg}</div> : null}
 
-          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <div
-              draggable={status === "playing"}
-              onDragStart={(e) => {
-                e.dataTransfer.setData("text/plain", String(puzzle.newValue));
-              }}
-              style={{
-                userSelect: "none",
-                padding: "10px 14px",
-                borderRadius: 999,
-                border: "1px solid rgba(129,140,248,0.45)",
-                background: "rgba(99,102,241,0.18)",
-                fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-                fontWeight: 700,
-              }}
-              title="Drag me"
-            >
-              {puzzle.newValue}
-            </div>
-
-            <Button variant="primary" onClick={check} disabled={status !== "playing"}>
-              Check
-            </Button>
-            <Button variant="secondary" onClick={resetTry}>
-              Reset
-            </Button>
-            <Button variant="ghost" onClick={newPuzzle}>
-              New tree
-            </Button>
-          </div>
-        </div>
-
-        {msg && (
-          <div
-            className="panel"
-            style={{
-              borderColor:
-                status === "won"
-                  ? "rgba(52,211,153,0.45)"
-                  : "rgba(129,140,248,0.35)",
-            }}
-          >
-            {msg}
-          </div>
-        )}
-
-        {status === "won" && (
+        {(status === "won" || status === "lost") ? (
           <ResultSubmitPanel
             category="BST_INSERT"
             difficulty={difficulty}
             timeMs={timeMs}
             errors={errors}
-            won={true}
-            onPlayAgain={newPuzzle}
-          challengeId={challenge?.challengeInstanceId}
-        />
-        )}
+            won={status === "won"}
+            challengeId={challenge?.challengeInstanceId}
+          />
+        ) : null}
 
-        {/* tree svg */}
-        <div
-          className="panel"
-          style={{
-            overflowX: "hidden",
-            overflowY: "visible",
-            padding: 12,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
-            <div className="muted" style={{ fontSize: 12 }}>
-              Tree size: <strong>{puzzle.cfg?.n ?? 0}</strong> nodes • Shape: <strong>{puzzle.cfg?.shape}</strong>
-            </div>
-            <div className="muted" style={{ fontSize: 12 }}>
-              Drag <strong>{puzzle.newValue}</strong> onto a dotted slot.
-            </div>
-          </div>
-
+        <div className="bstTreeCard" ref={treeCardRef}>
           <svg
             viewBox={viewBox}
             preserveAspectRatio="xMidYMid meet"
-            style={{
-              width: "100%",
-              height: idealHeight,
-              display: "block",
-              borderRadius: 14,
-              background:
-                "radial-gradient(900px 420px at 50% 0%, rgba(99,102,241,0.10), rgba(2,6,23,0.35) 55%, rgba(2,6,23,0.25))",
-              border: "1px solid rgba(148,163,184,0.14)",
-            }}
+            style={{ width: "100%", height: svgHeight, display: "block" }}
           >
             <defs>
               <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
@@ -395,10 +443,11 @@ export default function BSTInsertPage() {
               </filter>
 
               <linearGradient id="nodeFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="rgba(15,23,42,0.75)" />
-                <stop offset="100%" stopColor="rgba(2,6,23,0.55)" />
+                <stop offset="0%" stopColor="rgba(15,23,42,0.78)" />
+                <stop offset="100%" stopColor="rgba(2,6,23,0.58)" />
               </linearGradient>
             </defs>
+
             {/* edges */}
             {layout.edges.map((e) => {
               const a = layout.map.get(e.from);
@@ -407,50 +456,56 @@ export default function BSTInsertPage() {
               const mx = (a.x + b.x) / 2;
               const my = (a.y + b.y) / 2;
               const curve = `M ${a.x} ${a.y} Q ${mx} ${my - 18} ${b.x} ${b.y}`;
+
+              const inHint = hintOn && edgeSet.has(`${e.from}-${e.to}`);
               return (
                 <path
                   key={`${e.from}-${e.to}`}
                   d={curve}
                   fill="none"
-                  stroke="rgba(148,163,184,0.32)"
-                  strokeWidth="2.5"
+                  stroke={inHint ? "rgba(250,204,21,0.70)" : "rgba(148,163,184,0.30)"}
+                  strokeWidth={inHint ? 3.5 : 2.6}
                   strokeLinecap="round"
+                  filter={inHint ? "url(#softGlow)" : undefined}
                 />
               );
             })}
 
-            {/* empty slots (drop targets) */}
+            {/* empty slots (tap targets) */}
             {layout.slots.map((s) => {
               const isSelected = dropped && dropped.parent === s.parent && dropped.side === s.side;
+              const isHint = hintOn && s.parent === puzzle.answer.parentValue && s.side === puzzle.answer.side;
               return (
                 <g
                   key={`${s.parent}-${s.side}`}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    onDropSlot(s);
-                  }}
-                  style={{ cursor: status === "playing" ? "copy" : "default" }}
+                  onClick={() => onSelectSlot(s)}
+                  role="button"
+                  aria-label={`Slot ${s.side} of ${s.parent}`}
+                  style={{ cursor: status === "playing" ? "pointer" : "default" }}
                 >
-                  {/* hit area */}
-                  <circle cx={s.x} cy={s.y} r="22" fill="transparent" />
-                  {/* visible target */}
+                  <circle cx={s.x} cy={s.y} r="26" fill="transparent" />
                   <circle
                     cx={s.x}
                     cy={s.y}
-                    r="16"
-                    fill={isSelected ? "rgba(245,158,11,0.20)" : "rgba(2,6,23,0.18)"}
-                    stroke={isSelected ? "rgba(252,211,77,0.65)" : "rgba(129,140,248,0.45)"}
-                    strokeWidth="2"
+                    r="17"
+                    fill={isSelected ? "rgba(245,158,11,0.22)" : "rgba(2,6,23,0.14)"}
+                    stroke={
+                      isSelected
+                        ? "rgba(252,211,77,0.75)"
+                        : isHint
+                        ? "rgba(250,204,21,0.70)"
+                        : "rgba(129,140,248,0.45)"
+                    }
+                    strokeWidth={isSelected || isHint ? 2.8 : 2}
                     strokeDasharray="5 4"
-                    filter={isSelected ? "url(#softGlow)" : undefined}
+                    filter={(isSelected || isHint) ? "url(#softGlow)" : undefined}
                   />
                   <text
                     x={s.x}
                     y={s.y + 4}
                     textAnchor="middle"
-                    fill="rgba(226,232,240,0.75)"
-                    fontSize="10"
+                    fill="rgba(226,232,240,0.78)"
+                    fontSize="11"
                     fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
                   >
                     {s.side}
@@ -459,25 +514,59 @@ export default function BSTInsertPage() {
               );
             })}
 
+            {/* ghost new node at selected slot */}
+            {selectedSlot ? (
+              <g>
+                <circle
+                  cx={selectedSlot.x}
+                  cy={selectedSlot.y}
+                  r="22"
+                  fill="rgba(99,102,241,0.22)"
+                  stroke="rgba(129,140,248,0.72)"
+                  strokeWidth="2.8"
+                  filter="url(#softGlow)"
+                />
+                <text
+                  x={selectedSlot.x}
+                  y={selectedSlot.y + 5}
+                  textAnchor="middle"
+                  fill="rgba(248,250,252,0.98)"
+                  fontSize="14"
+                  fontWeight="800"
+                  fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
+                >
+                  {puzzle.newValue}
+                </text>
+              </g>
+            ) : null}
+
             {/* nodes */}
             {layout.nodes.map((n) => {
+              const inHint = hintOn && pathSet.has(n.value);
               return (
                 <g key={n.value}>
                   <circle
                     cx={n.x}
                     cy={n.y}
-                    r="18"
+                    r="19"
                     fill="url(#nodeFill)"
-                    stroke={status === "won" ? "rgba(52,211,153,0.55)" : "rgba(148,163,184,0.35)"}
-                    strokeWidth="2.5"
-                    filter="url(#softGlow)"
+                    stroke={
+                      status === "won"
+                        ? "rgba(52,211,153,0.55)"
+                        : inHint
+                        ? "rgba(250,204,21,0.75)"
+                        : "rgba(148,163,184,0.33)"
+                    }
+                    strokeWidth={inHint ? 3.0 : 2.6}
+                    filter={inHint ? "url(#softGlow)" : undefined}
                   />
                   <text
                     x={n.x}
-                    y={n.y + 4}
+                    y={n.y + 5}
                     textAnchor="middle"
-                    fill="rgba(248,250,252,0.95)"
+                    fill="rgba(248,250,252,0.96)"
                     fontSize="12"
+                    fontWeight={inHint ? 800 : 700}
                     fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
                   >
                     {n.value}
@@ -486,9 +575,26 @@ export default function BSTInsertPage() {
               );
             })}
           </svg>
+        </div>
 
-          <div className="muted" style={{ marginTop: 10, fontSize: 12 }}>
-            Skillcheck: BST insertion is a deterministic path from root → leaf based on comparisons.
+        <div className="bstBottomBar" ref={bottomBarRef}>
+          <div className="bstValueChip" aria-label="New node value">
+            <div className="bstValueLabel">New</div>
+            <div className="bstValueNum">{puzzle.newValue}</div>
+          </div>
+
+          <div className="bstActions">
+            {difficulty !== "HARD" ? (
+              <Button variant="secondary" onClick={toggleHint} disabled={status !== "playing"}>
+                Hint{difficulty === "MEDIUM" ? ` (${hintUses})` : ""}
+              </Button>
+            ) : null}
+            <Button variant="secondary" onClick={resetTry} disabled={status !== "playing"}>
+              Undo
+            </Button>
+            <Button variant="primary" onClick={check} disabled={status !== "playing"}>
+              Check
+            </Button>
           </div>
         </div>
       </div>

@@ -10,6 +10,7 @@ import Lobby from "./pages/Lobby";
 import TurnSummary from "./pages/TurnSummary";
 import EndScreen from "./pages/EndScreen";
 import StackMazePage from "./pages/StackMazePage";
+import StackDropPage from "./pages/StackDropPage";
 import GraphPathfinderPage from "./pages/GraphPathfinderPage";
 import BSTInsertPage from "./pages/BSTInsertPage";
 import QueueCommanderPage from "./pages/QueueCommanderPage";
@@ -18,6 +19,7 @@ import { getSession } from "./lib/session";
 import { getPlayer, leaveSessionBeacon, registerPlayer } from "./lib/player";
 import { API_BASE } from "./lib/api";
 import { DiceOverlayProvider } from "./components/dice/DiceOverlayProvider";
+import { MinigameResultToastProvider } from "./components/MinigameResultToastProvider";
 
 export default function App() {
   // Best-effort: when the tab/window is closed, remove the player from the match.
@@ -56,8 +58,9 @@ export default function App() {
 
   return (
     <DiceOverlayProvider>
-      <Router>
-        <Routes>
+      <MinigameResultToastProvider>
+        <Router>
+          <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/challenge" element={<Challenge />} />
         <Route path="/join/:code" element={<Join />} />
@@ -67,11 +70,13 @@ export default function App() {
         <Route path="/end" element={<EndScreen />} />
         <Route path="/leaderboard" element={<Leaderboard />} />
         <Route path="/stackmaze" element={<StackMazePage />} />
+        <Route path="/stackdrop" element={<StackDropPage />} />
         <Route path="/graphpath" element={<GraphPathfinderPage />} />
         <Route path="/bstinsert" element={<BSTInsertPage />} />
         <Route path="/queuecommander" element={<QueueCommanderPage />} />
-        </Routes>
-      </Router>
+          </Routes>
+        </Router>
+      </MinigameResultToastProvider>
     </DiceOverlayProvider>
   );
 }

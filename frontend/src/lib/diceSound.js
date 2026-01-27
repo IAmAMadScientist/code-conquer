@@ -134,6 +134,32 @@ export function playDiceLandSfx() {
   setTimeout(() => playTone({ freq: 320, durationMs: 22, type: "square", gain: 0.02, detune: 0 }), 22);
 }
 
+// --- Generic UI / minigame SFX (no assets) ---
+// These are intentionally subtle and "gamey" for mobile.
+
+export function playUiTapSfx() {
+  // crisp tiny tap
+  playTone({ freq: 360, durationMs: 26, type: "square", gain: 0.018, detune: 0, ramp: true });
+}
+
+export function playMoveSfx() {
+  // soft tick
+  playTone({ freq: 260, durationMs: 30, type: "triangle", gain: 0.02, detune: -8, ramp: true });
+}
+
+export function playFailSfx() {
+  // "bonk" + fizz
+  playTone({ freq: 150, durationMs: 140, type: "sine", gain: 0.055, detune: -18, ramp: true });
+  playNoise({ durationMs: 90, gain: 0.02, bandpassHz: 650, q: 0.9 });
+}
+
+export function playWinSfx() {
+  // small "victory" chirp
+  playTone({ freq: 330, durationMs: 80, type: "sine", gain: 0.05, detune: 0, ramp: true });
+  setTimeout(() => playTone({ freq: 440, durationMs: 90, type: "sine", gain: 0.055, detune: 0, ramp: true }), 90);
+  setTimeout(() => playTone({ freq: 560, durationMs: 110, type: "triangle", gain: 0.055, detune: 0, ramp: true }), 190);
+}
+
 export function useSoundSetting() {
   // Tiny hook helper without adding dependencies.
   const [enabled, setEnabled] = React.useState(getSoundEnabled());
