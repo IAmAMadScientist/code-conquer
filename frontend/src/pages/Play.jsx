@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import AppShell from "../components/AppShell";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
@@ -14,14 +14,11 @@ import ConfirmModal from "../components/ConfirmModal";
 
 export default function Play() {
   const nav = useNavigate();
-  const loc = useLocation();
   const session = useMemo(() => getSession(), []);
   const me = useMemo(() => getPlayer(), []);
 
   const [state, setState] = useState(null);
   const [err, setErr] = useState(null);
-  const [summary, setSummary] = useState(loc.state?.turnSummary || null);
-  const [turnMsg, setTurnMsg] = useState(null);
   const [pendingChoices, setPendingChoices] = useState(null);
 
   // Special deck modal (when landing on SPECIAL)
@@ -95,11 +92,7 @@ export default function Play() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-useEffect(() => {
-  if (!summary) return;
-  const t = setTimeout(() => setSummary(null), 4500);
-  return () => clearTimeout(t);
-}, [summary]);
+
 
   // Auto-open the Special deck modal when the backend requests it.
   useEffect(() => {
@@ -144,14 +137,11 @@ useEffect(() => {
           options: r.options || [],
           diceRoll: r.diceRoll,
         });
-        setTurnMsg(`🎲 Rolled ${r.diceRoll}. Choose a path.`);
       } else {
         setPendingChoices(null);
-        if (r?.diceRoll) setTurnMsg(`🎲 Rolled ${r.diceRoll}. Moved to ${r.positionNodeId} (${r.positionType}).`);
       }
       // Refresh lobby state so other UI updates (turnStatus/position) are shown.
       load();
-      setTimeout(() => setTurnMsg(null), 4500);
       return r;
     } catch (e) {
       setErr(e?.message || "Roll failed");
@@ -171,13 +161,10 @@ useEffect(() => {
           options: r.options || [],
           diceRoll: r.diceRoll,
         });
-        setTurnMsg(`➡️ Choose next path (remaining ${r.remainingSteps}).`);
       } else {
         setPendingChoices(null);
-        setTurnMsg(`✅ Moved to ${r.positionNodeId} (${r.positionType}).`);
       }
       load();
-      setTimeout(() => setTurnMsg(null), 4500);
     } catch (e) {
       setErr(e?.message || "Choice failed");
     }
@@ -232,10 +219,8 @@ useEffect(() => {
       setSpecialTarget("");
       setBoostOptions([]);
       setBoostTo("");
-      setTurnMsg("🃏 Special card activated.");
       setSpecialSubmitting(false);
       load();
-      setTimeout(() => setTurnMsg(null), 3500);
     } catch (e) {
       const msg = String(e?.message || "");
       // If the backend says the action is locked, we likely desynced (already resolved or no longer awaiting).
@@ -246,9 +231,7 @@ useEffect(() => {
         setSpecialTarget("");
         setBoostOptions([]);
         setBoostTo("");
-        setTurnMsg("Special already resolved — synced.");
         load();
-        setTimeout(() => setTurnMsg(null), 3500);
         return;
       }
       setSpecialSubmitting(false);
@@ -495,49 +478,8 @@ useEffect(() => {
             {/* Reserve space under the fixed (collapsed) EventFeed so it never overlaps content. */}
             <div style={{ height: "calc(var(--cc-eventfeed-h, 72px) + 8px)" }} aria-hidden />
 
-            {/* Floating banners (do not push layout) */}
-            {(turnMsg || summary) ? (
-              <div
-                style={{
-                  position: "absolute",
-                  top: "calc(var(--cc-eventfeed-h, 72px) + 8px)",
-                  left: 0,
-                  right: 0,
-                  padding: "0 12px",
-                  zIndex: 5,
-                  pointerEvents: "none",
-                  display: "grid",
-                  gap: 10,
-                }}
-              >
-                {turnMsg ? (
-                  <div className="panel" style={{ border: "1px solid rgba(148,163,184,0.22)" }}>
-                    <div style={{ fontWeight: 800 }}>ℹ️ {turnMsg}</div>
-                  </div>
-                ) : null}
-
-                {summary ? (
-                  <div className="panel" style={{ border: "1px solid rgba(148,163,184,0.22)" }}>
-                    <div style={{ fontWeight: 800, marginBottom: 6 }}>
-                      {summary.saved ? "✅ Score saved" : "⚠️ Score not saved"}
-                    </div>
-                    {summary.error ? <div className="muted" style={{ marginBottom: 6 }}>{summary.error}</div> : null}
-                    {summary.next ? (
-                      <div className="muted">
-                        Next turn: <strong>{summary.next.icon || "🙂"} {summary.next.name}</strong> (#{summary.next.turnOrder})
-                      </div>
-                    ) : (
-                      <div className="muted">Next turn is ready.</div>
-                    )}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-
             <div className="panel playCard">
               {err ? <div style={{ opacity: 0.9 }}>⚠️ {err}</div> : null}
-
-              {/* NOTE: turnMsg + summary are rendered as floating overlays above */}
 
               {!state?.started ? (
                 <div className="muted" style={{ lineHeight: 1.5 }}>
