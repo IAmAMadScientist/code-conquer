@@ -334,7 +334,7 @@ useEffect(() => {
                   The current player is selecting their Special card.
                 </div>
               </div>
-            ), document.body) : null}
+            ) : null}
 
             <div style={{ display: "grid", gap: 10 }}>
               <label style={{ display: "grid", gap: 6 }}>
@@ -419,7 +419,7 @@ useEffect(() => {
             </div>
           </div>
         </div>
-      ) : null}
+      ), document.body) : null}
 
       <style>{`
         .playRoot{ height:100%; min-height:0; display:flex; flex-direction:column; gap:12px; overflow:hidden; }
