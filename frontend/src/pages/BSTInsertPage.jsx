@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import AppShell from "../components/AppShell";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
@@ -59,7 +59,7 @@ function cloneTree(t) {
   return { value: t.value, left: cloneTree(t.left), right: cloneTree(t.right) };
 }
 
-function findInsertionSlot(root, value) {
+function findInsertionSlot(root, value, eqGoesLeft = false) {
   // Returns { parentValue, side: "L"|"R" } where the new node should be inserted as null child
   let cur = root;
   let parent = null;
@@ -70,24 +70,17 @@ function findInsertionSlot(root, value) {
     if (value < cur.value) {
       side = "L";
       cur = cur.left;
-    } else {
+    } else if (value > cur.value) {
       side = "R";
       cur = cur.right;
+    } else {
+      // equal
+      side = eqGoesLeft ? "L" : "R";
+      cur = eqGoesLeft ? cur.left : cur.right;
     }
   }
 
   return { parentValue: parent ? parent.value : null, side };
-}
-
-function insertionPath(root, value) {
-  // Values of nodes visited during deterministic BST insert.
-  const path = [];
-  let cur = root;
-  while (cur) {
-    path.push(cur.value);
-    cur = value < cur.value ? cur.left : cur.right;
-  }
-  return path;
 }
 
 function buildLayout(root) {
@@ -154,11 +147,13 @@ function makePuzzle(difficulty) {
   }[difficulty] || { n: 11, maxH: 6, shape: "random" };
 
   const poolMax = 60;
+  const eqGoesLeft = (difficulty || "EASY").toUpperCase() === "HARD";
+  const duplicateChance = (difficulty || "EASY").toUpperCase() === "MEDIUM" ? 0.25 : ((difficulty || "EASY").toUpperCase() === "HARD" ? 0.45 : 0);
   let attempt = 0;
   while (attempt++ < 80) {
     const values = shuffle(Array.from({ length: poolMax }, (_, i) => i + 1));
     const base = values.slice(0, cfg.n);
-    const newValue = values[cfg.n];
+    const newValue = Math.random() < duplicateChance ? base[randInt(0, base.length - 1)] : values[cfg.n];
 
     let root = null;
     if (cfg.shape === "balanced") {
@@ -181,8 +176,8 @@ function makePuzzle(difficulty) {
     }
 
     if (height(root) <= cfg.maxH) {
-      const answer = findInsertionSlot(root, newValue);
-      return { root, base, newValue, answer, cfg };
+      const answer = findInsertionSlot(root, newValue, eqGoesLeft);
+      return { root, base, newValue, answer, cfg, eqGoesLeft };
     }
   }
 
@@ -192,8 +187,9 @@ function makePuzzle(difficulty) {
   const newValue = values[11];
   let root = null;
   for (const v of base) root = bstInsert(root, v);
-  const answer = findInsertionSlot(root, newValue);
-  return { root, base, newValue, answer, cfg: { n: 11, maxH: 6, shape: "random" } };
+  const eqGoesLeftFallback = (difficulty || "EASY").toUpperCase() === "HARD";
+  const answer = findInsertionSlot(root, newValue, eqGoesLeftFallback);
+  return { root, base, newValue, answer, cfg: { n: 11, maxH: 6, shape: "random" }, eqGoesLeft: eqGoesLeftFallback };
 }
 
 // ------------------------
@@ -203,6 +199,15 @@ export default function BSTInsertPage() {
   const loc = useLocation();
   const challenge = loc.state?.challenge;
   const difficulty = (challenge?.difficulty || "EASY").toUpperCase();
+
+  // Prevent vertical page scrolling on mobile during the minigame.
+  useEffect(() => {
+    const prev = document.body.style.overflowY;
+    document.body.style.overflowY = "hidden";
+    return () => {
+      document.body.style.overflowY = prev;
+    };
+  }, []);
 
   const [seed, setSeed] = useState(0);
   const puzzle = useMemo(() => makePuzzle(difficulty), [seed, difficulty]);
@@ -217,20 +222,39 @@ export default function BSTInsertPage() {
     return 3; // MEDIUM
   }, [difficulty]);
 
-  const [hintOn, setHintOn] = useState(difficulty === "EASY");
+  // Hints should NOT reveal the path/answer. We only flash a short algorithm reminder.
+  const [hintOn, setHintOn] = useState(false);
   const [hintUses, setHintUses] = useState(difficulty === "MEDIUM" ? 2 : 0);
 
   const startRef = useRef(Date.now());
   const [timeMs, setTimeMs] = useState(0);
   const [errors, setErrors] = useState(0);
 
+  const timeLimitMs = useMemo(() => {
+    if (difficulty === "HARD") return 30_000;
+    if (difficulty === "MEDIUM") return 40_000;
+    return 55_000; // EASY
+  }, [difficulty]);
+
+  // Live timer + timeout
+  useEffect(() => {
+    if (status !== "playing") return;
+    const id = setInterval(() => {
+      const elapsed = Date.now() - startRef.current;
+      setTimeMs(elapsed);
+      if (timeLimitMs && elapsed >= timeLimitMs) {
+        setStatus("lost");
+        setMsg("⏱️ Time's up.");
+      }
+    }, 100);
+    return () => clearInterval(id);
+  }, [status, timeLimitMs]);
+
   const treeCardRef = useRef(null);
   const bottomBarRef = useRef(null);
   const [svgHeight, setSvgHeight] = useState(420);
 
   const layout = useMemo(() => buildLayout(puzzle.root), [puzzle.root]);
-  const pathNodes = useMemo(() => insertionPath(puzzle.root, puzzle.newValue), [puzzle.root, puzzle.newValue]);
-
   function buzz(ms = 12) {
     try {
       if (getHapticsEnabled() && navigator.vibrate) navigator.vibrate(ms);
@@ -272,7 +296,7 @@ export default function BSTInsertPage() {
     setDropped(null);
     setStatus("playing");
     setMsg("");
-    setHintOn(difficulty === "EASY");
+    setHintOn(false);
     setHintUses(difficulty === "MEDIUM" ? 2 : 0);
   }
 
@@ -292,10 +316,7 @@ export default function BSTInsertPage() {
   const hintTimerRef = useRef(null);
   function toggleHint() {
     if (difficulty === "HARD") return;
-    if (hintOn) {
-      setHintOn(false);
-      return;
-    }
+    if (hintOn) return; // already flashing
     if (difficulty === "MEDIUM") {
       if (hintUses <= 0) {
         buzz(16);
@@ -305,15 +326,17 @@ export default function BSTInsertPage() {
       }
       setHintUses((u) => Math.max(0, u - 1));
       setHintOn(true);
-      // Auto-hide hint quickly on MEDIUM so it feels like a consumable power-up.
+      // Flash a short algorithm reminder (no path highlighting).
       clearTimeout(hintTimerRef.current);
       hintTimerRef.current = setTimeout(() => setHintOn(false), 1600);
       buzz(8);
       sfx(playUiTapSfx);
       return;
     }
-    // EASY: free toggle
+    // EASY: free flash
     setHintOn(true);
+    clearTimeout(hintTimerRef.current);
+    hintTimerRef.current = setTimeout(() => setHintOn(false), 1800);
     buzz(8);
     sfx(playUiTapSfx);
   }
@@ -357,12 +380,7 @@ export default function BSTInsertPage() {
   }
 
   const viewBox = `${layout.bounds.x} ${layout.bounds.y} ${layout.bounds.w} ${layout.bounds.h}`;
-  const pathSet = useMemo(() => new Set(pathNodes), [pathNodes]);
-  const edgeSet = useMemo(() => {
-    const s = new Set();
-    for (let i = 0; i < pathNodes.length - 1; i++) s.add(`${pathNodes[i]}-${pathNodes[i + 1]}`);
-    return s;
-  }, [pathNodes]);
+  // We intentionally do not highlight the path/answer as a hint (too strong).
 
   const selectedSlot = useMemo(() => {
     if (!dropped) return null;
@@ -377,7 +395,9 @@ export default function BSTInsertPage() {
         <>
           <Badge>Category: BST_INSERT</Badge>
           <Badge>Diff: {difficulty}</Badge>
+          <Badge>Time: {Math.max(0, Math.ceil((timeLimitMs - timeMs) / 1000))}s</Badge>
           <Badge>Value: {puzzle.newValue}</Badge>
+          <Badge>Equal → {puzzle.eqGoesLeft ? "LEFT" : "RIGHT"}</Badge>
           <Badge>
             Mistakes: {errors}/{maxStrikes === Number.POSITIVE_INFINITY ? "∞" : maxStrikes}
           </Badge>
@@ -394,7 +414,8 @@ export default function BSTInsertPage() {
             <ol style={{ margin: "8px 0 0 18px" }}>
               <li>Start at the <strong>root</strong>.</li>
               <li>If <code>newValue &lt; node.value</code>, go <strong>left</strong>.</li>
-              <li>Else go <strong>right</strong>.</li>
+              <li>If <code>newValue &gt; node.value</code>, go <strong>right</strong>.</li>
+              <li>If <code>newValue == node.value</code>, go <strong>{puzzle.eqGoesLeft ? "left" : "right"}</strong> (this changes by difficulty).</li>
               <li>Repeat until the child is <strong>null</strong> — insert there.</li>
             </ol>
             <div style={{ marginTop: 10 }}>
@@ -414,7 +435,39 @@ export default function BSTInsertPage() {
       }
     >
       <div className="bstScreen">
+        <style>{`
+          /* Mobile-first: everything fits in the viewport without scrolling */
+          .bstScreen{display:flex;flex-direction:column;min-height:0;gap:10px;height:100%;}
+          .bstTreeCard{flex:1;min-height:0;border-radius:22px;border:1px solid rgba(148,163,184,0.18);
+            background:rgba(2,6,23,0.18);overflow:hidden;display:flex;align-items:center;justify-content:center;
+          }
+          .bstBottomBar{display:flex;align-items:center;justify-content:space-between;gap:12px;
+            padding:12px;border-radius:22px;border:1px solid rgba(148,163,184,0.18);
+            background:rgba(2,6,23,0.55);backdrop-filter:blur(10px);
+            padding-bottom:calc(env(safe-area-inset-bottom) + 12px);
+          }
+          .bstValueChip{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:18px;
+            border:1px solid rgba(148,163,184,0.18);background:rgba(15,23,42,0.35);min-width:90px;
+          }
+          .bstValueLabel{font-size:12px;opacity:0.75;}
+          .bstValueNum{font-size:20px;font-weight:900;letter-spacing:-0.02em;}
+          .bstActions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;}
+          .bstToast{padding:10px 12px;border-radius:16px;border:1px solid rgba(148,163,184,0.18);
+            background:rgba(2,6,23,0.35);font-size:13px;
+          }
+          @media (max-width:420px){
+            .bstBottomBar{flex-direction:column;align-items:stretch;}
+            .bstActions{justify-content:stretch;}
+            .bstActions > button{width:100%;}
+            .bstValueChip{width:100%;flex-direction:row;align-items:baseline;justify-content:space-between;}
+          }
+        `}</style>
         {msg ? <div className="bstToast">{msg}</div> : null}
+        {hintOn ? (
+          <div className="bstToast" style={{ borderColor: "rgba(59,130,246,0.55)" }}>
+            💡 Start at the root → compare → go LEFT if smaller, RIGHT if bigger{puzzle.eqGoesLeft ? ", EQUAL goes LEFT." : ", EQUAL goes RIGHT."}
+          </div>
+        ) : null}
 
         {(status === "won" || status === "lost") ? (
           <ResultSubmitPanel
@@ -457,7 +510,7 @@ export default function BSTInsertPage() {
               const my = (a.y + b.y) / 2;
               const curve = `M ${a.x} ${a.y} Q ${mx} ${my - 18} ${b.x} ${b.y}`;
 
-              const inHint = hintOn && edgeSet.has(`${e.from}-${e.to}`);
+              const inHint = false;
               return (
                 <path
                   key={`${e.from}-${e.to}`}
@@ -542,7 +595,7 @@ export default function BSTInsertPage() {
 
             {/* nodes */}
             {layout.nodes.map((n) => {
-              const inHint = hintOn && pathSet.has(n.value);
+              const inHint = false;
               return (
                 <g key={n.value}>
                   <circle
@@ -589,9 +642,7 @@ export default function BSTInsertPage() {
                 Hint{difficulty === "MEDIUM" ? ` (${hintUses})` : ""}
               </Button>
             ) : null}
-            <Button variant="secondary" onClick={resetTry} disabled={status !== "playing"}>
-              Undo
-            </Button>
+            {/* No undo needed: players can always tap a different slot to change their choice. */}
             <Button variant="primary" onClick={check} disabled={status !== "playing"}>
               Check
             </Button>

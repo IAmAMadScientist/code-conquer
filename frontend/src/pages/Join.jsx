@@ -106,7 +106,7 @@ export default function Join() {
             </div>
           </div>
         ) : (
-          <div style={{ display: "grid", gap: 10 }}>
+          <div style={{ display: "grid", gap: 10, maxWidth: 520, margin: "0 auto" }}>
             <div className="muted">Pick your player name and emoji:</div>
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
@@ -130,7 +130,7 @@ export default function Join() {
 
             <div style={{ display: "grid", gap: 8 }}>
               <div className="muted" style={{ fontSize: 13 }}>Emoji:</div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
                 {EMOJIS.map((e) => (
                   <button
                     key={e}

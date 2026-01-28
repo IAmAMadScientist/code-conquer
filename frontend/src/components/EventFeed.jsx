@@ -5,7 +5,7 @@ import { Badge } from "./ui/badge";
 
 // Mobile-friendly mini feed (collapsible) used in Play and Leaderboard.
 
-export default function EventFeed({ sessionId, title = "Events", limit = 5, pollMs = 1500 }) {
+export default function EventFeed({ sessionId, title = "Events", limit = 5, pollMs = 1500, floating = false }) {
   const MAX_ITEMS = 15;
   const isSmall = useMemo(() => {
     try {
@@ -102,8 +102,27 @@ export default function EventFeed({ sessionId, title = "Events", limit = 5, poll
   const shown = open ? bounded.slice(-Math.max(effectiveLimit, 1)) : bounded.slice(-1);
   const last = bounded.length ? bounded[bounded.length - 1] : null;
 
+  const wrapperStyle = floating
+    ? {
+        position: "absolute",
+        top: 12,
+        left: 12,
+        right: 12,
+        maxWidth: 620,
+        marginLeft: "auto",
+        marginRight: "auto",
+        zIndex: 45,
+        pointerEvents: "none",
+      }
+    : null;
+
+  const panelStyle = floating
+    ? { display: "grid", gap: 10, pointerEvents: "auto" }
+    : { display: "grid", gap: 10 };
+
   return (
-    <div className="panel" style={{ display: "grid", gap: 10 }}>
+    <div style={wrapperStyle || undefined}>
+      <div className="panel" style={panelStyle}>
       <div style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <div style={{ fontWeight: 800 }}>{title}</div>
@@ -145,6 +164,7 @@ export default function EventFeed({ sessionId, title = "Events", limit = 5, poll
           </div>
         </div>
       ) : null}
+      </div>
     </div>
   );
 }

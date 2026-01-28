@@ -378,23 +378,48 @@ export default function GraphPathfinderPage() {
   }, [optimalPath]);
 
   const [path, setPath] = useState([start]);
-  const [status, setStatus] = useState("playing"); // playing | won | invalid
+  const [status, setStatus] = useState("playing"); // playing | won | lost
   const [message, setMessage] = useState("");
+
+  // Quick-session arcade layer: beat a budget + timer.
+  const diffCfg = useMemo(() => {
+    const d = (difficulty || "EASY").toUpperCase();
+    if (d === "HARD") return { slack: 2, timeLimitSec: 35 };
+    if (d === "MEDIUM") return { slack: 4, timeLimitSec: 40 };
+    return { slack: 6, timeLimitSec: 45 };
+  }, [difficulty]);
 
   // scoring helpers
   const startRef = useRef(Date.now());
   const [timeMs, setTimeMs] = useState(0);
   const [errors, setErrors] = useState(0);
+  const [timeLeftMs, setTimeLeftMs] = useState(diffCfg.timeLimitSec * 1000);
 
   // IMPORTANT: when graph changes, start changes -> reset path
   useEffect(() => {
     startRef.current = Date.now();
     setTimeMs(0);
     setErrors(0);
+    setTimeLeftMs(diffCfg.timeLimitSec * 1000);
     setPath([start]);
     setStatus("playing");
     setMessage("");
-  }, [start]);
+  }, [start, diffCfg.timeLimitSec]);
+
+  // Tick down timer while playing (mobile-friendly: low freq).
+  useEffect(() => {
+    if (status !== "playing") return;
+    const t = setInterval(() => {
+      const elapsed = Date.now() - startRef.current;
+      const left = Math.max(0, diffCfg.timeLimitSec * 1000 - elapsed);
+      setTimeLeftMs(left);
+      if (left <= 0) {
+        setStatus("lost");
+        setMessage("Time's up! Try a faster route.");
+      }
+    }, 120);
+    return () => clearInterval(t);
+  }, [status, diffCfg.timeLimitSec]);
 
   const edgeMap = useMemo(() => {
     const m = new Map();
@@ -422,6 +447,7 @@ export default function GraphPathfinderPage() {
     startRef.current = Date.now();
     setTimeMs(0);
     setErrors(0);
+    setTimeLeftMs(diffCfg.timeLimitSec * 1000);
     setPath([start]);
     setStatus("playing");
     setMessage("");
@@ -431,6 +457,7 @@ export default function GraphPathfinderPage() {
     startRef.current = Date.now();
     setTimeMs(0);
     setErrors(0);
+    setTimeLeftMs(diffCfg.timeLimitSec * 1000);
     setSeed((s) => s + 1);
     // path gets reset by useEffect([start]), but do it now too for instant UI
     setPath([start]);
@@ -463,15 +490,33 @@ export default function GraphPathfinderPage() {
     }
 
     if (!isNeighbor(last, id)) {
-      setMessage("Not connected: you can only move along an edge.");
+      setMessage("Not connected — you can only move along a visible edge.");
+      try { if (navigator.vibrate) navigator.vibrate(18); } catch {}
+      setErrors((e) => e + 1);
+      return;
+    }
+
+    // Budget check (arcade): if you exceed the budget you lose immediately.
+    const stepW = edgeMap.get(edgeKey(last, id)) ?? Infinity;
+    const nextW = (Number.isFinite(currentWeight) ? currentWeight : 0) + stepW;
+    if (budget != null && nextW > budget) {
+      setErrors((e) => e + 1);
+      setMessage(`Over budget! (${nextW} > ${budget})`);
+      try { if (navigator.vibrate) navigator.vibrate([16, 30, 16]); } catch {}
+      setStatus("lost");
       return;
     }
 
     setMessage("");
     setPath((p) => p.concat(id));
+
+    // Auto-finish: when you reach goal, evaluate instantly (arcade feel).
+    if (id === goal) {
+      setTimeout(() => check(true), 0);
+    }
   }
 
-  function check() {
+  function check(fromAuto = false) {
     if (!safeOptimal) {
       setErrors((e) => e + 1);
       setMessage("No path from START to GOAL in this graph. Click 'New graph'.");
@@ -481,7 +526,7 @@ export default function GraphPathfinderPage() {
     const last = path[path.length - 1];
     if (last !== goal) {
       setErrors((e) => e + 1);
-      setMessage("You must end on the Goal node.");
+      setMessage(fromAuto ? "" : "You must end on the Goal node.");
       return;
     }
 
@@ -500,15 +545,38 @@ export default function GraphPathfinderPage() {
       return;
     }
 
+    const budget = safeOptimal + diffCfg.slack;
+    if (w > budget) {
+      setErrors((e) => e + 1);
+      setStatus("lost");
+      setMessage(`Too expensive! Cost ${w} (budget ${budget}).`);
+      try { if (navigator.vibrate) navigator.vibrate([18, 40, 18]); } catch {}
+      return;
+    }
+
     setStatus("won");
+    const left = Math.ceil(timeLeftMs / 1000);
     setMessage(
       w === safeOptimal
-        ? `Perfect! Your cost = ${w}. Optimal = ${safeOptimal}.`
-        : `Nice. Your cost = ${w}. Optimal = ${safeOptimal}.`
+        ? `Perfect! Cost ${w} (optimal). +${left}s left.`
+        : `Nice! Cost ${w} (optimal ${safeOptimal}). +${left}s left.`
     );
+    try { if (navigator.vibrate) navigator.vibrate([20, 30, 20]); } catch {}
   }
 
   const currentWeight = pathWeight(path);
+
+  const cursor = path[path.length - 1];
+  const neighborSet = useMemo(() => {
+    const s = new Set();
+    for (const n of (adj[cursor] || [])) s.add(n.to);
+    return s;
+  }, [adj, cursor]);
+
+  const budget = useMemo(() => {
+    if (!safeOptimal) return null;
+    return safeOptimal + diffCfg.slack;
+  }, [safeOptimal, diffCfg.slack]);
 
   const closenessPct = useMemo(() => {
     if (!Number.isFinite(currentWeight) || !safeOptimal || safeOptimal <= 0) return 0;
@@ -572,11 +640,16 @@ export default function GraphPathfinderPage() {
             </div>
           </div>
 
-          <div style={{ marginTop: 10 }}>
-            <Progress value={closenessPct} />
-            <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
-              Closeness to optimal (rough): {closenessPct}%
+          <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+              <div className="muted" style={{ fontSize: 12 }}>
+                Time left: <strong>{Math.ceil(timeLeftMs / 1000)}s</strong>
+              </div>
+              <div className="muted" style={{ fontSize: 12 }}>
+                Budget: <strong>{budget ?? "—"}</strong> · Cost: <strong>{Number.isFinite(currentWeight) ? currentWeight : 0}</strong>
+              </div>
             </div>
+            <Progress value={clamp(Math.round((timeLeftMs / (diffCfg.timeLimitSec * 1000)) * 100), 0, 100)} />
           </div>
 
           <div style={{ marginTop: 12, overflowX: "auto" }}>
@@ -622,15 +695,36 @@ export default function GraphPathfinderPage() {
                       filter={onOptimal || onUser ? "url(#softGlow)" : undefined}
                       strokeWidth={onOptimal ? 5 : onUser ? 4 : 2.5}
                     />
-                    <text
-                      x={(a.x + b.x) / 2}
-                      y={(a.y + b.y) / 2}
-                      fill="rgba(226,232,240,0.85)"
-                      fontSize="12"
-                      fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
-                    >
-                      {e.w}
-                    </text>
+                    {(() => {
+                      const mx = (a.x + b.x) / 2;
+                      const my = (a.y + b.y) / 2;
+                      const label = String(e.w);
+                      const w = 10 + label.length * 8;
+                      const h = 18;
+                      return (
+                        <g>
+                          <rect
+                            x={mx - w / 2}
+                            y={my - h / 2 - 1}
+                            width={w}
+                            height={h}
+                            rx={8}
+                            fill="rgba(2,6,23,0.55)"
+                            stroke="rgba(148,163,184,0.35)"
+                          />
+                          <text
+                            x={mx}
+                            y={my + 4}
+                            textAnchor="middle"
+                            fill="rgba(226,232,240,0.92)"
+                            fontSize="12"
+                            fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
+                          >
+                            {label}
+                          </text>
+                        </g>
+                      );
+                    })()}
                   </g>
                 );
               })}
@@ -640,6 +734,8 @@ export default function GraphPathfinderPage() {
                 const isStart = n.id === start;
                 const isGoal = n.id === goal;
                 const inPath = path.includes(n.id);
+                const isCursor = n.id === cursor;
+                const isNext = status === "playing" && neighborSet.has(n.id) && !inPath;
 
                 const fill = isStart
                   ? "rgba(99,102,241,0.35)"
@@ -660,18 +756,14 @@ export default function GraphPathfinderPage() {
                 return (
                   <g key={n.id} onClick={() => onNodeClick(n.id)} style={{ cursor: "pointer" }}>
                     {/* bigger hit area */}
-                    <circle cx={n.x} cy={n.y} r="28" fill="transparent" />
-                    <circle cx={n.x} cy={n.y} r="18" fill={fill} stroke={stroke} strokeWidth="2" />
-                    <text
-                      x={n.x}
-                      y={n.y + 4}
-                      textAnchor="middle"
-                      fill="rgba(248,250,252,0.95)"
-                      fontSize="12"
-                      fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
-                    >
-                      {n.id}
-                    </text>
+                    <circle cx={n.x} cy={n.y} r="34" fill="transparent" />
+                    {isNext && (
+                      <circle cx={n.x} cy={n.y} r="26" fill="transparent" stroke="rgba(252,211,77,0.65)" strokeWidth="3" strokeDasharray="6 6" />
+                    )}
+                    {isCursor && (
+                      <circle cx={n.x} cy={n.y} r="26" fill="transparent" stroke="rgba(255,255,255,0.55)" strokeWidth="3" />
+                    )}
+                    <circle cx={n.x} cy={n.y} r="20" fill={fill} stroke={stroke} strokeWidth="2" />
 
                     {isStart && (
                       <text x={n.x} y={n.y - 26} textAnchor="middle" fill="rgba(199,210,254,0.95)" fontSize="11">
@@ -681,6 +773,11 @@ export default function GraphPathfinderPage() {
                     {isGoal && (
                       <text x={n.x} y={n.y - 26} textAnchor="middle" fill="rgba(167,243,208,0.95)" fontSize="11">
                         GOAL
+                      </text>
+                    )}
+                    {isCursor && !isStart && !isGoal && (
+                      <text x={n.x} y={n.y - 26} textAnchor="middle" fill="rgba(248,250,252,0.9)" fontSize="11">
+                        YOU
                       </text>
                     )}
                   </g>
@@ -761,13 +858,13 @@ export default function GraphPathfinderPage() {
             Skillcheck: shortest path isn’t “fewest edges” — it’s minimum total weight (Dijkstra).
           </div>
 
-          {status === "won" && (
+          {status !== "playing" && (
             <ResultSubmitPanel
               category="GRAPH_PATH"
               difficulty={difficulty}
               timeMs={timeMs}
               errors={errors}
-              won={true}
+              won={status === "won"}
               onPlayAgain={resetSameGraph}
           challengeId={challenge?.challengeInstanceId}
         />

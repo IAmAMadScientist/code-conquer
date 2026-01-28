@@ -79,7 +79,12 @@ button, input { font: inherit; }
 
 /* ===== App Shell (phone-like) ===== */
 .appRoot{
-  min-height: 100vh;
+  /* Use dynamic viewport units to avoid bottom cut-offs on mobile browsers
+     with collapsing address bars. */
+  min-height: 100dvh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
   padding-top: env(safe-area-inset-top, 0px);
 }
 
@@ -175,6 +180,9 @@ button, input { font: inherit; }
 .soundIcon{ font-size: 18px; line-height: 1; }
 
 .appMain{
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
   padding: 12px;
   padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
 }
@@ -184,6 +192,11 @@ button, input { font: inherit; }
 }
 
 .screenSurface{
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border-radius: var(--r-lg);
   border: 1px solid rgba(71, 85, 105, 0.28);
   background: var(--surface);
@@ -271,6 +284,8 @@ button, input { font: inherit; }
   right: 10px;
   bottom: calc(10px + env(safe-area-inset-bottom, 0px));
   max-height: min(70vh, 540px);
+  display: flex;
+  flex-direction: column;
   border-radius: 26px;
   border: 1px solid rgba(71, 85, 105, 0.30);
   background: rgba(2,6,23,0.86);
@@ -448,6 +463,8 @@ button, input { font: inherit; }
 
 .sheetBody{
   padding: 0 12px 14px;
+  flex: 1;
+  min-height: 0;
   overflow: auto;
 }
 

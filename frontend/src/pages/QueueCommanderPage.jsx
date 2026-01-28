@@ -1,161 +1,178 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import AppShell from "../components/AppShell";
-import { Button } from "../components/ui/button";
-import { Badge } from "../components/ui/badge";
-import { Progress } from "../components/ui/progress";
 import { Link, useLocation } from "react-router-dom";
+
+import AppShell from "../components/AppShell";
+import { Badge } from "../components/ui/badge";
+import { Button } from "../components/ui/button";
 import ResultSubmitPanel from "../components/ResultSubmitPanel";
 
-function clamp(n, a, b) {
-  return Math.max(a, Math.min(b, n));
-}
+// Queue Commander (v5): Crowd Control (TACTICAL)
+// Goal: calm, readable, one-finger mobile gameplay.
+// Key change vs v4: NO real-time spawning or time pressure.
+// New loop: you take actions; after each action ONE new person arrives from a visible "NEXT" preview.
+// That makes it tactical (plan around FIFO), not stressful.
+
+const LS_BEST = "cc_queuecommander_best_v5";
 
 function randInt(a, b) {
   return Math.floor(Math.random() * (b - a + 1)) + a;
 }
 
-function shuffle(arr) {
-  const a = arr.slice();
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = randInt(0, i);
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
+function choice(arr) {
+  return arr[randInt(0, arr.length - 1)];
 }
 
-function difficultyConfig(difficulty, level) {
-  // Keep it simple and very noticeable.
-  const L = clamp(level, 1, 10);
+function getBest() {
+  try {
+    const v = Number(localStorage.getItem(LS_BEST) || "0");
+    return Number.isFinite(v) ? v : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function setBest(v) {
+  try {
+    localStorage.setItem(LS_BEST, String(v));
+  } catch {
+    // ignore
+  }
+}
+
+function vibrate(pattern) {
+  try {
+    if (navigator.vibrate) navigator.vibrate(pattern);
+  } catch {
+    // ignore
+  }
+}
+
+const TYPES = [
+  { key: "SET", label: "SET", color: "rgba(59,130,246,0.95)" }, // blue
+  { key: "AND", label: "AND", color: "rgba(34,197,94,0.95)" }, // green
+  { key: "OR", label: "OR", color: "rgba(249,115,22,0.95)" }, // orange
+  { key: "XOR", label: "XOR", color: "rgba(168,85,247,0.95)" }, // purple
+  { key: "NOT", label: "NOT", color: "rgba(236,72,153,0.95)" }, // pink
+];
+
+function diffCfg(difficulty) {
+  // Tactical defaults: fewer types on easy, more planning tools (rotations), and a small mission target.
   if (difficulty === "HARD") {
     return {
-      n: clamp(10 + Math.floor(L / 2), 10, 12),
-      capacity: 3,
-      rotateTokens: clamp(5 - Math.floor(L / 4), 3, 5),
+      cap: 7,
+      typeCount: 5,
+      ruleLen: 5,
+      lives: 2,
+      rotMax: 2,
+      // mission
+      targetRules: 5,
+      // preview depth
+      previewN: 3,
     };
   }
   if (difficulty === "MEDIUM") {
     return {
-      n: clamp(8 + Math.floor(L / 2), 8, 10),
-      capacity: 4,
-      rotateTokens: clamp(8 - Math.floor(L / 3), 5, 8),
+      cap: 8,
+      typeCount: 4,
+      ruleLen: 4,
+      lives: 3,
+      rotMax: 3,
+      targetRules: 4,
+      previewN: 3,
     };
   }
-  // EASY default
   return {
-    n: clamp(6 + Math.floor(L / 2), 6, 8),
-    capacity: 4,
-    rotateTokens: clamp(12 - Math.floor(L / 2), 8, 12),
+    cap: 9,
+    typeCount: 3,
+    ruleLen: 3,
+    lives: 3,
+    rotMax: 4,
+    targetRules: 3,
+    previewN: 3,
   };
 }
 
-// Generate a guaranteed-solvable "switchyard" puzzle:
-// - incoming is a fixed stream
-// - you have a FIFO queue buffer with limited capacity
-// - you can rotate (front -> back) with a limited token count
-// Target is created by simulating legal operations with the same constraints.
-function makeLevel({ difficulty, level, seed }) {
-  const cfg = difficultyConfig(difficulty, level);
-  const n = cfg.n;
-
-  // pseudo-seed by consuming random a few times (cheap but good enough for this minigame)
-  for (let i = 0; i < (seed % 17); i++) Math.random();
-
-  const incoming = shuffle(Array.from({ length: n }, (_, i) => i + 1));
-
-  function simulateTarget() {
-    const queue = [];
-    const target = [];
-    let idx = 0;
-    let rot = cfg.rotateTokens;
-
-    // Safety cap to avoid infinite loops (should never hit)
-    for (let step = 0; step < 5000 && target.length < n; step++) {
-      const canEnq = idx < n && queue.length < cfg.capacity;
-      const canRot = queue.length > 1 && rot > 0;
-      const canDeq = queue.length > 0;
-
-      // Weighted choices to make puzzles interesting but solvable.
-      // Prefer enqueue early, then rotate/dequeue mix.
-      let action = "";
-      const progress = target.length / n;
-      const wantEnq = canEnq && (queue.length === 0 || Math.random() < (0.55 - progress * 0.25));
-      const wantRot = canRot && Math.random() < (0.22 + progress * 0.12);
-      const wantDeq = canDeq && (!canEnq || Math.random() < 0.40);
-
-      if (wantEnq) action = "ENQ";
-      else if (wantRot) action = "ROT";
-      else if (wantDeq) action = "DEQ";
-      else if (canDeq) action = "DEQ";
-      else if (canEnq) action = "ENQ";
-      else break;
-
-      if (action === "ENQ") {
-        queue.push(incoming[idx++]);
-      } else if (action === "ROT") {
-        queue.push(queue.shift());
-        rot -= 1;
-      } else {
-        target.push(queue.shift());
-      }
-    }
-
-    // flush
-    while (target.length < n && queue.length) target.push(queue.shift());
-
-    // If we still haven't consumed all incoming (shouldn't happen often), enqueue & flush.
-    while (idx < n) {
-      if (queue.length < cfg.capacity) {
-        queue.push(incoming[idx++]);
-      } else {
-        target.push(queue.shift());
-      }
-    }
-    while (queue.length) target.push(queue.shift());
-
-    return target.slice(0, n);
+function makeRule(typeCount, ruleLen) {
+  const pool = TYPES.slice(0, typeCount);
+  const rule = [];
+  let last = null;
+  for (let i = 0; i < ruleLen; i++) {
+    let t = choice(pool);
+    let guard = 0;
+    while (guard++ < 12 && last && t.key === last.key) t = choice(pool);
+    rule.push(t.key);
+    last = t;
   }
-
-  // Ensure non-trivial (target != incoming) while staying solvable.
-  let target = simulateTarget();
-  let guard = 0;
-  while (guard++ < 12 && target.join(",") === incoming.join(",")) {
-    target = simulateTarget();
-  }
-
-  return {
-    level: clamp(level, 1, 10),
-    capacity: cfg.capacity,
-    rotateTokens: cfg.rotateTokens,
-    incoming,
-    target,
-  };
+  return rule;
 }
 
-function tokenStyle(kind, isActive = false) {
-  const base = {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minWidth: 42,
-    height: 34,
-    padding: "0 12px",
-    borderRadius: 14,
-    border: "1px solid rgba(51,65,85,0.55)",
-    background: "rgba(2,6,23,0.25)",
-    fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-    fontSize: 13,
-    fontWeight: 800,
-    userSelect: "none",
-    transition: "transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease",
-  };
+function roundedRect(ctx, x, y, w, h, r) {
+  const rr = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
+}
 
-  const glow = isActive ? { boxShadow: "0 0 0 3px rgba(99,102,241,0.18)", transform: "translateY(-1px)" } : {};
+function drawToken(ctx, key, x, y, size, isActive, isDone) {
+  const t = TYPES.find((tt) => tt.key === key) || TYPES[0];
+  const r = size * 0.22;
 
-  if (kind === "incoming") return { ...base, ...glow, borderColor: "rgba(129,140,248,0.55)", background: "rgba(99,102,241,0.12)" };
-  if (kind === "queue") return { ...base, ...glow, borderColor: "rgba(252,211,77,0.55)", background: "rgba(245,158,11,0.10)" };
-  if (kind === "output") return { ...base, ...glow, borderColor: "rgba(52,211,153,0.55)", background: "rgba(16,185,129,0.10)" };
-  if (kind === "target") return { ...base, ...glow, borderColor: "rgba(148,163,184,0.50)", background: "rgba(15,23,42,0.18)" };
-  return { ...base, ...glow };
+  ctx.save();
+  ctx.globalAlpha = isDone ? 0.55 : 1;
+
+  roundedRect(ctx, x, y, size, size, size * 0.18);
+  ctx.fillStyle = "rgba(255,255,255,0.10)";
+  ctx.fill();
+  ctx.lineWidth = isActive ? Math.max(2, size * 0.06) : Math.max(1.5, size * 0.04);
+  ctx.strokeStyle = isActive ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.25)";
+  ctx.stroke();
+
+  // icon
+  ctx.fillStyle = t.color;
+  const cx = x + size / 2;
+  const cy = y + size / 2;
+  ctx.beginPath();
+  if (key === "SET") {
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  } else if (key === "AND") {
+    ctx.moveTo(cx - r, cy);
+    ctx.lineTo(cx, cy - r);
+    ctx.lineTo(cx + r, cy);
+    ctx.lineTo(cx, cy + r);
+    ctx.closePath();
+  } else if (key === "OR") {
+    ctx.rect(cx - r, cy - r, r * 2, r * 2);
+  } else if (key === "XOR") {
+    ctx.moveTo(cx, cy - r);
+    ctx.lineTo(cx + r, cy);
+    ctx.lineTo(cx, cy + r);
+    ctx.lineTo(cx - r, cy);
+    ctx.closePath();
+  } else {
+    ctx.moveTo(cx - r, cy + r * 0.15);
+    ctx.lineTo(cx, cy - r);
+    ctx.lineTo(cx + r, cy + r * 0.15);
+    ctx.closePath();
+  }
+  ctx.fill();
+
+  // label
+  ctx.globalAlpha = 0.85;
+  ctx.fillStyle = "rgba(0,0,0,0.45)";
+  roundedRect(ctx, x + size * 0.12, y + size * 0.68, size * 0.76, size * 0.22, size * 0.12);
+  ctx.fill();
+  ctx.globalAlpha = isDone ? 0.65 : 0.95;
+  ctx.fillStyle = "rgba(255,255,255,0.92)";
+  ctx.font = `${Math.floor(size * 0.20)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(t.label, x + size / 2, y + size * 0.79);
+
+  ctx.restore();
 }
 
 export default function QueueCommanderPage() {
@@ -163,408 +180,671 @@ export default function QueueCommanderPage() {
   const challenge = loc.state?.challenge;
   const difficulty = challenge?.difficulty || "EASY";
 
-  const [seed, setSeed] = useState(0);
-  const [level, setLevel] = useState(1);
-
-  const data = useMemo(() => makeLevel({ difficulty, level, seed }), [difficulty, level, seed]);
-  const { capacity, rotateTokens: rotateStart, incoming, target } = data;
-
-  const [incomingIdx, setIncomingIdx] = useState(0);
-  const [queue, setQueue] = useState([]);
-  const [output, setOutput] = useState([]);
-  const [rotLeft, setRotLeft] = useState(rotateStart);
+  const cfg = useMemo(() => diffCfg(difficulty), [difficulty]);
 
   const [status, setStatus] = useState("playing"); // playing | won | lost
-  const [msg, setMsg] = useState("");
-  const [shake, setShake] = useState(false);
+  const [score, setScore] = useState(0);
+  const [best, setBestState] = useState(getBest());
+  const [combo, setCombo] = useState(0);
+  const [ruleStep, setRuleStep] = useState(0);
+  const [rulesDone, setRulesDone] = useState(0);
+  const [lives, setLives] = useState(cfg.lives);
+  const [rotCharges, setRotCharges] = useState(cfg.rotMax);
+  const [hint, setHint] = useState("Tap = Serve · Swipe down = Send Back · WAIT is safe");
 
-  const startRef = useRef(Date.now());
-  const [timeMs, setTimeMs] = useState(0);
-  const [errors, setErrors] = useState(0);
+  const canvasRef = useRef(null);
+  const canvasWrapRef = useRef(null);
+  const rafRef = useRef(0);
 
-  const nextIncoming = incomingIdx < incoming.length ? incoming[incomingIdx] : null;
-  const expectedNext = output.length < target.length ? target[output.length] : null;
+  const simRef = useRef({
+    queue: [],
+    preview: [],
+    rule: makeRule(cfg.typeCount, cfg.ruleLen),
+    ruleIdx: 0,
+    score: 0,
+    combo: 0,
+    rulesDone: 0,
+    lives: cfg.lives,
+    rot: cfg.rotMax,
+    running: true,
+    // juice
+    shakeT: 0,
+    shakeMs: 0,
+    shakePx: 0,
+    flashT: 0,
+    flashMs: 0,
+    flashGood: false,
+  });
 
-  const done = output.length === target.length;
-  const progressPct = Math.round((output.length / target.length) * 100);
+  const inputRef = useRef({ down: false, sx: 0, sy: 0 });
 
-  function hardReset() {
-    startRef.current = Date.now();
-    setTimeMs(0);
-    setErrors(0);
-    setIncomingIdx(0);
-    setQueue([]);
-    setOutput([]);
-    setRotLeft(rotateStart);
+  function syncUIFromSim() {
+    const s = simRef.current;
+    setScore(s.score);
+    setCombo(s.combo);
+    setRulesDone(s.rulesDone);
+    setLives(s.lives);
+    setRotCharges(s.rot);
+    setRuleStep(s.ruleIdx);
+  }
+
+  function randomTypeKey() {
+    const pool = TYPES.slice(0, cfg.typeCount);
+    return choice(pool).key;
+  }
+
+  function resetGame() {
+    const s = simRef.current;
+
+    s.queue = [];
+    s.preview = [];
+    s.rule = makeRule(cfg.typeCount, cfg.ruleLen);
+    s.ruleIdx = 0;
+    s.score = 0;
+    s.combo = 0;
+    s.rulesDone = 0;
+    s.lives = cfg.lives;
+    s.rot = cfg.rotMax;
+    s.running = true;
+
+    s.shakeT = 0;
+    s.shakeMs = 0;
+    s.shakePx = 0;
+    s.flashT = 0;
+    s.flashMs = 0;
+    s.flashGood = false;
+
+    // fill preview + initial queue
+    for (let i = 0; i < cfg.previewN; i++) s.preview.push(randomTypeKey());
+    const initial = Math.min(cfg.cap - 2, 5);
+    for (let i = 0; i < initial; i++) {
+      s.queue.push({ key: s.preview.shift(), born: performance.now() });
+      s.preview.push(randomTypeKey());
+    }
+
     setStatus("playing");
-    setMsg("");
+    setHint("Tap = Serve · Swipe down = Send Back · WAIT is safe");
+    syncUIFromSim();
   }
 
-  function newLevel() {
-    setSeed((s) => s + 1);
-    // rotateStart depends on seed, so reset after new data computed
-    setTimeout(() => {
-      hardReset();
-    }, 0);
+  function lose(reason) {
+    const s = simRef.current;
+    if (!s.running) return;
+    s.running = false;
+    setStatus("lost");
+    setHint(reason);
+
+    const b = Math.max(best, s.score);
+    setBestState(b);
+    setBest(b);
   }
 
-  // When difficulty/level changes, refresh the whole state.
-  useEffect(() => {
-    hardReset();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [difficulty, level, seed]);
+  function win() {
+    const s = simRef.current;
+    if (!s.running) return;
+    s.running = false;
+    setStatus("won");
+    setHint("Mission complete!");
 
-  function bumpError(text) {
-    setErrors((e) => e + 1);
-    setMsg(text);
-    setShake(true);
-    window.setTimeout(() => setShake(false), 280);
+    const b = Math.max(best, s.score);
+    setBestState(b);
+    setBest(b);
+
+    vibrate([18, 30, 18]);
   }
 
-  function enqueue() {
-    if (status !== "playing") return;
-    if (nextIncoming == null) return bumpError("No more incoming items.");
-    if (queue.length >= capacity) return bumpError(`Queue full (capacity ${capacity}).`);
-    setMsg("");
-    setQueue((q) => q.concat(nextIncoming));
-    setIncomingIdx((i) => i + 1);
+  function juiceBad() {
+    const s = simRef.current;
+    s.shakeT = performance.now();
+    s.shakeMs = 180;
+    s.shakePx = 10;
+    s.flashT = performance.now();
+    s.flashMs = 120;
+    s.flashGood = false;
+    vibrate(20);
   }
 
-  function rotate() {
-    if (status !== "playing") return;
-    if (queue.length < 2) return bumpError("Need at least 2 items to rotate.");
-    if (rotLeft <= 0) return bumpError("No rotate tokens left.");
-    setMsg("");
-    setRotLeft((r) => r - 1);
-    setQueue((q) => q.slice(1).concat(q[0]));
+  function juiceGood() {
+    const s = simRef.current;
+    s.flashT = performance.now();
+    s.flashMs = 120;
+    s.flashGood = true;
   }
 
-  function dequeueToOutput() {
-    if (status !== "playing") return;
-    if (queue.length === 0) return bumpError("Queue empty. Enqueue first.");
-    const front = queue[0];
-    if (front !== expectedNext) {
-      setErrors((e) => e + 1);
-      setStatus("lost");
-      setTimeMs(Date.now() - startRef.current);
-      setMsg(`❌ Wrong! Front is ${front}, but next target is ${expectedNext}.`);
-      setShake(true);
-      window.setTimeout(() => setShake(false), 280);
+  function advanceArrival() {
+    // After EACH action: one person arrives from NEXT.
+    const s = simRef.current;
+    if (!s.running) return;
+
+    if (s.queue.length >= cfg.cap) {
+      // tactical: overflow is your fault, immediate loss (no stress timer)
+      juiceBad();
+      syncUIFromSim();
+      lose("Overflow");
       return;
     }
-    setMsg("");
-    setQueue((q) => q.slice(1));
-    setOutput((o) => o.concat(front));
+
+    const k = s.preview.shift();
+    s.queue.push({ key: k, born: performance.now() });
+    s.preview.push(randomTypeKey());
   }
 
-  // Auto-detect deadlocks: no legal moves left and not done.
-  useEffect(() => {
-    if (status !== "playing") return;
-    if (done) return;
+  function serveFront() {
+    const s = simRef.current;
+    if (!s.running) return;
 
-    const canEnq = nextIncoming != null && queue.length < capacity;
-    const canRot = rotLeft > 0 && queue.length > 1;
-    const canDeq = queue.length > 0 && queue[0] === expectedNext;
-    if (!canEnq && !canRot && !canDeq) {
-      setStatus("lost");
-      setTimeMs(Date.now() - startRef.current);
-      setMsg("❌ Stuck! No legal moves left. Try a new level.");
+    if (s.queue.length === 0) {
+      // nothing to serve -> small penalty, still advances (keeps it tactical)
+      s.combo = 0;
+      s.score = Math.max(0, s.score - 1);
+      juiceBad();
+      advanceArrival();
+      syncUIFromSim();
+      return;
     }
-  }, [status, done, nextIncoming, queue, capacity, rotLeft, expectedNext]);
+
+    const front = s.queue[0];
+    const want = s.rule[s.ruleIdx];
+
+    if (front.key === want) {
+      s.queue.shift();
+      s.ruleIdx += 1;
+      s.combo = Math.min(30, s.combo + 1);
+      s.score += 6 + Math.min(6, s.combo);
+      juiceGood();
+
+      if (s.ruleIdx >= s.rule.length) {
+        s.rulesDone += 1;
+        s.score += 25 + s.combo * 2;
+        s.combo += 1;
+        s.rule = makeRule(cfg.typeCount, cfg.ruleLen);
+        s.ruleIdx = 0;
+        // reward: regain 1 rotate (up to max)
+        s.rot = Math.min(cfg.rotMax, s.rot + 1);
+        vibrate([12, 20, 12]);
+
+        if (s.rulesDone >= cfg.targetRules) {
+          syncUIFromSim();
+          win();
+          return;
+        }
+      }
+
+      advanceArrival();
+      syncUIFromSim();
+      return;
+    }
+
+    // mismatch
+    s.queue.shift();
+    s.combo = 0;
+    s.lives -= 1;
+    s.score = Math.max(0, s.score - 6);
+    juiceBad();
+
+    if (s.lives <= 0) {
+      syncUIFromSim();
+      lose("No lives");
+      return;
+    }
+
+    advanceArrival();
+    syncUIFromSim();
+  }
+
+  function sendBack() {
+    const s = simRef.current;
+    if (!s.running) return;
+
+    if (s.rot <= 0) {
+      juiceBad();
+      syncUIFromSim();
+      return;
+    }
+
+    if (s.queue.length <= 1) {
+      // rotate doesn't help, but don't punish.
+      advanceArrival();
+      syncUIFromSim();
+      return;
+    }
+
+    const front = s.queue.shift();
+    s.queue.push(front);
+    s.rot -= 1;
+
+    advanceArrival();
+    syncUIFromSim();
+  }
+
+  function waitTurn() {
+    // Safe "do nothing" action (still adds ONE arrival).
+    // This keeps the game moving without stress.
+    const s = simRef.current;
+    if (!s.running) return;
+    s.combo = Math.max(0, s.combo - 1);
+    s.score = Math.max(0, s.score - 1);
+    advanceArrival();
+    syncUIFromSim();
+  }
+
+  function draw() {
+    const canvas = canvasRef.current;
+    const wrap = canvasWrapRef.current;
+    if (!canvas || !wrap) return;
+
+    const ctx = canvas.getContext("2d");
+    const dpr = window.devicePixelRatio || 1;
+    const w = wrap.clientWidth;
+    const h = wrap.clientHeight;
+
+    const targetW = Math.max(1, Math.floor(w * dpr));
+    const targetH = Math.max(1, Math.floor(h * dpr));
+    if (canvas.width !== targetW || canvas.height !== targetH) {
+      canvas.width = targetW;
+      canvas.height = targetH;
+      canvas.style.width = `${w}px`;
+      canvas.style.height = `${h}px`;
+    }
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const s = simRef.current;
+
+    // shake
+    let ox = 0,
+      oy = 0;
+    if (s.shakeMs > 0) {
+      const t = performance.now() - s.shakeT;
+      if (t <= s.shakeMs) {
+        const p = 1 - t / s.shakeMs;
+        const mag = s.shakePx * p;
+        ox = (Math.random() * 2 - 1) * mag;
+        oy = (Math.random() * 2 - 1) * mag;
+      } else {
+        s.shakeMs = 0;
+      }
+    }
+
+    ctx.save();
+    ctx.translate(ox, oy);
+
+    // background
+    ctx.clearRect(0, 0, w, h);
+    const grd = ctx.createLinearGradient(0, 0, 0, h);
+    grd.addColorStop(0, "rgba(15,23,42,1)");
+    grd.addColorStop(1, "rgba(2,6,23,1)");
+    ctx.fillStyle = grd;
+    ctx.fillRect(0, 0, w, h);
+
+    // subtle grid
+    ctx.globalAlpha = 0.12;
+    ctx.strokeStyle = "rgba(255,255,255,0.18)";
+    ctx.lineWidth = 1;
+    const grid = 36;
+    for (let x = 0; x <= w; x += grid) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, h);
+      ctx.stroke();
+    }
+    for (let y = 0; y <= h; y += grid) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(w, y);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // flash overlay
+    if (s.flashMs > 0) {
+      const t = performance.now() - s.flashT;
+      if (t <= s.flashMs) {
+        const p = 1 - t / s.flashMs;
+        ctx.globalAlpha = 0.22 * p;
+        ctx.fillStyle = s.flashGood ? "rgba(34,197,94,1)" : "rgba(239,68,68,1)";
+        ctx.fillRect(0, 0, w, h);
+        ctx.globalAlpha = 1;
+      } else {
+        s.flashMs = 0;
+      }
+    }
+
+    // layout
+    const pad = 14;
+    const headerH = 108;
+    const queueTop = headerH + pad;
+    const queueH = h - queueTop - pad;
+
+    // header panel
+    ctx.fillStyle = "rgba(255,255,255,0.06)";
+    roundedRect(ctx, pad, pad, w - pad * 2, headerH, 16);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.18)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // title
+    ctx.fillStyle = "rgba(255,255,255,0.92)";
+    ctx.font = "700 16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
+    ctx.textBaseline = "top";
+    ctx.textAlign = "left";
+    ctx.fillText("CROWD CONTROL", pad + 12, pad + 10);
+
+    ctx.globalAlpha = 0.85;
+    ctx.font = "500 12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
+    ctx.fillText("Tactical FIFO: plan with NEXT", pad + 12, pad + 32);
+    ctx.globalAlpha = 1;
+
+    // rule tokens (right)
+    const tile = 40;
+    const gap = 10;
+    const ruleW = s.rule.length * tile + (s.rule.length - 1) * gap;
+    const rx = w - pad - 12 - ruleW;
+    const ry = pad + 18;
+    for (let i = 0; i < s.rule.length; i++) {
+      drawToken(ctx, s.rule[i], rx + i * (tile + gap), ry, tile, i === s.ruleIdx, i < s.ruleIdx);
+    }
+
+    // NEXT preview (left, under title)
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = "rgba(255,255,255,0.85)";
+    ctx.font = "700 12px ui-sans-serif, system-ui";
+    ctx.textAlign = "left";
+    ctx.fillText("NEXT", pad + 12, pad + 58);
+    ctx.globalAlpha = 1;
+
+    const nextSize = 34;
+    for (let i = 0; i < Math.min(3, s.preview.length); i++) {
+      drawToken(ctx, s.preview[i], pad + 12 + i * (nextSize + 8), pad + 70, nextSize, false, false);
+    }
+
+    // queue lane
+    const laneX = pad;
+    const laneY = queueTop;
+    const laneW = w - pad * 2;
+    const laneH = queueH;
+
+    ctx.fillStyle = "rgba(255,255,255,0.05)";
+    roundedRect(ctx, laneX, laneY, laneW, laneH, 18);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.14)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // queue cards
+    const cardPad = 14;
+    const cardH = 52;
+    const cardGap = 10;
+    const maxVisible = Math.max(1, Math.floor((laneH - cardPad * 2) / (cardH + cardGap)));
+
+    const visible = s.queue.slice(0, maxVisible);
+    for (let i = 0; i < visible.length; i++) {
+      const p = visible[i];
+      const t = TYPES.find((tt) => tt.key === p.key) || TYPES[0];
+      const x = laneX + cardPad;
+      const y = laneY + cardPad + i * (cardH + cardGap);
+      const cw = laneW - cardPad * 2;
+
+      const isFront = i === 0;
+
+      ctx.fillStyle = isFront ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.08)";
+      roundedRect(ctx, x, y, cw, cardH, 16);
+      ctx.fill();
+      ctx.strokeStyle = isFront ? "rgba(255,255,255,0.45)" : "rgba(255,255,255,0.18)";
+      ctx.lineWidth = isFront ? 3 : 2;
+      ctx.stroke();
+
+      // token pill
+      const pillW = 84;
+      ctx.fillStyle = "rgba(0,0,0,0.35)";
+      roundedRect(ctx, x + 12, y + 10, pillW, 32, 18);
+      ctx.fill();
+
+      // icon
+      ctx.fillStyle = t.color;
+      const cx = x + 12 + 22;
+      const cy = y + 10 + 16;
+      const r = 10;
+      ctx.beginPath();
+      if (t.key === "SET") ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      else if (t.key === "AND") {
+        ctx.moveTo(cx - r, cy);
+        ctx.lineTo(cx, cy - r);
+        ctx.lineTo(cx + r, cy);
+        ctx.lineTo(cx, cy + r);
+        ctx.closePath();
+      } else if (t.key === "OR") ctx.rect(cx - r, cy - r, r * 2, r * 2);
+      else if (t.key === "XOR") {
+        ctx.moveTo(cx, cy - r);
+        ctx.lineTo(cx + r, cy);
+        ctx.lineTo(cx, cy + r);
+        ctx.lineTo(cx - r, cy);
+        ctx.closePath();
+      } else {
+        ctx.moveTo(cx - r, cy + r * 0.15);
+        ctx.lineTo(cx, cy - r);
+        ctx.lineTo(cx + r, cy + r * 0.15);
+        ctx.closePath();
+      }
+      ctx.fill();
+
+      // label
+      ctx.fillStyle = "rgba(255,255,255,0.92)";
+      ctx.font = "700 12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText(t.label, x + 12 + 42, y + 10 + 16);
+
+      if (isFront) {
+        ctx.globalAlpha = 0.9;
+        ctx.fillStyle = "rgba(255,255,255,0.85)";
+        ctx.font = "700 12px ui-sans-serif, system-ui";
+        ctx.textAlign = "right";
+        ctx.fillText("FRONT", x + cw - 12, y + cardH / 2);
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // cap indicator
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = "rgba(255,255,255,0.70)";
+    ctx.font = "600 12px ui-sans-serif, system-ui";
+    ctx.textAlign = "right";
+    ctx.textBaseline = "top";
+    ctx.fillText(`CAP ${cfg.cap}`, laneX + laneW - 12, laneY + 10);
+    ctx.globalAlpha = 1;
+
+    ctx.restore();
+  }
+
+  // main loop: draw only (no real-time sim)
+  useEffect(() => {
+    const tick = () => {
+      rafRef.current = requestAnimationFrame(tick);
+      draw();
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cfg.cap, cfg.typeCount, cfg.ruleLen]);
+
+  // reset when difficulty changes / first mount
+  useEffect(() => {
+    resetGame();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [difficulty]);
+
+  // pointer/touch on canvas: tap=serve, swipe down=send back
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const getPoint = (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const clientX = e.touches?.[0]?.clientX ?? e.changedTouches?.[0]?.clientX ?? e.clientX;
+      const clientY = e.touches?.[0]?.clientY ?? e.changedTouches?.[0]?.clientY ?? e.clientY;
+      return { x: clientX - rect.left, y: clientY - rect.top };
+    };
+
+    const onDown = (e) => {
+      if (status !== "playing") return;
+      inputRef.current.down = true;
+      const pt = getPoint(e);
+      inputRef.current.sx = pt.x;
+      inputRef.current.sy = pt.y;
+    };
+
+    const onMove = (e) => {
+      if (!inputRef.current.down) return;
+      if (e.cancelable) e.preventDefault();
+    };
+
+    const onUp = (e) => {
+      if (!inputRef.current.down) return;
+      inputRef.current.down = false;
+      const pt = getPoint(e);
+      const dy = pt.y - inputRef.current.sy;
+
+      if (dy > 40) sendBack();
+      else serveFront();
+    };
+
+    canvas.addEventListener("pointerdown", onDown, { passive: true });
+    canvas.addEventListener("pointermove", onMove, { passive: false });
+    canvas.addEventListener("pointerup", onUp, { passive: true });
+    canvas.addEventListener("pointercancel", onUp, { passive: true });
+
+    canvas.addEventListener("touchstart", onDown, { passive: true });
+    canvas.addEventListener("touchmove", onMove, { passive: false });
+    canvas.addEventListener("touchend", onUp, { passive: true });
+    canvas.addEventListener("touchcancel", onUp, { passive: true });
+
+    return () => {
+      canvas.removeEventListener("pointerdown", onDown);
+      canvas.removeEventListener("pointermove", onMove);
+      canvas.removeEventListener("pointerup", onUp);
+      canvas.removeEventListener("pointercancel", onUp);
+
+      canvas.removeEventListener("touchstart", onDown);
+      canvas.removeEventListener("touchmove", onMove);
+      canvas.removeEventListener("touchend", onUp);
+      canvas.removeEventListener("touchcancel", onUp);
+    };
+  }, [status, rotCharges]);
 
   useEffect(() => {
-    if (status !== "playing") return;
-    if (!done) return;
-    setStatus("won");
-    setTimeMs(Date.now() - startRef.current);
-    setMsg("✅ Perfect routing! You matched the target output.");
-  }, [done, status]);
+    setBestState(getBest());
+  }, []);
 
-  const canEnqueue = status === "playing" && nextIncoming != null && queue.length < capacity;
-  const canRotate = status === "playing" && queue.length > 1 && rotLeft > 0;
-  const canDequeue = status === "playing" && queue.length > 0 && queue[0] === expectedNext;
+  const showResult = status !== "playing";
+  const remaining = Math.max(0, cfg.targetRules - rulesDone);
 
   return (
-    <AppShell
-      title="Code & Conquer"
-      subtitle="Queue Switchyard (FIFO) — route crates using a limited buffer"
-      headerBadges={
-        <>
-          <Badge>Category: QUEUE_COMMANDER</Badge>
-          <Badge>Level: {level}</Badge>
-          <Badge>Diff: {difficulty}</Badge>
-          <Badge>Errors: {errors}</Badge>
-          <Badge>Cap: {capacity}</Badge>
-          <Badge>Rot: {rotLeft}/{rotateStart}</Badge>
-          {status === "won" && <Badge style={{ borderColor: "rgba(52,211,153,0.45)" }}>WON</Badge>}
-          {status === "lost" && <Badge style={{ borderColor: "rgba(251,113,133,0.45)" }}>LOST</Badge>}
-        </>
-      }
-      rightPanel={
-        <div className="panel">
-          <div style={{ fontSize: 16, fontWeight: 750 }}>How it works</div>
-          <div className="muted" style={{ marginTop: 10, fontSize: 14, lineHeight: 1.45 }}>
-            <div style={{ marginTop: 6 }}>
-              You must build the <strong>Target Output</strong> exactly.
-            </div>
-            <div style={{ marginTop: 10 }}>
-              <strong>Enqueue</strong> takes the next incoming crate and puts it at the <em>back</em>.
-            </div>
-            <div style={{ marginTop: 6 }}>
-              <strong>Dequeue</strong> sends the <em>front</em> crate to output — <strong>only</strong> if it matches the next target.
-            </div>
-            <div style={{ marginTop: 6 }}>
-              <strong>Rotate</strong> moves <em>front → back</em> using a limited token.
-            </div>
-            <div style={{ marginTop: 10 }}>
-              Tip: plan around your buffer. Hard mode has less space and fewer rotates.
-            </div>
+    <AppShell>
+      <div
+        style={{
+          height: "100dvh",
+          width: "100%",
+          display: "flex",
+          flexDirection: "column",
+          padding: 12,
+          boxSizing: "border-box",
+          touchAction: "none",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <Badge variant="secondary">Queue Commander</Badge>
+            <Badge>{difficulty}</Badge>
+            <span style={{ color: "rgba(255,255,255,0.85)", fontSize: 12 }}>Best: {best}</span>
           </div>
-
-          <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
-            <Link to="/play">
-              <Button variant="ghost">Back to game</Button>
-            </Link>
-          </div>
+          <Link to="/">
+            <Button variant="secondary" size="sm">
+              Back
+            </Button>
+          </Link>
         </div>
-      }
-    >
-      <div style={{ display: "grid", gap: 12 }}>
-        {/* Target */}
-        <div className="panel">
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-            <div style={{ fontWeight: 750 }}>Target Output</div>
-            <div className="muted" style={{ fontSize: 13 }}>
-              Next expected: <strong style={{ color: "rgba(252,211,77,0.95)" }}>{expectedNext ?? "-"}</strong>
-            </div>
-          </div>
 
-          <div style={{ marginTop: 10 }}>
-            <Progress value={progressPct} />
-            <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
-              Completed: {output.length}/{target.length}
-            </div>
-          </div>
-
-          <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {target.map((t, i) => {
-              const isDone = i < output.length;
-              return (
-                <span
-                  key={`t-${t}-${i}`}
-                  style={{
-                    ...tokenStyle("target", i === output.length),
-                    opacity: isDone ? 0.35 : 1,
-                    borderColor: isDone ? "rgba(52,211,153,0.35)" : tokenStyle("target").borderColor,
-                    background: isDone ? "rgba(16,185,129,0.08)" : tokenStyle("target").background,
-                  }}
-                >
-                  {t}
-                </span>
-              );
-            })}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginTop: 10,
+            gap: 10,
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 800, fontSize: 18 }}>Score: {score}</div>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <div style={{ color: "rgba(255,255,255,0.9)", fontSize: 12 }}>🎯 {remaining} rules</div>
+            <div style={{ color: "rgba(255,255,255,0.9)", fontSize: 12 }}>❤️ {lives}</div>
+            <div style={{ color: "rgba(255,255,255,0.9)", fontSize: 12 }}>↩ {rotCharges}</div>
+            <div style={{ color: "rgba(255,255,255,0.9)", fontSize: 12 }}>🔥 {combo}</div>
+            <div style={{ color: "rgba(255,255,255,0.9)", fontSize: 12 }}>✅ {rulesDone}</div>
           </div>
         </div>
 
-        {msg && (
-          <div
-            className="panel"
-            style={{
-              borderColor:
-                status === "lost"
-                  ? "rgba(251,113,133,0.45)"
-                  : status === "won"
-                    ? "rgba(52,211,153,0.45)"
-                    : "rgba(129,140,248,0.35)",
-            }}
+        <div style={{ marginTop: 10, flex: 1, minHeight: 0, borderRadius: 16, overflow: "hidden" }} ref={canvasWrapRef}>
+          <canvas ref={canvasRef} style={{ width: "100%", height: "100%", display: "block", touchAction: "none" }} />
+        </div>
+
+        <div style={{ marginTop: 10, color: "rgba(255,255,255,0.85)", fontSize: 12, textAlign: "center" }}>{hint}</div>
+
+        <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+          <Button
+            className="w-full"
+            style={{ height: 56, fontSize: 18, fontWeight: 800 }}
+            onClick={() => serveFront()}
+            disabled={status !== "playing"}
           >
-            {msg}
+            SERVE
+          </Button>
+          <Button
+            className="w-full"
+            style={{ height: 56, fontSize: 18, fontWeight: 800 }}
+            variant="secondary"
+            onClick={() => sendBack()}
+            disabled={status !== "playing" || rotCharges <= 0}
+          >
+            SEND BACK
+          </Button>
+        </div>
+
+        <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+          <Button
+            className="w-full"
+            style={{ height: 50, fontSize: 16, fontWeight: 800 }}
+            variant="outline"
+            onClick={() => waitTurn()}
+            disabled={status !== "playing"}
+          >
+            WAIT
+          </Button>
+          <Button
+            className="w-full"
+            style={{ height: 50, fontSize: 16, fontWeight: 800 }}
+            variant="outline"
+            onClick={() => resetGame()}
+          >
+            RESTART
+          </Button>
+        </div>
+
+        {showResult && (
+          <div style={{ marginTop: 12 }}>
+            <ResultSubmitPanel
+              challenge={challenge}
+              score={score}
+              didWin={status === "won"}
+              onRestart={() => {
+                resetGame();
+              }}
+            />
           </div>
         )}
-
-        {status !== "playing" && (
-          <ResultSubmitPanel
-            category="QUEUE_COMMANDER"
-            difficulty={difficulty}
-            timeMs={timeMs}
-            errors={errors}
-            won={status === "won"}
-            onPlayAgain={hardReset}
-            challengeId={challenge?.challengeInstanceId}
-          />
-        )}
-
-        {/* Switchyard */}
-        <div className="panel">
-          <div
-            style={{
-              display: "grid",
-              gap: 14,
-            }}
-          >
-            <div>
-              <div style={{ fontWeight: 750, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
-                <span>Incoming Belt</span>
-                <span className="muted" style={{ fontSize: 13 }}>
-                  Next: <strong style={{ color: "rgba(129,140,248,0.95)" }}>{nextIncoming ?? "—"}</strong>
-                </span>
-              </div>
-              <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {incoming.map((x, i) => {
-                  const passed = i < incomingIdx;
-                  const isNext = i === incomingIdx;
-                  return (
-                    <span
-                      key={`in-${x}-${i}`}
-                      style={{
-                        ...tokenStyle("incoming", isNext),
-                        opacity: passed ? 0.18 : 1,
-                        borderColor: isNext ? "rgba(129,140,248,0.85)" : tokenStyle("incoming").borderColor,
-                      }}
-                    >
-                      {x}
-                    </span>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div>
-              <div style={{ fontWeight: 750, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
-                <span>Your Buffer Queue (FIFO)</span>
-                <span className="muted" style={{ fontSize: 13 }}>
-                  Front = left • Back = right • {queue.length}/{capacity} • Rotates left: {rotLeft}
-                </span>
-              </div>
-
-              <div
-                style={{
-                  marginTop: 10,
-                  display: "grid",
-                  gridTemplateColumns: `repeat(${capacity}, minmax(54px, 1fr))`,
-                  gap: 8,
-                  alignItems: "stretch",
-                }}
-                className={shake ? "qc-shake" : ""}
-              >
-                {Array.from({ length: capacity }).map((_, idx) => {
-                  const v = queue[idx];
-                  const isFront = idx === 0 && queue.length > 0;
-                  const isMatch = isFront && v === expectedNext;
-                  return (
-                    <div
-                      key={`slot-${idx}`}
-                      style={{
-                        height: 54,
-                        borderRadius: 16,
-                        border: "1px solid rgba(51,65,85,0.55)",
-                        background: "rgba(2,6,23,0.20)",
-                        display: "grid",
-                        placeItems: "center",
-                        position: "relative",
-                        outline: isFront ? "2px solid rgba(252,211,77,0.22)" : "none",
-                        boxShadow: isMatch ? "0 0 0 3px rgba(52,211,153,0.12)" : "none",
-                      }}
-                      title={isFront ? "FRONT (dequeue here)" : ""}
-                    >
-                      {typeof v === "number" ? (
-                        <span style={tokenStyle("queue", isFront)}>{v}</span>
-                      ) : (
-                        <span className="muted" style={{ fontSize: 12 }}>
-                          empty
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="muted" style={{ fontSize: 12, marginTop: 8, lineHeight: 1.35 }}>
-                Rule: You can only send to output if the <strong>front</strong> equals the next target value.
-              </div>
-            </div>
-
-            <div>
-              <div style={{ fontWeight: 750, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
-                <span>Output</span>
-                <span className="muted" style={{ fontSize: 13 }}>
-                  Must match target exactly
-                </span>
-              </div>
-              <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {output.length === 0 ? (
-                  <span className="muted">(empty)</span>
-                ) : (
-                  output.map((x, i) => (
-                    <span key={`out-${x}-${i}`} style={tokenStyle("output", i === output.length - 1)}>
-                      {x}
-                    </span>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* controls */}
-        <div className="panel">
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, justifyContent: "space-between", alignItems: "center" }}>
-            <div className="muted" style={{ fontSize: 13 }}>
-              Tip: Enqueue to buffer, rotate to bring the right crate to the front, then dequeue when it matches.
-            </div>
-
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-              <Button variant="primary" onClick={enqueue} disabled={!canEnqueue}>
-                Enqueue
-              </Button>
-              <Button variant="secondary" onClick={rotate} disabled={!canRotate}>
-                Rotate
-              </Button>
-              <Button variant="secondary" onClick={dequeueToOutput} disabled={!canDequeue}>
-                Dequeue → Output
-              </Button>
-
-              <Button variant="ghost" onClick={hardReset}>
-                Reset
-              </Button>
-
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  setLevel((l) => clamp(l + 1, 1, 10));
-                  setSeed((s) => s + 1);
-                }}
-                disabled={status === "playing"}
-              >
-                Next Level
-              </Button>
-
-              <Button variant="ghost" onClick={newLevel}>
-                New Level
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        <div className="muted" style={{ fontSize: 12 }}>
-          Skillcheck: Queue = FIFO. Rotating is like a circular queue — limited tokens force you to plan.
-        </div>
       </div>
-
-      {/* Tiny local CSS for shake + mobile safety */}
-      <style>{`
-        .qc-shake { animation: qcshake 260ms ease-in-out; }
-        @keyframes qcshake {
-          0% { transform: translateX(0); }
-          25% { transform: translateX(-3px); }
-          55% { transform: translateX(3px); }
-          85% { transform: translateX(-2px); }
-          100% { transform: translateX(0); }
-        }
-        @media (max-width: 520px) {
-          .panel { padding: 14px !important; }
-        }
-      `}</style>
     </AppShell>
   );
 }

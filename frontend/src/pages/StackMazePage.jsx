@@ -160,9 +160,12 @@ function getConfig(difficulty) {
       maxEnergy: 18,
       stepMs: 260,
       maxStack: 16,
-      fog: true,
-      fogRadius: 1,
+      // Fog-of-war removed: it's frustrating on mobile + in short boardgame sessions.
+      fog: false,
+      fogRadius: 99,
       allowPreview: false,
+      // Per-difficulty timer (boardgame-friendly quick session)
+      timeLimitMs: 45_000,
     };
   }
   if (d === "MEDIUM") {
@@ -172,9 +175,11 @@ function getConfig(difficulty) {
       maxEnergy: 22,
       stepMs: 300,
       maxStack: 20,
-      fog: true,
-      fogRadius: 2,
+      // Fog-of-war removed: it's frustrating on mobile + in short boardgame sessions.
+      fog: false,
+      fogRadius: 99,
       allowPreview: true,
+      timeLimitMs: 60_000,
     };
   }
   // EASY should be very easy.
@@ -187,6 +192,7 @@ function getConfig(difficulty) {
     fog: false,
     fogRadius: 99,
     allowPreview: true,
+    timeLimitMs: 75_000,
   };
 }
 
@@ -203,11 +209,13 @@ export default function StackMazePage() {
   const [stack, setStack] = useState([]);
   const [running, setRunning] = useState(false);
   const [status, setStatus] = useState("playing"); // "playing" | "won" | "lost"
+  const [lostReason, setLostReason] = useState(""); // "" | "energy" | "out_of_moves" | "time"
   const [energy, setEnergy] = useState(config.maxEnergy);
   const [crashes, setCrashes] = useState(0);
   const [stars, setStars] = useState(() => placeStars(grid, difficulty === "HARD" ? 4 : difficulty === "MEDIUM" ? 3 : 2));
   const [collected, setCollected] = useState(() => new Set());
   const [showPreview, setShowPreview] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
   // Fog-of-war is implemented as a single soft vision mask overlay, so we don't
   // need per-tile discovery state.
 
@@ -215,6 +223,7 @@ export default function StackMazePage() {
   const boardRef = useRef(null);
   const rootRef = useRef(null);
   const hudRef = useRef(null);
+  const trayRef = useRef(null);
   const controlsRef = useRef(null);
   const [boardSizePx, setBoardSizePx] = useState(340);
   const [cellPx, setCellPx] = useState(40);
@@ -229,12 +238,14 @@ export default function StackMazePage() {
       const vw = window.innerWidth || 390;
 
       const hudBottom = hudEl ? hudEl.getBoundingClientRect().bottom : (rootEl ? rootEl.getBoundingClientRect().top : 0);
+      const trayH = trayRef.current ? trayRef.current.getBoundingClientRect().height : 0;
       const ctlH = ctlEl ? ctlEl.getBoundingClientRect().height : 180;
 
       // Small paddings + safe areas.
       const safeTop = 8;
       const safeBottom = 18;
-      const availH = Math.max(220, vh - hudBottom - ctlH - safeTop - safeBottom);
+      // IMPORTANT: account for the stack tray too, otherwise the board can push controls off-screen on phones.
+      const availH = Math.max(200, vh - hudBottom - trayH - ctlH - safeTop - safeBottom);
 
       // Board should fit both width and available height.
       const maxW = Math.min(vw * 0.94, 520);
@@ -248,11 +259,70 @@ export default function StackMazePage() {
     return () => window.removeEventListener("resize", recalc);
   }, [size]);
 
+  // Prevent vertical page scrolling on mobile during the minigame.
+  useEffect(() => {
+    const prev = document.body.style.overflowY;
+    document.body.style.overflowY = "hidden";
+    return () => {
+      document.body.style.overflowY = prev;
+    };
+  }, []);
+
   // timing
   const startRef = useRef(Date.now());
   const [timeMs, setTimeMs] = useState(0);
 
+  // Update timer during play + enforce difficulty time limit.
+  useEffect(() => {
+    if (status !== "playing") return;
+    const t = setInterval(() => {
+      const elapsed = Date.now() - startRef.current;
+      setTimeMs(elapsed);
+      if (config.timeLimitMs && elapsed >= config.timeLimitMs) {
+        setRunning(false);
+        setLostReason("time");
+        setStatus("lost");
+      }
+    }, 120);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, config.timeLimitMs]);
+
   const goal = { r: size - 1, c: size - 1 };
+  const statusRef = useRef(status);
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+
+  // Live timer + timeout. (Quick sessions for hybrid boardgame.)
+  useEffect(() => {
+    if (status !== "playing") return;
+    const id = setInterval(() => {
+      const elapsed = Date.now() - startRef.current;
+      setTimeMs(elapsed);
+      if (config.timeLimitMs && elapsed >= config.timeLimitMs && statusRef.current === "playing") {
+        setLostReason("time");
+        setStatus("lost");
+        setRunning(false);
+      }
+    }, 100);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, config.timeLimitMs]);
+
+  // Refs for interval-safe reads
+  const posRef = useRef(pos);
+  const stackRef = useRef(stack);
+  const energyRef = useRef(energy);
+  useEffect(() => {
+    posRef.current = pos;
+  }, [pos]);
+  useEffect(() => {
+    stackRef.current = stack;
+  }, [stack]);
+  useEffect(() => {
+    energyRef.current = energy;
+  }, [energy]);
 
   function haptic(ms = 12) {
     try {
@@ -281,6 +351,7 @@ export default function StackMazePage() {
     setStack([]);
     setRunning(false);
     setStatus("playing");
+    setLostReason("");
     setEnergy(config.maxEnergy);
     setCrashes(0);
     setCollected(new Set());
@@ -305,7 +376,17 @@ export default function StackMazePage() {
 
   function stepOnce() {
     setStack((s) => {
-      if (s.length === 0) return s;
+      if (s.length === 0) {
+        // Prevent the "stuck running forever" state: if the stack is empty and
+        // we're not at the goal, the run is over.
+        setRunning(false);
+        const p = posRef.current;
+        if (!(p.r === goal.r && p.c === goal.c) && statusRef.current === "playing") {
+          setLostReason("out_of_moves");
+          setStatus("lost");
+        }
+        return s;
+      }
       const d = s[s.length - 1];
       const next = s.slice(0, -1);
       setEnergy((e) => e - 1);
@@ -359,6 +440,7 @@ export default function StackMazePage() {
       setStatus("won");
       setRunning(false);
     } else if (energy <= 0) {
+      setLostReason("energy");
       setStatus("lost");
       setRunning(false);
     }
@@ -399,6 +481,9 @@ export default function StackMazePage() {
       headerBadges={
         <>
           <Badge>Category: STACK_MAZE</Badge>
+          <Badge>
+            Time: {Math.max(0, Math.ceil((config.timeLimitMs - timeMs) / 1000))}s
+          </Badge>
           <Badge>Stars: {collected.size}/{stars.length}</Badge>
           <Badge>Energy: {energy}</Badge>
           <Badge>Crashes: {crashes}</Badge>
@@ -454,7 +539,8 @@ export default function StackMazePage() {
             style={{ "--smxGap": `${gap}px`, "--smxBtn": `${btn}px`, "--smxBoardPx": `${boardSizePx}px` }}
           >
             <style>{`
-              .smx{display:grid;gap:12px;}
+              /* Fullscreen, no-scroll layout on mobile */
+              .smx{display:flex;flex-direction:column;gap:10px;min-height:0;}
               .smx-hud{display:grid;gap:10px;}
               .smx-hudRow{display:flex;gap:10px;align-items:center;justify-content:space-between;}
               .smx-title{font-weight:750;font-size:16px;letter-spacing:-0.01em;}
@@ -500,6 +586,10 @@ export default function StackMazePage() {
 
               .smx-tray{display:grid;gap:8px;padding:12px;border-radius:18px;border:1px solid rgba(148,163,184,0.18);background:rgba(2,6,23,0.22);}
               .smx-trayTop{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+              .smx-infoBtn{height:36px;width:36px;border-radius:999px;border:1px solid rgba(71,85,105,0.38);
+                background:rgba(15,23,42,0.35);display:grid;place-items:center;cursor:pointer;
+                font-size:16px;line-height:1;}
+              .smx-infoBtn:active{transform:translateY(1px);}
               .smx-stackScroll{display:flex;gap:8px;overflow:auto;padding-bottom:2px;}
               .smx-card{min-width:48px;height:44px;border-radius:16px;border:1px solid rgba(148,163,184,0.20);background:rgba(15,23,42,0.30);
                 display:flex;align-items:center;justify-content:center;font-weight:900;
@@ -507,7 +597,8 @@ export default function StackMazePage() {
               }
               .smx-cardTop{border-color:rgba(252,211,77,0.38);background:rgba(245,158,11,0.10);}
 
-              .smx-controls{position:sticky;bottom:0;z-index:5;margin-top:4px;padding-bottom:calc(env(safe-area-inset-bottom) + 10px);}
+              /* Keep controls visible without relying on page scrolling */
+              .smx-controls{position:relative;z-index:5;margin-top:4px;padding-bottom:calc(env(safe-area-inset-bottom) + 10px);}
               .smx-bar{display:flex;gap:12px;align-items:center;justify-content:space-between;
                 padding:12px;border-radius:22px;border:1px solid rgba(148,163,184,0.18);
                 background:rgba(2,6,23,0.55);backdrop-filter:blur(10px);
@@ -521,6 +612,23 @@ export default function StackMazePage() {
               @media (max-width:520px){
                 .smx-cell{border-radius:16px}
                 .smx-board{width:min(95vw, 58vh, 480px)}
+              }
+
+              /* Phones: avoid horizontal clipping by stacking controls */
+              @media (max-width:440px){
+                .smx-bar{flex-direction:column;align-items:stretch;gap:10px;padding:10px;}
+                .smx-dpad{justify-content:center;align-self:center;}
+                .smx-actions{min-width:unset;width:100%;}
+                .smx-actionsRow{width:100%;}
+              }
+
+              .smx-modalOverlay{position:fixed;inset:0;z-index:60;background:rgba(2,6,23,0.65);
+                display:flex;align-items:flex-end;justify-content:center;padding:12px;
+                padding-bottom:calc(env(safe-area-inset-bottom) + 12px);
+              }
+              .smx-modal{width:min(680px, 100%);border-radius:22px;border:1px solid rgba(148,163,184,0.18);
+                background:rgba(2,6,23,0.86);backdrop-filter:blur(14px);
+                box-shadow:0 22px 60px rgba(0,0,0,0.55);padding:14px;
               }
             `}</style>
 
@@ -629,12 +737,17 @@ export default function StackMazePage() {
               </div>
             </div>
 
-            <div className="smx-tray">
-              <div className="smx-trayTop">
-                <div style={{ fontWeight: 750 }}>Move stack</div>
-                <div className="muted" style={{ fontSize: 12 }}>
-                  Top executes next (LIFO)
-                </div>
+            <div ref={trayRef} className="smx-tray">
+              <div className="smx-trayTop" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                <div style={{ fontWeight: 800 }}>Stack</div>
+                <button
+                  type="button"
+                  className="smx-infoBtn"
+                  aria-label="How to play"
+                  onClick={() => setInfoOpen(true)}
+                >
+                  ℹ️
+                </button>
               </div>
               <div className="smx-stackScroll" aria-label="Stack">
                 {stack.length === 0 ? (
@@ -653,6 +766,26 @@ export default function StackMazePage() {
                 </div>
               )}
             </div>
+
+            {infoOpen ? (
+              <div className="smx-modalOverlay" onClick={() => setInfoOpen(false)}>
+                <div className="smx-modal" onClick={(e) => e.stopPropagation()}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                    <div style={{ fontWeight: 900, fontSize: 16 }}>How to play</div>
+                    <Button variant="ghost" onClick={() => setInfoOpen(false)} style={{ borderRadius: 14 }}>
+                      Close
+                    </Button>
+                  </div>
+                  <div className="muted" style={{ marginTop: 10, fontSize: 13, lineHeight: 1.5 }}>
+                    <div><strong>Goal:</strong> Collect all ⭐ then reach 🏁.</div>
+                    <div style={{ marginTop: 8 }}><strong>Stack (LIFO):</strong> The <em>top</em> move executes first.</div>
+                    <div style={{ marginTop: 8 }}><strong>Controls:</strong> Tap the D-pad to push moves. Tap ↩ to pop the top move.</div>
+                    <div style={{ marginTop: 8 }}><strong>Preview:</strong> Shows the simulated path before you press Run (if enabled on this difficulty).</div>
+                    <div style={{ marginTop: 8 }}><strong>Energy:</strong> Each executed move costs 1 energy. Crashes happen when you hit walls or borders.</div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
 
             <div ref={controlsRef} className="smx-controls">
               <div className="smx-bar">

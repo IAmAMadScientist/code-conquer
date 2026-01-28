@@ -103,15 +103,24 @@ export async function chooseTurnPath(sessionId, playerId, toNodeId) {
 }
 
 // Special deck: apply a drawn card (selected in-app)
-export async function applySpecialCard(sessionId, playerId, card, targetPlayerId) {
+export async function applySpecialCard(sessionId, playerId, card, targetPlayerId, boostToNodeId) {
   const qs = new URLSearchParams();
   qs.set("sessionId", sessionId);
   qs.set("playerId", playerId);
   qs.set("card", String(card));
   if (targetPlayerId) qs.set("targetPlayerId", String(targetPlayerId));
+  if (boostToNodeId) qs.set("boostToNodeId", String(boostToNodeId));
   const res = await fetch(`${API_BASE}/special/apply?${qs.toString()}`, {
     method: "POST",
   });
+
+  // BOOST on forks returns 409 with JSON payload {needChoice:true, options:[...]}
+  if (res.status === 409) {
+    let data = null;
+    try { data = await res.json(); } catch {}
+    return { needChoice: true, ...(data || {}) };
+  }
+
   const data = await parseJsonOrThrow(res);
   return data;
 }

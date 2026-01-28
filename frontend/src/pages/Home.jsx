@@ -93,7 +93,6 @@ export default function Home() {
   return (
     <AppShell
       title="Code & Conquer"
-      subtitle="Create a match, set your player profile, then go to the lobby."
       backTo={false}
       headerBadges={
         <>
@@ -145,7 +144,7 @@ export default function Home() {
             </div>
 
             {!player?.playerId ? (
-              <div style={{ display: "grid", gap: 10 }}>
+              <div style={{ display: "grid", gap: 10, maxWidth: 520, margin: "0 auto" }}>
                 <div className="muted">Set your player profile:</div>
                 <div className="mobileRow" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                   <input
@@ -162,7 +161,7 @@ export default function Home() {
 
                 <div style={{ display: "grid", gap: 8 }}>
                   <div className="muted" style={{ fontSize: 13 }}>Emoji:</div>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
                     {EMOJIS.map((e) => (
                       <button
                         key={e}

@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import AppShell from "../components/AppShell";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
-import { getSession, clearSession } from "../lib/session";
+import { getSession, clearSession, setSessionStarted } from "../lib/session";
 import { getPlayer, fetchLobby, leaveSession, clearPlayer, rollTurnD6, chooseTurnPath, startTurnChallenge, applySpecialCard } from "../lib/player";
 import D6Die from "../components/D6Die";
 import EventFeed from "../components/EventFeed";
@@ -26,8 +26,16 @@ export default function Play() {
   const [specialOpen, setSpecialOpen] = useState(false);
   const [specialCard, setSpecialCard] = useState("BOOST");
   const [specialTarget, setSpecialTarget] = useState("");
+  const [boostOptions, setBoostOptions] = useState([]);
+  const [boostTo, setBoostTo] = useState("");
 
   const canView = !!(session?.sessionId && me?.playerId);
+
+  // Reset per-card sub-selections when switching card.
+  useEffect(() => {
+    setBoostOptions([]);
+    setBoostTo("");
+  }, [specialCard]);
 
   async function load() {
     if (!session?.sessionId) return;
@@ -35,6 +43,9 @@ export default function Play() {
     try {
       const s = await fetchLobby(session.sessionId);
       setState(s);
+
+      // Keep a lightweight shared flag so the bottom tab can switch between Lobby/Play.
+      setSessionStarted(!!s?.started);
 
       // If the match is finished, go to endscreen.
       if (s?.sessionStatus === "FINISHED") {
@@ -93,6 +104,8 @@ useEffect(() => {
     } else {
       setSpecialOpen(false);
       setSpecialTarget("");
+      setBoostOptions([]);
+      setBoostTo("");
     }
   }, [state?.turnStatus, state?.currentPlayerId, me?.playerId]);
 
@@ -179,9 +192,30 @@ useEffect(() => {
         setErr("Bitte wähle ein Ziel (Spieler) für diese Karte.");
         return;
       }
-      await applySpecialCard(session.sessionId, me.playerId, specialCard, specialTarget || undefined);
+      // BOOST: if backend detected a fork, it will respond with needChoice + options.
+      if (specialCard === "BOOST" && boostOptions.length > 0 && !boostTo) {
+        setErr("Bitte wähle einen Pfad für Boost.");
+        return;
+      }
+
+      const r = await applySpecialCard(
+        session.sessionId,
+        me.playerId,
+        specialCard,
+        specialTarget || undefined,
+        specialCard === "BOOST" ? (boostTo || undefined) : undefined
+      );
+
+      if (r?.needChoice) {
+        setBoostOptions(r.options || []);
+        setBoostTo("");
+        setErr("Boost ist an einer Gabelung – bitte wähle den Pfad.");
+        return;
+      }
       setSpecialOpen(false);
       setSpecialTarget("");
+      setBoostOptions([]);
+      setBoostTo("");
       setTurnMsg("🃏 Special-Karte aktiviert.");
       load();
       setTimeout(() => setTurnMsg(null), 3500);
@@ -205,6 +239,8 @@ useEffect(() => {
     nav("/");
   }
 
+
+
   if (!canView) {
     return (
       <AppShell title="Play" subtitle="Join a match and set your profile first." showTabs activeTab="play" backTo="/">
@@ -226,29 +262,34 @@ useEffect(() => {
   const myFieldType = meState?.positionType || null;
   const hasChallengeOnField = myFieldType === "EASY" || myFieldType === "MEDIUM" || myFieldType === "HARD";
 
+  // Player-facing turn indicator (no internal node ids).
+  const turnLabel = useMemo(() => {
+    if (!state?.started) return "Waiting for start";
+    if (!players.length || !me?.playerId || !state?.currentPlayerId) return "";
+    if (isMyTurn) return "Your turn: NOW";
+
+    const idxMe = players.findIndex((p) => p.id === me.playerId);
+    const idxCur = players.findIndex((p) => p.id === state.currentPlayerId);
+    if (idxMe < 0 || idxCur < 0) return "";
+    const n = players.length;
+    const dist = (idxMe - idxCur + n) % n;
+    if (dist === 1) return "Your turn: NEXT";
+    return `Your turn in: ${dist} turns`;
+  }, [state?.started, state?.currentPlayerId, players, me?.playerId, isMyTurn]);
+
   return (
     <AppShell
       title="Play"
-      subtitle="Roll the D6 to move. Difficulty comes from the board."
+      subtitle={""}
       showTabs
       activeTab="play"
-      backTo="/lobby"
+      backTo={false}
       headerBadges={
         <>
           {session?.sessionCode ? <Badge variant="secondary">Match: {session.sessionCode}</Badge> : null}
           {me?.playerName ? <Badge variant="secondary">You: {me.playerIcon || "🙂"} {me.playerName}</Badge> : null}
-          {state?.started ? <Badge variant="secondary">Started</Badge> : <Badge>Not started</Badge>}
+          <Badge variant={isMyTurn ? "secondary" : "outline"}>{turnLabel}</Badge>
         </>
-      }
-      rightPanel={
-        <div className="panel">
-          <div style={{ fontSize: 16, fontWeight: 650 }}>Turn</div>
-          <div className="muted" style={{ fontSize: 14, marginTop: 10, lineHeight: 1.5 }}>
-            {state?.started
-              ? "Wait if it's not your turn. After a player finishes a minigame, the turn automatically advances."
-              : "Waiting in lobby… The game starts automatically when everyone is ready."}
-          </div>
-        </div>
       }
     >
       {specialOpen ? (
@@ -331,6 +372,28 @@ useEffect(() => {
                 </label>
               ) : null}
 
+              {specialCard === "BOOST" && boostOptions.length > 0 ? (
+                <label style={{ display: "grid", gap: 6 }}>
+                  <div style={{ fontWeight: 700 }}>Boost: wähle den Pfad (Fork)</div>
+                  <select
+                    value={boostTo}
+                    onChange={(e) => setBoostTo(e.target.value)}
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: 12,
+                      border: "1px solid rgba(148,163,184,0.25)",
+                      background: "rgba(15,23,42,0.35)",
+                      color: "inherit",
+                    }}
+                  >
+                    <option value="">Bitte wählen…</option>
+                    {boostOptions.map((o) => (
+                      <option key={o.to} value={o.to}>{o.label}</option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+
               <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 6 }}>
                 <Button onClick={doApplySpecial}>Aktivieren</Button>
               </div>
@@ -339,126 +402,120 @@ useEffect(() => {
         </div>
       ) : null}
 
+      <style>{`
+        .playRoot{ height:100%; min-height:0; display:flex; flex-direction:column; gap:12px; overflow:hidden; }
+        .playTop{ flex:0 0 auto; }
+        .playMid{ flex:1 1 auto; min-height:0; overflow:auto; padding-right:4px; }
+        .playCard{ display:grid; gap:12px; }
+        .turnRow{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+        .forkRow{ display:flex; gap:10px; flex-wrap:wrap; }
+        @media (min-width: 900px){
+          .playRoot{ max-width: 720px; margin: 0 auto; width:100%; }
+        }
+      `}</style>
+
       <PullToRefresh onRefresh={load}>
-      <div className="panel mobileCenter" style={{ display: "grid", gap: 12 }}>
-        {err ? <div style={{ opacity: 0.9 }}>⚠️ {err}</div> : null}
-        <EventFeed sessionId={session.sessionId} title="Game feed" limit={5} />
-
-        {turnMsg ? (
-          <div className="panel" style={{ border: "1px solid rgba(148,163,184,0.22)" }}>
-            <div style={{ fontWeight: 800 }}>ℹ️ {turnMsg}</div>
+        <div className="playRoot">
+          <div className="playTop">
+            <EventFeed sessionId={session.sessionId} title="Game feed" limit={5} floating={false} />
           </div>
-        ) : null}
-{summary ? (
-  <div className="panel" style={{ border: "1px solid rgba(148,163,184,0.22)" }}>
-    <div style={{ fontWeight: 800, marginBottom: 6 }}>
-      {summary.saved ? "✅ Score saved" : "⚠️ Score not saved"}
-    </div>
-    {summary.error ? <div className="muted" style={{ marginBottom: 6 }}>{summary.error}</div> : null}
-    {summary.next ? (
-      <div className="muted">
-        Next turn: <strong>{summary.next.icon || "🙂"} {summary.next.name}</strong> (#{summary.next.turnOrder})
-      </div>
-    ) : (
-      <div className="muted">Next turn is ready.</div>
-    )}
-  </div>
-) : null}
 
+          <div className="playMid">
+            <div className="panel playCard">
+              {err ? <div style={{ opacity: 0.9 }}>⚠️ {err}</div> : null}
 
-        {!state?.started ? (
-          <div className="muted">
-            Game not started yet. (Lobby is only for the start. If you’re stuck here, someone didn’t ready up.)
-          </div>
-        ) : (
-          <>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-              <Badge variant={isMyTurn ? "secondary" : "outline"}>{isMyTurn ? "Your turn" : "Waiting"}</Badge>
-              {currentPlayer ? (
-                <Badge variant="secondary">Current: {currentPlayer.icon || "🙂"} {currentPlayer.name}</Badge>
-              ) : null}
-              {meState?.positionNodeId ? (
-                <Badge variant="outline">You at: {meState.positionNodeId}</Badge>
-              ) : null}
-              {typeof state?.lastDiceRoll === "number" ? (
-                <Badge variant="outline">Last D6: {state.lastDiceRoll}</Badge>
-              ) : null}
-              {typeof meState?.lobbyRoll === "number" ? (
-                <Badge variant="outline">Your D20: {meState.lobbyRoll}</Badge>
-              ) : null}
-            </div>
-
-            {/* Phase 2B: D6 roll + fork choice */}
-            {isMyTurn && waitingForDice ? (
-              <div style={{ display: "grid", gap: 10, marginTop: 6 }}>
-                <div className="muted">Roll the D6 to move on the board:</div>
-                <div className="mobileRow" style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-                  <D6Die
-                    value={state?.lastDiceRoll || null}
-                    onRoll={doRollD6}
-                    disabled={!isMyTurn}
-                  />
-                  <div className="muted" style={{ lineHeight: 1.4 }}>
-                    {state?.lastDiceRoll ? <>Last roll: <strong>{state.lastDiceRoll}</strong></> : ""}
-                  </div>
+              {turnMsg ? (
+                <div className="panel" style={{ border: "1px solid rgba(148,163,184,0.22)" }}>
+                  <div style={{ fontWeight: 800 }}>ℹ️ {turnMsg}</div>
                 </div>
-              </div>
-            ) : null}
+              ) : null}
 
-            {isMyTurn && waitingForPath ? (
-              <div style={{ display: "grid", gap: 10, marginTop: 6 }}>
-                <div className="muted">Fork! Choose your path:</div>
-                <div className="mobileRow" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  {(pendingChoices?.options || []).map((opt) => (
-                    <Button key={opt?.to || opt} variant="secondary" onClick={() => doChoosePath(opt?.to || opt)}>
-                      {opt?.label ? opt.label : "Choose"}
-                    </Button>
-                  ))}
-                  {!pendingChoices?.options?.length ? (
-                    <div className="muted">(Loading options…)</div>
+              {summary ? (
+                <div className="panel" style={{ border: "1px solid rgba(148,163,184,0.22)" }}>
+                  <div style={{ fontWeight: 800, marginBottom: 6 }}>
+                    {summary.saved ? "✅ Score saved" : "⚠️ Score not saved"}
+                  </div>
+                  {summary.error ? <div className="muted" style={{ marginBottom: 6 }}>{summary.error}</div> : null}
+                  {summary.next ? (
+                    <div className="muted">
+                      Next turn: <strong>{summary.next.icon || "🙂"} {summary.next.name}</strong> (#{summary.next.turnOrder})
+                    </div>
+                  ) : (
+                    <div className="muted">Next turn is ready.</div>
+                  )}
+                </div>
+              ) : null}
+
+              {!state?.started ? (
+                <div className="muted" style={{ lineHeight: 1.5 }}>
+                  Match not started yet. Use the <strong>Lobby</strong> tab below to roll the D20 and press Ready.
+                </div>
+              ) : (
+                <>
+                  <div className="turnRow">
+                    {currentPlayer ? (
+                      <Badge variant="secondary">Current: {currentPlayer.icon || "🙂"} {currentPlayer.name}</Badge>
+                    ) : null}
+                    {typeof state?.lastDiceRoll === "number" ? (
+                      <Badge variant="outline">Last D6: {state.lastDiceRoll}</Badge>
+                    ) : null}
+                    {myFieldType ? (
+                      <Badge variant="outline">Field: {myFieldType}</Badge>
+                    ) : null}
+                  </div>
+
+                  {/* D6 roll */}
+                  {isMyTurn && waitingForDice ? (
+                    <div style={{ display: "grid", gap: 10 }}>
+                      <D6Die value={state?.lastDiceRoll || null} onRoll={doRollD6} disabled={!isMyTurn} />
+                    </div>
                   ) : null}
-                </div>
-              </div>
-            ) : null}
 
-            <div className="muted">Challenge:</div>
-            {myFieldType ? (
-              <div className="muted" style={{ fontSize: 13 }}>
-                Current field: <strong>{myFieldType}</strong>
-              </div>
-            ) : null}
-            {!canStartChallenge ? (
-              <div className="muted" style={{ fontSize: 13 }}>
-                {waitingForDice ? "Roll the D6 first." : waitingForPath ? "Finish the fork choice first." : ""}
-              </div>
-            ) : null}
-            <div className={"stickyActions hasTabs"}>
-              <div className="stickyActionsRow">
-                <Button
-                  className="fullWidthBtn"
-                  variant="primary"
-                  onClick={doStartChallenge}
-                  disabled={!canStartChallenge || !hasChallengeOnField}
-                >
-                  Start challenge
-                </Button>
-                {canStartChallenge && !hasChallengeOnField ? (
-                  <div className="muted" style={{ fontSize: 12, textAlign: "center" }}>
-                    No challenge on this field.
-                  </div>
-                ) : null}
-              </div>
+                  {/* Fork choice */}
+                  {isMyTurn && waitingForPath ? (
+                    <div style={{ display: "grid", gap: 10 }}>
+                      <div className="muted">Fork! Choose your path:</div>
+                      <div className="forkRow">
+                        {(pendingChoices?.options || []).map((opt) => (
+                          <Button key={opt?.to || opt} variant="secondary" onClick={() => doChoosePath(opt?.to || opt)}>
+                            {opt?.label ? opt.label : "Choose"}
+                          </Button>
+                        ))}
+                        {!pendingChoices?.options?.length ? <div className="muted">(Loading options…)</div> : null}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {!canStartChallenge ? (
+                    <div className="muted" style={{ fontSize: 13 }}>
+                      {waitingForDice ? "Roll the D6." : waitingForPath ? "Choose a fork path." : ""}
+                    </div>
+                  ) : null}
+                </>
+              )}
             </div>
-          </>
-        )}
+          </div>
 
-        <div className="mobileRow" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
-          <Link to="/leaderboard">
-            <Button variant="ghost">Leaderboard</Button>
-          </Link>
-          <Button variant="ghost" onClick={leaveGame}>Leave game</Button>
+          {/* Bottom actions: as low as possible, directly above the tab bar */}
+          <div className="stickyActions hasTabs" style={{ marginTop: 0 }}>
+            <div className="stickyActionsRow">
+              <Button
+                className="fullWidthBtn"
+                variant="primary"
+                onClick={doStartChallenge}
+                disabled={!canStartChallenge || !hasChallengeOnField}
+              >
+                Start challenge
+              </Button>
+              {canStartChallenge && !hasChallengeOnField ? (
+                <div className="muted" style={{ fontSize: 12, textAlign: "center" }}>
+                  No challenge on this field.
+                </div>
+              ) : null}
+              <Button className="fullWidthBtn" variant="ghost" onClick={leaveGame}>Leave game</Button>
+            </div>
+          </div>
         </div>
-      </div>
       </PullToRefresh>
     </AppShell>
   );

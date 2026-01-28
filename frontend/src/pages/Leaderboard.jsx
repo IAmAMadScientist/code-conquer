@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+// Navigation is handled by the bottom tab bar.
 import AppShell from "../components/AppShell";
 import EventFeed from "../components/EventFeed";
 import PullToRefresh from "../components/PullToRefresh";
@@ -43,32 +43,17 @@ export default function Leaderboard() {
       subtitle={session?.sessionCode ? `Match: ${session.sessionCode}` : "Top scores"}
       showTabs
       activeTab="leaderboard"
-      backTo="/play"
+      backTo={false}
       headerBadges={
         <>
           {session?.sessionCode ? <Badge variant="secondary">{session.sessionCode}</Badge> : <Badge>Global</Badge>}
         </>
       }
-      rightPanel={
-        <div className="panel">
-          <div style={{ fontSize: 16, fontWeight: 650 }}>Back to game</div>
-          <div className="muted" style={{ fontSize: 14, marginTop: 10, lineHeight: 1.5 }}>
-            Use <strong>Back to game</strong> to continue.
-          </div>
-        </div>
-      }
     >
       <PullToRefresh onRefresh={load}>
         <div className="panel" style={{ display: "grid", gap: 12 }}>
-          <div className={"stickyActions hasTabs"}>
-            <div className="stickyActionsRow">
-              <Link to="/play">
-                <Button className="fullWidthBtn" variant="primary">Back to game</Button>
-              </Link>
-              <Button className="fullWidthBtn" variant="secondary" onClick={load} disabled={loading}>
-                Refresh
-              </Button>
-            </div>
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <Button variant="secondary" onClick={load} disabled={loading}>Refresh</Button>
           </div>
 
         {loading ? <div className="muted">Loading…</div> : null}

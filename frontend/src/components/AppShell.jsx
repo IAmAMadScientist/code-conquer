@@ -3,6 +3,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "./ui/button";
 import { Separator } from "./ui/separator";
 import { useHapticsSetting, useSoundSetting } from "../lib/diceSound";
+import InfoCenter from "./InfoCenter";
+import { getSession, isSessionStarted } from "../lib/session";
 
 /**
  * Mobile-first app shell.
@@ -10,13 +12,12 @@ import { useHapticsSetting, useSoundSetting } from "../lib/diceSound";
  * Goals:
  * - Full-screen "native app" look (no centered web card)
  * - Safe-area padding + sticky bottom tab bar
- * - Optional rightPanel rendered as a bottom sheet ("Info")
+ * - Info tab opens a bottom sheet help menu
  */
 export default function AppShell({
   title = "Code & Conquer",
   subtitle = null,
   headerBadges = null,
-  rightPanel = null,
   showTabs = false,
   activeTab = null,
   backTo = null,
@@ -30,22 +31,22 @@ export default function AppShell({
 
   const showBack = backTo !== false && (loc?.pathname || "/") !== "/";
 
-  const tabs = useMemo(
-    () => {
-      const base = [
-        { key: "play", label: "Play", icon: "🎲", to: "/play" },
-        { key: "leaderboard", label: "Scores", icon: "🏆", to: "/leaderboard" },
-      ];
+  const hasSession = !!getSession()?.sessionId;
+  const startedFlag = hasSession && isSessionStarted();
 
-      // If a screen provides an info/rightPanel bottom sheet, expose it as a dedicated tab button.
-      if (rightPanel) {
-        base.push({ key: "info", label: "Info", icon: "ℹ️", to: null });
-      }
+  const tabs = useMemo(() => {
+    // Bottom tab behavior:
+    // - Before the match starts, the left tab should bring you back to the Lobby.
+    // - Once started, it becomes Play.
+    const playLabel = startedFlag ? "Play" : "Lobby";
+    const playTo = startedFlag ? "/play" : "/lobby";
 
-      return base;
-    },
-    [rightPanel]
-  );
+    return [
+      { key: "play", label: playLabel, icon: "🎲", to: playTo },
+      { key: "leaderboard", label: "Scores", icon: "🏆", to: "/leaderboard" },
+      { key: "info", label: "Info", icon: "ℹ️", to: null },
+    ];
+  }, [startedFlag, hasSession]);
 
   const resolvedActiveTab = useMemo(() => {
     if (activeTab) return activeTab;
@@ -64,14 +65,13 @@ export default function AppShell({
       <header className="topBar">
         <div className="topBarRow">
           <div className="topBarLeft">
-            <button
-              className="iconBtn"
-              aria-label="Back"
-              onClick={goBack}
-              style={{ visibility: showBack ? "visible" : "hidden" }}
-            >
-              ‹
-            </button>
+            {showBack ? (
+              <button className="iconBtn" aria-label="Back" onClick={goBack}>
+                ‹
+              </button>
+            ) : (
+              <div style={{ width: 44, height: 44 }} />
+            )}
           </div>
 
           <div className="topBarCenter">
@@ -143,20 +143,20 @@ export default function AppShell({
         </nav>
       ) : null}
 
-      {rightPanel ? (
-        <div className={sheetOpen ? "sheetOverlay open" : "sheetOverlay"} onClick={() => setSheetOpen(false)}>
-          <div className={sheetOpen ? "sheet open" : "sheet"} onClick={(e) => e.stopPropagation()}>
-            <div className="sheetHandle" />
-            <div className="sheetHeader">
-              <div style={{ fontWeight: 800 }}>Info</div>
-              <Button variant="ghost" onClick={() => setSheetOpen(false)}>
-                Close
-              </Button>
-            </div>
-            <div className="sheetBody">{rightPanel}</div>
+      <div className={sheetOpen ? "sheetOverlay open" : "sheetOverlay"} onClick={() => setSheetOpen(false)}>
+        <div className={sheetOpen ? "sheet open" : "sheet"} onClick={(e) => e.stopPropagation()}>
+          <div className="sheetHandle" />
+          <div className="sheetHeader">
+            <div style={{ fontWeight: 800 }}>Info</div>
+            <Button variant="ghost" onClick={() => setSheetOpen(false)}>
+              Close
+            </Button>
+          </div>
+          <div className="sheetBody">
+            <InfoCenter onRequestClose={() => setSheetOpen(false)} />
           </div>
         </div>
-      ) : null}
+      </div>
     </div>
   );
 }

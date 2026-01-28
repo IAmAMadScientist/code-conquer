@@ -45,7 +45,9 @@ public class SpecialCardController {
             @RequestParam String sessionId,
             @RequestParam String playerId,
             @RequestParam SpecialCardType card,
-            @RequestParam(required = false) String targetPlayerId
+            @RequestParam(required = false) String targetPlayerId,
+            // Only used for BOOST on fork nodes (player chooses the outgoing edge)
+            @RequestParam(required = false) String boostToNodeId
     ) {
         Optional<GameSession> sOpt = sessionService.findById(sessionId);
         if (sOpt.isEmpty()) return ResponseEntity.badRequest().build();
@@ -121,7 +123,19 @@ public class SpecialCardController {
                 sessionService.publishEvent(s, "SPECIAL", "⛓️🃏 " + fmt(p) + " schickt " + fmt(t) + " ins Gefängnis (1 Runde).");
             }
             case BOOST -> {
-                boostOneStep(s, p);
+                BoostResult br = boostOneStep(s, p, boostToNodeId);
+
+                // If this is a fork and the player hasn't chosen an outgoing edge yet,
+                // keep the turn in AWAITING_SPECIAL_CARD and return the options so the UI can prompt.
+                if (br.needChoice) {
+                    return ResponseEntity.status(409).body(java.util.Map.of(
+                            "ok", false,
+                            "needChoice", true,
+                            "forkNodeId", br.forkNodeId,
+                            "options", br.options
+                    ));
+                }
+
                 playerRepository.save(p);
                 sessionService.publishEvent(s, "SPECIAL", "⚡🃏 " + fmt(p) + " bekommt einen Boost (+1 Feld).");
             }
@@ -161,14 +175,38 @@ public class SpecialCardController {
         p.setSkipTurns(1);
     }
 
-    private void boostOneStep(GameSession s, Player p) {
+    private static class BoostResult {
+        boolean needChoice = false;
+        String forkNodeId;
+        java.util.List<com.codeconquer.server.dto.ForkOption> options = java.util.List.of();
+    }
+
+    private BoostResult boostOneStep(GameSession s, Player p, String boostToNodeId) {
+        BoostResult br = new BoostResult();
         BoardGraph board = boardService.getBoard();
         String cur = p.getPositionNodeId();
-        if (cur == null) return;
+        if (cur == null) return br;
         var outs = board.outgoing(cur);
-        if (outs == null || outs.isEmpty()) return;
-        // Deterministic: first outgoing edge.
-        String next = outs.get(0);
+        if (outs == null || outs.isEmpty()) return br;
+
+        String next;
+        if (outs.size() > 1) {
+            // Fork: player must choose.
+            if (boostToNodeId == null || boostToNodeId.isBlank()) {
+                br.needChoice = true;
+                br.forkNodeId = cur;
+                br.options = boardService.getForkOptions(cur);
+                return br;
+            }
+            if (!outs.contains(boostToNodeId)) {
+                throw new IllegalArgumentException("Invalid boostToNodeId for this fork");
+            }
+            next = boostToNodeId;
+        } else {
+            // Only one path.
+            next = outs.get(0);
+        }
+
         p.setPositionNodeId(next);
 
         BoardNodeType t = board.getType(next);
@@ -178,6 +216,8 @@ public class SpecialCardController {
         if (t == BoardNodeType.FINISH) {
             sessionService.finishSession(s.getId(), p.getId());
         }
+
+        return br;
     }
 
     private String fmt(Player p) {
