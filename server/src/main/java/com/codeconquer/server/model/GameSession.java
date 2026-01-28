@@ -47,6 +47,12 @@ public class GameSession {
     // Remaining steps left to move after choosing a path.
     private Integer pendingRemainingSteps;
 
+    // --- Turn start position (used to revert on failed challenge) ---
+    // Stored when the current player rolls the dice, before any movement happens.
+    // Cleared when the turn ends (score submitted / jail / finish).
+    private String turnStartPlayerId;
+    private String turnStartNodeId;
+
     // Lightweight event channel for polling clients (no websockets needed).
     // Increment lastEventSeq whenever something noteworthy happens (player left, etc.).
     private long lastEventSeq;

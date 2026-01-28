@@ -71,6 +71,23 @@ public class ScoreService {
 
         Score saved = scoreRepository.save(score);
 
+        String nmPre = (p.getName() == null || p.getName().isBlank()) ? "Player" : p.getName().trim();
+        String icPre = (p.getIcon() == null || p.getIcon().isBlank()) ? "🙂" : p.getIcon().trim();
+
+        // If the challenge was failed (0 points), revert the player back to where they were
+        // before rolling the dice at the start of this turn.
+        if (score.getPoints() <= 0) {
+            try {
+                String startPid = s.getTurnStartPlayerId();
+                String startNode = s.getTurnStartNodeId();
+                if (startPid != null && startPid.equals(p.getId()) && startNode != null && !startNode.isBlank()) {
+                    p.setPositionNodeId(startNode);
+                    playerService.save(p);
+                    sessionService.publishEvent(s, "CHALLENGE_FAIL", "❌ " + icPre + " " + nmPre + " failed the challenge and returns to the previous tile.");
+                }
+            } catch (Exception ignored) {}
+        }
+
         // Update running total score for the player (used by leaderboard).
         Player updated = playerService.addToTotalScore(score.getSessionId(), score.getPlayerId(), score.getPoints());
 
@@ -84,6 +101,9 @@ public class ScoreService {
         // Your game uses "each player on their own phone", so there is no handover confirm.
         s.setTurnStatus(GameSessionService.TURN_AWAITING_D6_ROLL);
         s.setActiveChallengeId(null);
+        // Clear stored turn-start position (no longer needed after score submit).
+        s.setTurnStartPlayerId(null);
+        s.setTurnStartNodeId(null);
         sessionService.save(s);
 
         // Advance to next player (includes auto-skip + TURN_NEXT event).

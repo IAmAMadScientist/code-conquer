@@ -381,9 +381,11 @@ export default function GraphPathfinderPage() {
   // Quick-session arcade layer: beat a budget + timer.
   const diffCfg = useMemo(() => {
     const d = (difficulty || "EASY").toUpperCase();
-    if (d === "HARD") return { slack: 2, timeLimitSec: 35 };
-    if (d === "MEDIUM") return { slack: 4, timeLimitSec: 40 };
-    return { slack: 6, timeLimitSec: 45 };
+    // Only the true shortest path (Dijkstra optimal) counts as a win.
+    // Difficulty only adjusts the time pressure.
+    if (d === "HARD") return { timeLimitSec: 35 };
+    if (d === "MEDIUM") return { timeLimitSec: 40 };
+    return { timeLimitSec: 45 };
   }, [difficulty]);
 
   // scoring helpers
@@ -537,22 +539,19 @@ export default function GraphPathfinderPage() {
       return;
     }
 
-    const budget = safeOptimal + diffCfg.slack;
-    if (w > budget) {
+    // Only the true shortest path counts.
+    const budget = safeOptimal;
+    if (w !== budget) {
       setErrors((e) => e + 1);
       setStatus("lost");
-      setMessage(`Too expensive! Cost ${w} (budget ${budget}).`);
+      setMessage(`Not optimal! Cost ${w} (shortest ${budget}).`);
       try { if (navigator.vibrate) navigator.vibrate([18, 40, 18]); } catch {}
       return;
     }
 
     setStatus("won");
     const left = Math.ceil(timeLeftMs / 1000);
-    setMessage(
-      w === safeOptimal
-        ? `Perfect! Cost ${w} (optimal). +${left}s left.`
-        : `Nice! Cost ${w} (optimal ${safeOptimal}). +${left}s left.`
-    );
+    setMessage(`Perfect! Shortest cost ${w}. +${left}s left.`);
     try { if (navigator.vibrate) navigator.vibrate([20, 30, 20]); } catch {}
   }
 
@@ -567,8 +566,8 @@ export default function GraphPathfinderPage() {
 
   const budget = useMemo(() => {
     if (!safeOptimal) return null;
-    return safeOptimal + diffCfg.slack;
-  }, [safeOptimal, diffCfg.slack]);
+    return safeOptimal;
+  }, [safeOptimal]);
 
   const pathEdges = useMemo(() => {
     const s = new Set();

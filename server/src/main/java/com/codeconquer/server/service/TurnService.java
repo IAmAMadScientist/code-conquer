@@ -65,6 +65,11 @@ public class TurnService {
             throw new IllegalArgumentException("Not waiting for dice roll");
         }
 
+        // Remember where the player started this turn (before dice roll movement).
+        // Used to revert position if the upcoming challenge is failed.
+        s.setTurnStartPlayerId(p.getId());
+        s.setTurnStartNodeId(p.getPositionNodeId());
+
         int roll;
         // Special card: next dice roll advantage (roll twice, take higher)
         if (p.isNextDiceAdvantage()) {
@@ -93,6 +98,9 @@ public class TurnService {
 
         // If we reached a terminal end-of-turn effect (JAIL), advance immediately.
         if (mr.turnEnded) {
+            // Turn ends without a challenge -> clear stored turn start.
+            s.setTurnStartPlayerId(null);
+            s.setTurnStartNodeId(null);
             sessionService.advanceTurn(sessionId);
             sessionService.advanceTurnConsideringSkips(sessionId);
             return responseFor(sessionId, playerId, roll, p, s, mr, "Turn ended");
@@ -173,6 +181,9 @@ public class TurnService {
             // Clear fork state and end turn immediately.
             s.setPendingForkNodeId(null);
             s.setPendingRemainingSteps(null);
+            // Turn ends without a challenge -> clear stored turn start.
+            s.setTurnStartPlayerId(null);
+            s.setTurnStartNodeId(null);
             s.setTurnStatus(GameSessionService.TURN_AWAITING_D6_ROLL);
             sessionRepository.save(s);
             playerRepository.save(p);
@@ -184,6 +195,9 @@ public class TurnService {
         }
         if (landed == BoardNodeType.FINISH) {
             // Finish: mark session finished and announce winner.
+            // Turn ends without a challenge -> clear stored turn start.
+            s.setTurnStartPlayerId(null);
+            s.setTurnStartNodeId(null);
             sessionService.finishSession(sessionId, playerId);
             s = requireSession(sessionId);
             sessionRepository.save(s);
@@ -212,6 +226,9 @@ public class TurnService {
         }
 
         if (mr.turnEnded) {
+            // Turn ends without a challenge -> clear stored turn start.
+            s.setTurnStartPlayerId(null);
+            s.setTurnStartNodeId(null);
             sessionService.advanceTurn(sessionId);
             sessionService.advanceTurnConsideringSkips(sessionId);
             return responseFor(sessionId, playerId, roll, p, s, mr, "Turn ended");
