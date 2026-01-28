@@ -10,7 +10,6 @@ import Lobby from "./pages/Lobby";
 import TurnSummary from "./pages/TurnSummary";
 import EndScreen from "./pages/EndScreen";
 import StackMazePage from "./pages/StackMazePage";
-import StackDropPage from "./pages/StackDropPage";
 import GraphPathfinderPage from "./pages/GraphPathfinderPage";
 import BSTInsertPage from "./pages/BSTInsertPage";
 import QueueCommanderPage from "./pages/QueueCommanderPage";
@@ -71,7 +70,6 @@ export default function App() {
         <Route path="/end" element={<EndScreen />} />
         <Route path="/leaderboard" element={<Leaderboard />} />
         <Route path="/stackmaze" element={<StackMazePage />} />
-        <Route path="/stackdrop" element={<StackDropPage />} />
         <Route path="/graphpath" element={<GraphPathfinderPage />} />
         <Route path="/bstinsert" element={<BSTInsertPage />} />
         <Route path="/queuecommander" element={<QueueCommanderPage />} />

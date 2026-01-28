@@ -230,30 +230,6 @@ export default function InfoCenter({ onRequestClose }) {
         ),
       },
 
-      {
-        key: "stackdrop",
-        title: "Stack Drop",
-        icon: "📦",
-        subtitle: "Stack/LIFO — plan ahead or react fast",
-        render: () => (
-          <div style={{ display: "grid", gap: 12 }}>
-            <div style={{ fontWeight: 900, fontSize: 16 }}>Stack Drop</div>
-            <div className="ui-card">
-              <div className="ui-cardContent" style={{ display: "grid", gap: 10, padding: 16 }}>
-                <Bullet>
-                  A <b>stack</b> is LIFO: last in → first out.
-                </Bullet>
-                <Bullet>
-                  Keep an eye on what’s on top — that’s your next output.
-                </Bullet>
-                <Bullet>
-                  Goal: execute the correct order and score points.
-                </Bullet>
-              </div>
-            </div>
-          </div>
-        ),
-      },
     ],
     []
   );

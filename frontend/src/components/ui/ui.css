@@ -29,37 +29,6 @@
   --r-sm: 14px;
 }
 
-/* ------------------------------ */
-/* Stack Drop (desktop QA helper) */
-/* ------------------------------ */
-
-.stackdropHint {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  justify-content: center;
-  padding: 8px 12px;
-  border-radius: 999px;
-  margin-bottom: 12px;
-  background: rgba(15, 23, 42, 0.18);
-  border: 1px solid rgba(148, 163, 184, 0.14);
-  color: rgba(255, 255, 255, 0.82);
-  font-size: 12px;
-  line-height: 1;
-  user-select: none;
-}
-
-.stackdropKey {
-  padding: 6px 8px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  font-weight: 800;
-  letter-spacing: 0.4px;
-  color: rgba(255, 255, 255, 0.92);
-}
-
 html, body, #root {
   height: 100%;
 }
@@ -99,22 +68,16 @@ button, input { font: inherit; }
 }
 
 .topBarRow{
-  display: grid;
-  grid-template-columns: 90px 1fr auto;
-  gap: 10px;
+  display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   padding: 10px 12px;
 }
-
-.topBarLeft{ display: flex; justify-content: center; }
+.topBarLeft{ display: flex; justify-content: flex-start; align-items: center; gap: 10px; min-width: 0; }
 .topBarRight{ display: flex; justify-content: flex-end; }
 
-.topBarCenter{
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
+.topBarText{ min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 
 .topBarTitleRow{
   display: flex;
@@ -223,27 +186,7 @@ button, input { font: inherit; }
 
 .iconBtn:active{ transform: translateY(1px); }
 
-/* Brand (logo) in top-left where the back button used to be */
-.brandSlot{
-  height: 90px;
-  width: 90px;
-  display: grid;
-  place-items: center;
-  border-radius: 999px;
-  border: 1px solid rgba(71, 85, 105, 0.38);
-  background: rgba(15, 23, 42, 0.35);
-  box-shadow: 0 10px 30px rgba(0,0,0,0.25);
-  overflow: hidden;
-}
-
-.brandLogo{
-  width: 90px;
-  height: 90px;
-  object-fit: cover;
-  object-position: center;
-  pointer-events: none;
-  user-select: none;
-}
+/* Brand/logo removed */
 
 /* ===== Tab Bar ===== */
 .tabBar{

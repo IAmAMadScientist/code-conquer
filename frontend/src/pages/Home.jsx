@@ -5,7 +5,6 @@ import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { createSession, joinSessionByCode, getSession, clearSession } from "../lib/session";
 import { getPlayer, registerPlayer, clearPlayer } from "../lib/player";
-import logo from "../assets/logo.png";
 
 const EMOJIS = ["🦊","🐱","🐶","🐸","🐼","🦁","🐙","🦄","🐝","🐧","🐢","🦖","👾","🤖","🧠","🔥","⭐","🍀","🍕","🎲"];
 
@@ -94,7 +93,6 @@ export default function Home() {
   return (
     <AppShell
       title="Code & Conquer"
-      subtitle="Create a match, set your player profile, then go to the lobby."
       backTo={false}
       headerBadges={
         <>
@@ -114,14 +112,6 @@ export default function Home() {
       }
     >
       <div className="panel mobileCenter" style={{ display: "grid", gap: 12 }}>
-        <div style={{ display: "flex", justifyContent: "center", padding: "10px 0 2px" }}>
-          <img
-            src={logo}
-            alt="Code & Conquer"
-            style={{ width: 140, height: 140, objectFit: "contain", filter: "drop-shadow(0 14px 40px rgba(0,0,0,0.35))" }}
-          />
-        </div>
-
         {err ? <div style={{ opacity: 0.9 }}>⚠️ {err}</div> : null}
 
         {!session?.sessionId ? (

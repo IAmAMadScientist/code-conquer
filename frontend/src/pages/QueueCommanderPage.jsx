@@ -136,6 +136,10 @@ export default function QueueCommanderPage() {
   const targetIdxRef = useRef(0);
   const speedRef = useRef(cfg.baseSpeed);
 
+  // Ensure a just-enqueued value is visible in the FIFO before auto-output pops it.
+  const autoOutputRequestedRef = useRef(false);
+  const autoOutputBlockUntilRef = useRef(0);
+
   const [status, setStatus] = useState("playing"); // playing | won | lost
   const [best, setBest] = useState(safeGetBest());
   const [timeMs, setTimeMs] = useState(0);
@@ -184,7 +188,8 @@ export default function QueueCommanderPage() {
     setMsg("Removed");
     vibrate(12);
     // Re-run auto output in case the removal exposes a match at the front.
-    autoOutput();
+    autoOutputRequestedRef.current = true;
+    autoOutputBlockUntilRef.current = 0;
     syncUI();
     setTimeout(() => setMsg(""), 800);
   }
@@ -255,7 +260,8 @@ export default function QueueCommanderPage() {
       }
       f.state = "left";
       f.t = 0;
-      autoOutput();
+      autoOutputRequestedRef.current = true;
+      autoOutputBlockUntilRef.current = performance.now() + 160;
     } else {
       f.state = "right";
       f.t = 0;
@@ -301,6 +307,18 @@ export default function QueueCommanderPage() {
     if (!lastTsRef.current) lastTsRef.current = ts;
     const dt = clamp((ts - lastTsRef.current) / 1000, 0, 0.033);
     lastTsRef.current = ts;
+
+    // If we enqueued something recently, give it a brief moment to appear in the FIFO UI
+    // before the auto-output pops it.
+    if (
+      status === "playing" &&
+      autoOutputRequestedRef.current &&
+      performance.now() >= autoOutputBlockUntilRef.current
+    ) {
+      autoOutputRequestedRef.current = false;
+      autoOutput();
+      syncUI();
+    }
 
     resizeCanvas();
 
@@ -618,19 +636,19 @@ export default function QueueCommanderPage() {
         </Button>
         <Button
           style={{ height: 58, fontSize: 18, fontWeight: 900, borderRadius: 18 }}
-          variant="secondary"
-          onClick={() => decide("discard")}
-          disabled={status !== "playing"}
-        >
-          DISCARD
-        </Button>
-        <Button
-          style={{ height: 58, fontSize: 18, fontWeight: 900, borderRadius: 18 }}
           variant="outline"
           onClick={() => removeFromQueue(selectedIdx)}
           disabled={status !== "playing" || selectedIdx < 0 || deleteCharges <= 0}
         >
           REMOVE
+        </Button>
+        <Button
+          style={{ height: 58, fontSize: 18, fontWeight: 900, borderRadius: 18 }}
+          variant="secondary"
+          onClick={() => decide("discard")}
+          disabled={status !== "playing"}
+        >
+          DISCARD
         </Button>
       </div>
 

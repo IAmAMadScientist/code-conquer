@@ -491,33 +491,53 @@ useEffect(() => {
             <EventFeed sessionId={session.sessionId} title="Game feed" limit={5} />
           </div>
 
-          <div className="playMid">
+          <div className="playMid" style={{ position: "relative" }}>
             {/* Reserve space under the fixed (collapsed) EventFeed so it never overlaps content. */}
             <div style={{ height: "calc(var(--cc-eventfeed-h, 72px) + 8px)" }} aria-hidden />
+
+            {/* Floating banners (do not push layout) */}
+            {(turnMsg || summary) ? (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "calc(var(--cc-eventfeed-h, 72px) + 8px)",
+                  left: 0,
+                  right: 0,
+                  padding: "0 12px",
+                  zIndex: 5,
+                  pointerEvents: "none",
+                  display: "grid",
+                  gap: 10,
+                }}
+              >
+                {turnMsg ? (
+                  <div className="panel" style={{ border: "1px solid rgba(148,163,184,0.22)" }}>
+                    <div style={{ fontWeight: 800 }}>ℹ️ {turnMsg}</div>
+                  </div>
+                ) : null}
+
+                {summary ? (
+                  <div className="panel" style={{ border: "1px solid rgba(148,163,184,0.22)" }}>
+                    <div style={{ fontWeight: 800, marginBottom: 6 }}>
+                      {summary.saved ? "✅ Score saved" : "⚠️ Score not saved"}
+                    </div>
+                    {summary.error ? <div className="muted" style={{ marginBottom: 6 }}>{summary.error}</div> : null}
+                    {summary.next ? (
+                      <div className="muted">
+                        Next turn: <strong>{summary.next.icon || "🙂"} {summary.next.name}</strong> (#{summary.next.turnOrder})
+                      </div>
+                    ) : (
+                      <div className="muted">Next turn is ready.</div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
             <div className="panel playCard">
               {err ? <div style={{ opacity: 0.9 }}>⚠️ {err}</div> : null}
 
-              {turnMsg ? (
-                <div className="panel" style={{ border: "1px solid rgba(148,163,184,0.22)" }}>
-                  <div style={{ fontWeight: 800 }}>ℹ️ {turnMsg}</div>
-                </div>
-              ) : null}
-
-              {summary ? (
-                <div className="panel" style={{ border: "1px solid rgba(148,163,184,0.22)" }}>
-                  <div style={{ fontWeight: 800, marginBottom: 6 }}>
-                    {summary.saved ? "✅ Score saved" : "⚠️ Score not saved"}
-                  </div>
-                  {summary.error ? <div className="muted" style={{ marginBottom: 6 }}>{summary.error}</div> : null}
-                  {summary.next ? (
-                    <div className="muted">
-                      Next turn: <strong>{summary.next.icon || "🙂"} {summary.next.name}</strong> (#{summary.next.turnOrder})
-                    </div>
-                  ) : (
-                    <div className="muted">Next turn is ready.</div>
-                  )}
-                </div>
-              ) : null}
+              {/* NOTE: turnMsg + summary are rendered as floating overlays above */}
 
               {!state?.started ? (
                 <div className="muted" style={{ lineHeight: 1.5 }}>

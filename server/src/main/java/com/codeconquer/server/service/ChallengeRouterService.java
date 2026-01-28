@@ -25,7 +25,6 @@ public class ChallengeRouterService {
 
     public ChallengeRouterService() {
         categoryToRoute.put(Category.STACK_MAZE, "/stackmaze");
-        categoryToRoute.put(Category.STACK_DROP, "/stackdrop");
         categoryToRoute.put(Category.GRAPH_PATH, "/graphpath");
         categoryToRoute.put(Category.BST_INSERT, "/bstinsert");
         categoryToRoute.put(Category.QUEUE_COMMANDER, "/queuecommander");

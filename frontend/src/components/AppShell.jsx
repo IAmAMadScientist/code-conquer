@@ -5,7 +5,6 @@ import { Separator } from "./ui/separator";
 import { useHapticsSetting, useSoundSetting } from "../lib/diceSound";
 import InfoCenter from "./InfoCenter";
 import { getSession, isSessionStarted } from "../lib/session";
-import logo from "../assets/logo.png";
 
 /**
  * Mobile-first app shell.
@@ -71,20 +70,14 @@ export default function AppShell({
               <button className="iconBtn" aria-label="Back" onClick={goBack}>
                 ‹
               </button>
-            ) : showBrand ? (
-              <div className="brandSlot" aria-label="Code & Conquer">
-                <img className="brandLogo" src={logo} alt="Code & Conquer" />
-              </div>
-            ) : (
-              <div style={{ width: 44, height: 44 }} />
-            )}
-          </div>
+            ) : null}
 
-          <div className="topBarCenter">
-            <div className="topBarTitleRow">
-              <div className="topBarTitle">{title}</div>
+            <div className="topBarText">
+              <div className="topBarTitleRow">
+                <div className="topBarTitle">{title}</div>
+              </div>
+              {subtitle ? <div className="topBarSubtitle">{subtitle}</div> : null}
             </div>
-            {subtitle ? <div className="topBarSubtitle">{subtitle}</div> : null}
           </div>
 
           <div className="topBarRight">
