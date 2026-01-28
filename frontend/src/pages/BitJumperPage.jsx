@@ -119,6 +119,7 @@ export default function BitJumperPage() {
     diff,
     pattern: makePattern(diff),
     patternIndex: 0,
+    countdown: 0,
     gameOver: false,
     startedAt: 0,
     timeMs: 0,
@@ -135,6 +136,7 @@ export default function BitJumperPage() {
       patternIndex: 0,
       score: 0,
       combo: 0,
+      countdown: 0,
       gameOver: false,
       startedAt: 0,
       timeMs: 0,
@@ -210,67 +212,55 @@ export default function BitJumperPage() {
       };
     }
 
-    // Helper: ensure per height band there is always a neutral BLANK + a 0 + a 1 choice.
-    // The 0/1 platforms use the *current* expected op so you always have the next-bit choice.
-    function spreadBandX() {
+    // Two-choice layout per height band: left vs right (decisive 0/1 choice).
+    function spreadBandX2() {
       const margin = 12;
       const maxX = Math.max(margin, W - PLATFORM_W - margin);
-      const xs = [
-        Math.round(W * 0.18 - PLATFORM_W / 2),
-        Math.round(W * 0.50 - PLATFORM_W / 2),
-        Math.round(W * 0.82 - PLATFORM_W / 2),
-      ].map((v) => clamp(v, margin, maxX));
-      // tiny shuffle so it doesn't feel too rigid
-      for (let i = xs.length - 1; i > 0; i--) {
-        const j = randInt(0, i);
-        [xs[i], xs[j]] = [xs[j], xs[i]];
-      }
-      return xs;
+      const left = clamp(Math.round(W * 0.26 - PLATFORM_W / 2), margin, maxX);
+      const right = clamp(Math.round(W * 0.74 - PLATFORM_W / 2), margin, maxX);
+      return [left, right];
     }
 
-    // initial platforms (ensure variety is visible) + always give BLANK/0/1 per band
+    // initial platforms (mobile-first):
+    // - spawn on a BLANK platform
+    // - after the countdown, the first decision is a clear left/right 0-vs-1 choice
     const platforms = [];
     function pushBand(y, mustTypeOrNull = null) {
       const want = pattern[patternIndex] || makeToken(cfg.ops);
       const op = want?.op || cfg.ops[0] || "SET";
 
-      const blank = spawnPlatform(y, "STATIC", true);
-      const p0 = spawnPlatform(y, mustTypeOrNull, false);
-      const p1 = spawnPlatform(y, mustTypeOrNull, false);
-      p0.token = makeFixedToken(op, 0);
-      p1.token = makeFixedToken(op, 1);
+      const pA = spawnPlatform(y, mustTypeOrNull, false);
+      const pB = spawnPlatform(y, mustTypeOrNull, false);
 
-      // spread x so all three choices are always reachable
-      const [xA, xB, xC] = spreadBandX();
-      blank.x = xA;
-      p0.x = xB;
-      p1.x = xC;
+      // Randomize which side is 0/1 so you must react, but always a decisive choice.
+      const leftIsZero = Math.random() < 0.5;
+      pA.token = makeFixedToken(op, leftIsZero ? 0 : 1);
+      pB.token = makeFixedToken(op, leftIsZero ? 1 : 0);
 
-      platforms.push(blank, p0, p1);
+      const [xL, xR] = spreadBandX2();
+      pA.x = xL;
+      pB.x = xR;
+
+      platforms.push(pA, pB);
     }
 
-    // Start band: always BLANK + 0 + 1.
+    // Start: BLANK only (player spawns here during the countdown).
+    let startBlank = null;
     {
-      const want = pattern[0] || makeToken(cfg.ops);
-      const op = want?.op || cfg.ops[0] || "SET";
       const blank = spawnPlatform(startY + 44, "STATIC", true);
-      const p0 = spawnPlatform(startY + 44, "STATIC", false);
-      const p1 = spawnPlatform(startY + 44, "STATIC", false);
-      p0.token = makeFixedToken(op, 0);
-      p1.token = makeFixedToken(op, 1);
-      const [xA, xB, xC] = spreadBandX();
       // Always start on a BLANK platform.
       blank.x = Math.round(startX - PLATFORM_W / 2);
-      // Ensure the next choice always offers 0 and 1 (reachable and not overlapping controls).
-      p0.x = xA;
-      p1.x = xC;
-      platforms.push(blank, p0, p1);
+      platforms.push(blank);
+      startBlank = blank;
     }
-    pushBand(startY - cfg.gap * 1.0, "MOVING");
-    pushBand(startY - cfg.gap * 2.0, "BREAKING");
-    pushBand(startY - cfg.gap * 3.0, "BOUNCY");
-    for (let i = 4; i < 11; i++) {
-      pushBand(startY - cfg.gap * i);
+    // First decision band: further away so you don't instantly land on the next platform.
+    // This also ensures you must actually steer into a 0/1 choice.
+    const firstGap = cfg.gap * 1.9;
+    pushBand(startY - firstGap, "MOVING");
+    pushBand(startY - (firstGap + cfg.gap * 1.0), "BREAKING");
+    pushBand(startY - (firstGap + cfg.gap * 2.0), "BOUNCY");
+    for (let i = 4; i < 9; i++) {
+      pushBand(startY - (firstGap + cfg.gap * (i - 1)));
     }
 
     const s = {
@@ -295,8 +285,9 @@ export default function BitJumperPage() {
       PLATFORM_W,
       // game
       player: {
-        x: startX,
-        y: startY,
+        // Spawn standing on the BLANK platform (no bit).
+        x: startBlank ? startBlank.x + startBlank.w / 2 : startX,
+        y: startBlank ? startBlank.y - PLAYER_R - 1 : startY,
         vy: 0,
       },
       platforms,
@@ -310,7 +301,11 @@ export default function BitJumperPage() {
       shakeAmp: 0,
       errors: 0,
       completed: 0,
-      startedAt: now,
+      // Countdown phase: start timer after "GO".
+      phase: "countdown",
+      countdownStart: now,
+      countdownMs: 3000,
+      startedAt: 0,
       gameOver: false,
     };
 
@@ -322,6 +317,7 @@ export default function BitJumperPage() {
       combo: 0,
       pattern: s.pattern,
       patternIndex: 0,
+      countdown: 3,
       gameOver: false,
       startedAt: s.startedAt,
       timeMs: 0,
@@ -422,7 +418,21 @@ export default function BitJumperPage() {
       const dt = clamp((now - last) / 1000, 0, 1 / 20);
       last = now;
 
-      if (!s.gameOver) {
+      // Countdown: show 3..2..1 and start with a jump.
+      if (!s.gameOver && s.phase === "countdown") {
+        const left = Math.max(0, s.countdownMs - (now - s.countdownStart));
+        const n = left <= 0 ? 0 : Math.ceil(left / 1000);
+        s._countdown = n;
+        if (left <= 0) {
+          s.phase = "playing";
+          s.startedAt = now;
+          // Kick off the run with a jump from the BLANK start platform.
+          s.player.vy = s.JUMP_VY;
+          s._countdown = 0;
+        }
+      }
+
+      if (!s.gameOver && s.phase === "playing") {
         update(s, dt, now);
       }
       render(s, ctx, now);
@@ -437,9 +447,15 @@ export default function BitJumperPage() {
           combo: s.combo,
           pattern: s.pattern,
           patternIndex: s.patternIndex,
+          countdown: s._countdown || 0,
           gameOver: s.gameOver,
           errors: s.errors,
-          timeMs: s.gameOver ? Math.max(0, Math.round(now - s.startedAt)) : u.timeMs,
+          startedAt: s.startedAt || u.startedAt,
+          timeMs: s.gameOver
+            ? Math.max(0, Math.round((s.startedAt ? now - s.startedAt : 0)))
+            : s.phase === "playing" && s.startedAt
+            ? Math.max(0, Math.round(now - s.startedAt))
+            : u.timeMs,
         }));
       }
     }
@@ -583,46 +599,36 @@ export default function BitJumperPage() {
       }
 
       // Remove broken/off platforms + spawn new.
-      // Every height band gets a neutral "BLANK" platform so you're not forced to take a wrong token.
+      // Each height band has *max 2 platforms* (a decisive 0 vs 1 choice).
       s.platforms = s.platforms.filter((pl) => !pl.brokeAt && pl.y < H + 120);
       let topMost = s.platforms.reduce((m, pl) => Math.min(m, pl.y), Infinity);
 
-      function spreadBandXRuntime() {
+      function spreadBandXRuntime2() {
         const margin = 12;
         const maxX = Math.max(margin, s.W - s.PLATFORM_W - margin);
-        const xs = [
-          Math.round(s.W * 0.18 - s.PLATFORM_W / 2),
-          Math.round(s.W * 0.50 - s.PLATFORM_W / 2),
-          Math.round(s.W * 0.82 - s.PLATFORM_W / 2),
-        ].map((v) => clamp(v, margin, maxX));
-        for (let i = xs.length - 1; i > 0; i--) {
-          const j = randInt(0, i);
-          [xs[i], xs[j]] = [xs[j], xs[i]];
-        }
-        return xs;
+        const left = clamp(Math.round(s.W * 0.26 - s.PLATFORM_W / 2), margin, maxX);
+        const right = clamp(Math.round(s.W * 0.74 - s.PLATFORM_W / 2), margin, maxX);
+        return [left, right];
       }
 
       function pushBandRuntime(y) {
-        // Always offer three choices per jump band:
-        // BLANK (safe) + BIT=0 + BIT=1 for the *current* required OP.
         const want = s.pattern[s.patternIndex] || makeToken(s.cfg.ops);
         const op = want?.op || s.cfg.ops[0] || "SET";
 
-        const blank = spawnPlatformRuntime(s, y, true);
-        const p0 = spawnPlatformRuntime(s, y, false);
-        const p1 = spawnPlatformRuntime(s, y, false);
-        p0.token = makeFixedToken(op, 0);
-        p1.token = makeFixedToken(op, 1);
+        const pA = spawnPlatformRuntime(s, y, false);
+        const pB = spawnPlatformRuntime(s, y, false);
+        const leftIsZero = Math.random() < 0.5;
+        pA.token = makeFixedToken(op, leftIsZero ? 0 : 1);
+        pB.token = makeFixedToken(op, leftIsZero ? 1 : 0);
 
-        const [xA, xB, xC] = spreadBandXRuntime();
-        blank.x = xA;
-        p0.x = xB;
-        p1.x = xC;
+        const [xL, xR] = spreadBandXRuntime2();
+        pA.x = xL;
+        pB.x = xR;
 
-        s.platforms.push(blank, p0, p1);
+        s.platforms.push(pA, pB);
       }
 
-      const DESIRED = 22;
+      const DESIRED = 14;
       while (s.platforms.length < DESIRED) {
         const y = Math.min(topMost - s.cfg.gap, -randInt(20, 60));
         pushBandRuntime(y);
@@ -983,9 +989,38 @@ export default function BitJumperPage() {
             overflow: "hidden",
             border: "1px solid rgba(148,163,184,0.18)",
             background: "rgba(2,6,23,0.25)",
+            position: "relative",
           }}
         >
           <canvas ref={canvasRef} style={{ width: "100%", height: "100%", display: "block" }} />
+
+          {/* Countdown overlay */}
+          {ui.countdown > 0 ? (
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "grid",
+                placeItems: "center",
+                background: "rgba(0,0,0,0.35)",
+                backdropFilter: "blur(2px)",
+                WebkitBackdropFilter: "blur(2px)",
+                pointerEvents: "none",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 84,
+                  fontWeight: 950,
+                  lineHeight: 1,
+                  letterSpacing: -2,
+                  textShadow: "0 18px 40px rgba(0,0,0,0.6)",
+                }}
+              >
+                {ui.countdown}
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
 

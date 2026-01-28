@@ -290,7 +290,9 @@ useEffect(() => {
   const waitingForPath = state?.turnStatus === "AWAITING_PATH_CHOICE";
   const canStartChallenge = isMyTurn && state?.turnStatus === "IDLE";
   const myFieldType = meState?.positionType || null;
-  const hasChallengeOnField = myFieldType === "EASY" || myFieldType === "MEDIUM" || myFieldType === "HARD";
+  // Fork nodes stay FORK fields, but if you END your move on a fork (turnStatus === IDLE)
+  // they should behave like a MEDIUM challenge field.
+  const hasChallengeOnField = myFieldType === "EASY" || myFieldType === "MEDIUM" || myFieldType === "HARD" || myFieldType === "FORK";
 
   // Player-facing turn indicator (no internal node ids).
   const turnLabel = useMemo(() => {
