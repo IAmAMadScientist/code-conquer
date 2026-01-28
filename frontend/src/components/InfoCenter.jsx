@@ -44,30 +44,30 @@ export default function InfoCenter({ onRequestClose }) {
         key: "how",
         title: "How to play (Boardgame)",
         icon: "🎲",
-        subtitle: "Kurz erklärt: Runde, Würfeln, Forks, Specials",
+        subtitle: "Turns, dice, forks, specials — the essentials",
         render: () => (
           <div style={{ display: "grid", gap: 12 }}>
             <div style={{ fontWeight: 900, fontSize: 16 }}>How to play</div>
             <div style={{ color: "var(--muted)", fontSize: 13, lineHeight: 1.45 }}>
-              Du spielst am Tisch das Boardgame – die Webapp unterstützt Würfel, Regeln und Minigames.
+              You play the physical boardgame at the table — the web app supports dice, rules, and minigames.
             </div>
             <div className="ui-card">
               <div className="ui-cardContent" style={{ display: "grid", gap: 10, padding: 16 }}>
                 <Bullet>
-                  <b>Turn:</b> Würfeln → bewegen → Event (Fork / Special / Challenge).
+                  <b>Turn:</b> Roll → move → resolve the event (Fork / Special / Challenge).
                 </Bullet>
                 <Bullet>
-                  <b>Fork:</b> Wenn mehrere Wege möglich sind, wählt der Spieler den Pfad.
+                  <b>Fork:</b> If multiple paths are available, the player chooses the path.
                 </Bullet>
                 <Bullet>
-                  <b>Challenge:</b> Minigame starten, Ergebnis zählt fürs Boardgame.
+                  <b>Challenge:</b> Start a minigame — the result counts for the boardgame.
                 </Bullet>
                 <Bullet>
-                  <b>Special Field:</b> Ziehe eine Karte (real life) und wähle sie hier im Dialog.
+                  <b>Special Field:</b> Draw a real-life card and select it in the dialog.
                 </Bullet>
                 <Bullet>
-                  <b>Field Types:</b> Normal = nix, <b>Fork</b> = Pfad wählen, <b>Challenge</b> = Minigame,
-                  <b>Special</b> = Karte ziehen, <b>Jail</b> = Zug aussetzen.
+                  <b>Field Types:</b> Normal = nothing, <b>Fork</b> = choose a path, <b>Challenge</b> = minigame,
+                  <b>Special</b> = draw a card, <b>Jail</b> = skip a turn.
                 </Bullet>
               </div>
             </div>
@@ -79,23 +79,23 @@ export default function InfoCenter({ onRequestClose }) {
         key: "qr",
         title: "QR Code / Join",
         icon: "🔳",
-        subtitle: "Schnell beitreten: scannen oder Code eingeben",
+        subtitle: "Join fast: scan or enter the code",
         render: () => (
           <div style={{ display: "grid", gap: 12 }}>
             <div style={{ fontWeight: 900, fontSize: 16 }}>QR Code / Join</div>
             <div className="ui-card">
               <div className="ui-cardContent" style={{ display: "grid", gap: 10, padding: 16 }}>
                 <Bullet>
-                  In der <b>Lobby</b> zeigt die Host-App einen QR Code.
+                  In the <b>Lobby</b>, the host shows a QR code.
                 </Bullet>
                 <Bullet>
-                  Alle Spieler scannen ihn mit der Handykamera oder tippen den <b>Match Code</b> ein.
+                  Players scan it with their phone camera or enter the <b>match code</b>.
                 </Bullet>
                 <Bullet>
-                  Falls das Scannen nicht geht: nutze den Link unter dem QR Code (oder teile ihn per Messenger).
+                  If scanning fails: use the link under the QR code (or share it via messenger).
                 </Bullet>
                 <Bullet>
-                  Tipp: Helligkeit hochdrehen – QR Codes scannen bei dunklen Displays oft schlechter.
+                  Tip: increase screen brightness — QR codes scan worse on dark displays.
                 </Bullet>
               </div>
             </div>
@@ -106,23 +106,23 @@ export default function InfoCenter({ onRequestClose }) {
         key: "stackmaze",
         title: "Stack Maze",
         icon: "🧱",
-        subtitle: "Plane Moves, dann läuft der Stack (LIFO)",
+        subtitle: "Plan moves, then the stack runs (LIFO)",
         render: () => (
           <div style={{ display: "grid", gap: 12 }}>
             <div style={{ fontWeight: 900, fontSize: 16 }}>Stack Maze</div>
             <div className="ui-card">
               <div className="ui-cardContent" style={{ display: "grid", gap: 10, padding: 16 }}>
                 <Bullet>
-                  Du baust zuerst eine <b>Move-Liste</b> (Stack). Oben liegt immer der nächste Move.
+                  First you build a <b>move list</b> (stack). The top is always the next move.
                 </Bullet>
                 <Bullet>
-                  Beim Start (<b>Run</b>) werden Moves <b>LIFO</b> ausgeführt: <i>Top executes next</i>.
+                  When you press <b>Run</b>, moves execute <b>LIFO</b>: <i>top executes next</i>.
                 </Bullet>
                 <Bullet>
-                  Ziel: Sammle ⭐ und erreiche das 🏁 – ohne gegen Wände zu crashen.
+                  Goal: collect ⭐ and reach 🏁 — without crashing into walls.
                 </Bullet>
                 <Bullet>
-                  Tipp: Plane erst den letzten Schritt, dann den davor (weil Stack rückwärts abarbeitet).
+                  Tip: plan the last step first, then the one before it (because the stack runs backwards).
                 </Bullet>
               </div>
             </div>
@@ -133,23 +133,23 @@ export default function InfoCenter({ onRequestClose }) {
         key: "bst",
         title: "BST Insert",
         icon: "🌳",
-        subtitle: "Tippe den korrekten Insert-Slot",
+        subtitle: "Tap the correct insert slot",
         render: () => (
           <div style={{ display: "grid", gap: 12 }}>
             <div style={{ fontWeight: 900, fontSize: 16 }}>BST Insert</div>
             <div className="ui-card">
               <div className="ui-cardContent" style={{ display: "grid", gap: 10, padding: 16 }}>
                 <Bullet>
-                  Neue Zahl startet an der Root. <b>Kleiner</b> → links, <b>größer</b> → rechts.
+                  A new number starts at the root. <b>Smaller</b> → left, <b>larger</b> → right.
                 </Bullet>
                 <Bullet>
-                  Du wählst nicht den Pfad, sondern den <b>Slot</b>, wo das neue Node landet.
+                  You don’t choose the path — you choose the <b>slot</b> where the node will be inserted.
                 </Bullet>
                 <Bullet>
-                  Bei <b>Equal</b> gilt die Regel oben rechts (z.B. Equal → RIGHT).
+                  For <b>Equal</b>, follow the rule shown (e.g. Equal → RIGHT).
                 </Bullet>
                 <Bullet>
-                  Du kannst jederzeit einfach einen anderen Slot antippen, um die Auswahl zu wechseln.
+                  You can tap another slot anytime to change your selection.
                 </Bullet>
               </div>
             </div>
@@ -160,20 +160,20 @@ export default function InfoCenter({ onRequestClose }) {
         key: "graph",
         title: "Graph Pathfinder",
         icon: "🗺️",
-        subtitle: "Finde den Pfad – Edge weights zählen",
+        subtitle: "Find the path — edge weights matter",
         render: () => (
           <div style={{ display: "grid", gap: 12 }}>
             <div style={{ fontWeight: 900, fontSize: 16 }}>Graph Pathfinder</div>
             <div className="ui-card">
               <div className="ui-cardContent" style={{ display: "grid", gap: 10, padding: 16 }}>
                 <Bullet>
-                  Du bewegst dich Node für Node. Nur die <b>Kanten</b> haben Kosten (Edge Weight).
+                  You move node by node. Only <b>edges</b> have costs (edge weights).
                 </Bullet>
                 <Bullet>
-                  Ziel: Erreiche GOAL mit möglichst wenig Gesamtkosten.
+                  Goal: reach GOAL with the lowest total cost.
                 </Bullet>
                 <Bullet>
-                  Tipp: Nicht nur der kleinste nächste Edge zählt – manchmal lohnt ein Umweg.
+                  Tip: the smallest next edge isn’t always best — sometimes a detour wins.
                 </Bullet>
               </div>
             </div>
@@ -184,20 +184,20 @@ export default function InfoCenter({ onRequestClose }) {
         key: "bitjumper",
         title: "Bit Jumper",
         icon: "🕹️",
-        subtitle: "Doodle Jump + Token Pattern",
+        subtitle: "Vertical platform jumper + bit pattern",
         render: () => (
           <div style={{ display: "grid", gap: 12 }}>
             <div style={{ fontWeight: 900, fontSize: 16 }}>Bit Jumper</div>
             <div className="ui-card">
               <div className="ui-cardContent" style={{ display: "grid", gap: 10, padding: 16 }}>
                 <Bullet>
-                  Du springst automatisch. Steuere nur horizontal (Finger/Mouse).
+                  You jump automatically. You only steer horizontally (finger/mouse).
                 </Bullet>
                 <Bullet>
-                  Triff Token-Plattformen in der <b>richtigen Reihenfolge</b> (Pattern oben).
+                  Hit token platforms in the <b>correct order</b> (pattern at the top).
                 </Bullet>
                 <Bullet>
-                  Falsches Token resetet Progress und gibt Penalty (Shake/Vibrate).
+                  A wrong token ends the run (you lose).
                 </Bullet>
               </div>
             </div>
@@ -209,20 +209,20 @@ export default function InfoCenter({ onRequestClose }) {
         key: "queue",
         title: "Queue Commander",
         icon: "🚦",
-        subtitle: "Queue/FIFO – arbeite das Front-Element ab",
+        subtitle: "Queue/FIFO — process the front element",
         render: () => (
           <div style={{ display: "grid", gap: 12 }}>
             <div style={{ fontWeight: 900, fontSize: 16 }}>Queue Commander</div>
             <div className="ui-card">
               <div className="ui-cardContent" style={{ display: "grid", gap: 10, padding: 16 }}>
                 <Bullet>
-                  Eine <b>Queue</b> ist FIFO: zuerst rein → zuerst raus.
+                  A <b>queue</b> is FIFO: first in → first out.
                 </Bullet>
                 <Bullet>
-                  Du darfst nur das <b>Front</b>-Element bedienen (DEQUEUE). ENQUEUE passiert hinten.
+                  You can only handle the <b>front</b> element (dequeue). Enqueue happens at the back.
                 </Bullet>
                 <Bullet>
-                  Ziel: richtig bedienen, ohne dass die Queue überläuft.
+                  Goal: serve correctly without letting the queue overflow.
                 </Bullet>
               </div>
             </div>
@@ -234,20 +234,20 @@ export default function InfoCenter({ onRequestClose }) {
         key: "stackdrop",
         title: "Stack Drop",
         icon: "📦",
-        subtitle: "Stack/LIFO – plane oder reagiere schnell",
+        subtitle: "Stack/LIFO — plan ahead or react fast",
         render: () => (
           <div style={{ display: "grid", gap: 12 }}>
             <div style={{ fontWeight: 900, fontSize: 16 }}>Stack Drop</div>
             <div className="ui-card">
               <div className="ui-cardContent" style={{ display: "grid", gap: 10, padding: 16 }}>
                 <Bullet>
-                  Ein <b>Stack</b> ist LIFO: zuletzt rein → zuerst raus.
+                  A <b>stack</b> is LIFO: last in → first out.
                 </Bullet>
                 <Bullet>
-                  Behalte im Blick, was oben liegt – das ist dein nächster Output.
+                  Keep an eye on what’s on top — that’s your next output.
                 </Bullet>
                 <Bullet>
-                  Ziel: richtige Reihenfolge treffen und Punkte sammeln.
+                  Goal: execute the correct order and score points.
                 </Bullet>
               </div>
             </div>
@@ -263,7 +263,7 @@ export default function InfoCenter({ onRequestClose }) {
   const current = active ? sections.find((s) => s.key === active) : null;
 
   return (
-    <div style={{ display: "grid", gap: 12 }}>
+    <div style={{ display: "grid", gap: 12, color: "var(--text)" }}>
       {!current ? (
         <>
           <div className="nativeList">

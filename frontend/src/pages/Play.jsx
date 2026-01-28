@@ -30,6 +30,7 @@ export default function Play() {
   const [specialTarget, setSpecialTarget] = useState("");
   const [boostOptions, setBoostOptions] = useState([]);
   const [boostTo, setBoostTo] = useState("");
+  const [specialSubmitting, setSpecialSubmitting] = useState(false);
 
   const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
 
@@ -104,18 +105,20 @@ useEffect(() => {
   useEffect(() => {
     const ts = String(state?.turnStatus || "");
     const awaiting = ts === "AWAITING_SPECIAL_CARD";
-    const hinted = !awaiting && state?.lastEventType === "SPECIAL" && state?.currentPlayerId && me?.playerId && state.currentPlayerId === me.playerId;
-    // Be robust: sometimes currentPlayerId can briefly be stale during polling.
-    // When awaiting a special card, always show the modal. Only the current player can act.
-    if (awaiting || hinted) {
+
+    // Only open when the backend is explicitly waiting for a Special card.
+    // (Opening just because we *saw* a SPECIAL event can desync with the backend and cause a 423 Locked loop.)
+    if (awaiting) {
       setSpecialOpen(true);
       return;
     }
+
     setSpecialOpen(false);
     setSpecialTarget("");
     setBoostOptions([]);
     setBoostTo("");
-  }, [state?.turnStatus, state?.currentPlayerId, me?.playerId]);
+    setSpecialSubmitting(false);
+  }, [state?.turnStatus, state?.currentPlayerId, state?.lastEventType, me?.playerId]);
 
 
   async function doStartChallenge() {
@@ -193,16 +196,20 @@ useEffect(() => {
 
   async function doApplySpecial() {
     if (!session?.sessionId || !me?.playerId) return;
+    if (specialSubmitting) return;
     setErr(null);
+    setSpecialSubmitting(true);
     try {
       const cardDef = SPECIAL_CARDS.find((c) => c.id === specialCard);
       if (cardDef?.needsTarget && !specialTarget) {
-        setErr("Bitte wähle ein Ziel (Spieler) für diese Karte.");
+        setErr("Please choose a target player for this card.");
+        setSpecialSubmitting(false);
         return;
       }
       // BOOST: if backend detected a fork, it will respond with needChoice + options.
       if (specialCard === "BOOST" && boostOptions.length > 0 && !boostTo) {
-        setErr("Bitte wähle einen Pfad für Boost.");
+        setErr("Please choose a path for Boost.");
+        setSpecialSubmitting(false);
         return;
       }
 
@@ -217,18 +224,35 @@ useEffect(() => {
       if (r?.needChoice) {
         setBoostOptions(r.options || []);
         setBoostTo("");
-        setErr("Boost ist an einer Gabelung – bitte wähle den Pfad.");
+        setErr("Boost hit a fork — please choose the path.");
+        setSpecialSubmitting(false);
         return;
       }
       setSpecialOpen(false);
       setSpecialTarget("");
       setBoostOptions([]);
       setBoostTo("");
-      setTurnMsg("🃏 Special-Karte aktiviert.");
+      setTurnMsg("🃏 Special card activated.");
+      setSpecialSubmitting(false);
       load();
       setTimeout(() => setTurnMsg(null), 3500);
     } catch (e) {
-      setErr(e?.message || "Special-Karte fehlgeschlagen");
+      const msg = String(e?.message || "");
+      // If the backend says the action is locked, we likely desynced (already resolved or no longer awaiting).
+      // Sync state and don't leave the user stuck in the modal.
+      if (msg.includes("423") || msg.toLowerCase().includes("locked")) {
+        setSpecialSubmitting(false);
+        setSpecialOpen(false);
+        setSpecialTarget("");
+        setBoostOptions([]);
+        setBoostTo("");
+        setTurnMsg("Special already resolved — synced.");
+        load();
+        setTimeout(() => setTurnMsg(null), 3500);
+        return;
+      }
+      setSpecialSubmitting(false);
+      setErr(e?.message || "Special card failed");
     }
   }
 
@@ -301,30 +325,33 @@ useEffect(() => {
     >
       {specialOpen ? createPortal((
         <div
+          className="specialOverlay"
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0,0,0,0.55)",
+            background: "rgba(0,0,0,0.65)",
             zIndex: 200,
-            display: "grid",
-            placeItems: "center",
-            padding: 16,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
           }}
           onClick={() => {
             // Don't allow closing: special resolution is required to continue.
           }}
         >
           <div
-            className="panel"
+            className="panel specialPanel"
             style={{
-              width: "min(520px, 94vw)",
+              width: "min(520px, 100vw)",
               border: "1px solid rgba(148,163,184,0.22)",
+              maxHeight: "calc(100dvh - 24px)",
+              overflow: "auto",
             }}
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ fontWeight: 900, fontSize: 18, marginBottom: 6 }}>🃏 Special Field</div>
             <div className="muted" style={{ lineHeight: 1.5, marginBottom: 12 }}>
-              Ziehe <strong>eine Karte in real life</strong> vom Special-Stapel und wähle sie hier aus.
+              Draw <strong>a real-life card</strong> from the Special deck and select it here.
             </div>
 
             {!isMyTurn ? (
@@ -338,7 +365,7 @@ useEffect(() => {
 
             <div style={{ display: "grid", gap: 10 }}>
               <label style={{ display: "grid", gap: 6 }}>
-                <div style={{ fontWeight: 700 }}>Welche Karte hast du gezogen?</div>
+                <div style={{ fontWeight: 700 }}>Which card did you draw?</div>
                 <select
                   value={specialCard}
                   onChange={(e) => setSpecialCard(e.target.value)}
@@ -362,14 +389,15 @@ useEffect(() => {
                   <img
                     src={SPECIAL_CARDS.find((c) => c.id === specialCard).img}
                     alt={specialCard}
-                    style={{ width: "min(260px, 70vw)", borderRadius: 12, border: "1px solid rgba(148,163,184,0.18)" }}
+                    className="specialCardImg"
+                    style={{ width: "min(300px, 86vw)", borderRadius: 12, border: "1px solid rgba(148,163,184,0.18)", height: "auto" }}
                   />
                 </div>
               ) : null}
 
               {SPECIAL_CARDS.find((c) => c.id === specialCard)?.needsTarget ? (
                 <label style={{ display: "grid", gap: 6 }}>
-                  <div style={{ fontWeight: 700 }}>Ziel-Spieler</div>
+                  <div style={{ fontWeight: 700 }}>Target player</div>
                   <select
                     value={specialTarget}
                     onChange={(e) => setSpecialTarget(e.target.value)}
@@ -382,7 +410,7 @@ useEffect(() => {
                       color: "inherit",
                     }}
                   >
-                    <option value="">Bitte wählen…</option>
+                    <option value="">Select…</option>
                     {(state?.players || []).filter((p) => p.id !== me?.playerId).map((p) => (
                       <option key={p.id} value={p.id}>{(p.icon || "🙂") + " " + (p.name || "Player")}</option>
                     ))}
@@ -392,7 +420,7 @@ useEffect(() => {
 
               {specialCard === "BOOST" && boostOptions.length > 0 ? (
                 <label style={{ display: "grid", gap: 6 }}>
-                  <div style={{ fontWeight: 700 }}>Boost: wähle den Pfad (Fork)</div>
+                  <div style={{ fontWeight: 700 }}>Boost: choose the path (fork)</div>
                   <select
                     value={boostTo}
                     onChange={(e) => setBoostTo(e.target.value)}
@@ -405,7 +433,7 @@ useEffect(() => {
                       color: "inherit",
                     }}
                   >
-                    <option value="">Bitte wählen…</option>
+                    <option value="">Select…</option>
                     {boostOptions.map((o) => (
                       <option key={o.to} value={o.to}>{o.label}</option>
                     ))}
@@ -414,7 +442,7 @@ useEffect(() => {
               ) : null}
 
               <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 6 }}>
-                <Button onClick={doApplySpecial} disabled={!isMyTurn}>Aktivieren</Button>
+                <Button onClick={doApplySpecial} disabled={!isMyTurn || specialSubmitting}>Activate</Button>
               </div>
             </div>
           </div>
@@ -428,6 +456,28 @@ useEffect(() => {
         .playCard{ display:grid; gap:12px; }
         .turnRow{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
         .forkRow{ display:flex; gap:10px; flex-wrap:wrap; }
+
+        /* Special card modal: mobile-first full-screen sheet */
+        .specialOverlay{
+          padding: max(env(safe-area-inset-top), 12px) 12px max(env(safe-area-inset-bottom), 12px);
+        }
+        .specialPanel{ -webkit-overflow-scrolling: touch; }
+        .specialCardImg{ display:block; max-width:100%; }
+        @media (max-width: 640px){
+          .specialOverlay{
+            padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+            align-items: stretch;
+          }
+          .specialPanel{
+            width: 100vw !important;
+            height: 100dvh;
+            max-height: 100dvh !important;
+            border-radius: 0 !important;
+            border-left: 0 !important;
+            border-right: 0 !important;
+          }
+          .specialCardImg{ width: min(360px, 88vw) !important; }
+        }
         @media (min-width: 900px){
           .playRoot{ max-width: 720px; margin: 0 auto; width:100%; }
         }
@@ -543,8 +593,8 @@ useEffect(() => {
         open={confirmLeaveOpen}
         title="Leave game?"
         message={
-          "Willst du das Spiel wirklich verlassen?\n\n" +
-          "Du verlässt das Match und musst beim nächsten QR-Join wieder Name + Icon auswählen."
+          "Do you really want to leave the game?\n\n" +
+          "You will leave the match and will need to choose your name + icon again the next time you join via QR."
         }
         confirmText="Leave"
         cancelText="Stay"

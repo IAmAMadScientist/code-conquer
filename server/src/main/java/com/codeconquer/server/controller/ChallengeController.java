@@ -129,7 +129,8 @@ public class ChallengeController {
         if (nodeType == BoardNodeType.EASY) diff = Difficulty.EASY;
         else if (nodeType == BoardNodeType.MEDIUM) diff = Difficulty.MEDIUM;
         else if (nodeType == BoardNodeType.HARD) diff = Difficulty.HARD;
-        else return ResponseEntity.status(409).build(); // no challenge on START/FORK/JAIL/SPECIAL/FINISH
+        else if (nodeType == BoardNodeType.FORK) diff = Difficulty.MEDIUM; // Fork nodes are treated as MEDIUM challenge fields
+        else return ResponseEntity.status(409).build(); // no challenge on START/JAIL/SPECIAL/FINISH
 
         // Special cards can downgrade the next hard challenge.
         if (diff == Difficulty.HARD && p.isNextHardBecomesEasy()) {

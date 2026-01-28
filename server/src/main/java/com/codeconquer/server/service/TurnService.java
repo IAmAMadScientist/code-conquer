@@ -110,19 +110,11 @@ public class TurnService {
             return responseFor(sessionId, playerId, roll, p, s, mr, "Choose a path");
         }
 
-        // If movement ended exactly on a FORK node (no steps remaining), there is no challenge to play.
-        // End the turn immediately so the game doesn't get stuck on a non-challenge field.
+        // If movement ended exactly on a FORK node (no steps remaining):
+        // Fork nodes count as MEDIUM challenge fields, so we allow challenge selection.
         String endPos = p.getPositionNodeId();
         BoardNodeType endType = (endPos == null ? null : boardService.getBoard().getType(endPos));
-        if (endType == BoardNodeType.FORK) {
-            sessionRepository.save(s);
-            playerRepository.save(p);
-            sessionService.advanceTurn(sessionId);
-            sessionService.advanceTurnConsideringSkips(sessionId);
-            GameSession s2 = requireSession(sessionId);
-            Player p2 = requirePlayer(playerId, sessionId);
-            return responseFor(sessionId, playerId, roll, p2, s2, new MoveResult(), "Fork – turn ended");
-        }
+        // (No special handling needed here anymore.)
 
         // Movement finished normally -> allow challenge selection.
         s.setTurnStatus(GameSessionService.TURN_IDLE);
@@ -210,6 +202,15 @@ public class TurnService {
 
         Integer roll = s.getLastDiceRoll();
 
+        // IMPORTANT: movement continuation after a fork can land on SPECIAL.
+        // moveSteps() sets TURN_AWAITING_SPECIAL_CARD and stops movement.
+        // We must NOT overwrite that state by setting TURN_IDLE below.
+        if (GameSessionService.TURN_AWAITING_SPECIAL_CARD.equals(s.getTurnStatus())) {
+            sessionRepository.save(s);
+            playerRepository.save(p);
+            return responseFor(sessionId, playerId, roll, p, s, mr, "SPECIAL: draw a card");
+        }
+
         if (mr.turnEnded) {
             sessionService.advanceTurn(sessionId);
             sessionService.advanceTurnConsideringSkips(sessionId);
@@ -220,19 +221,7 @@ public class TurnService {
             return responseFor(sessionId, playerId, roll, p, s, mr, "Choose a path");
         }
 
-        // If movement ended on a FORK node (no steps remaining), there is no challenge to play.
-        // End the turn immediately.
-        String endPos = p.getPositionNodeId();
-        BoardNodeType endType = (endPos == null ? null : boardService.getBoard().getType(endPos));
-        if (endType == BoardNodeType.FORK) {
-            sessionRepository.save(s);
-            playerRepository.save(p);
-            sessionService.advanceTurn(sessionId);
-            sessionService.advanceTurnConsideringSkips(sessionId);
-            GameSession s2 = requireSession(sessionId);
-            Player p2 = requirePlayer(playerId, sessionId);
-            return responseFor(sessionId, playerId, roll, p2, s2, new MoveResult(), "Fork – turn ended");
-        }
+        // Fork nodes count as MEDIUM challenge fields, so we allow challenge selection.
 
         s.setTurnStatus(GameSessionService.TURN_IDLE);
         sessionRepository.save(s);

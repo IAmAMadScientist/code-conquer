@@ -1,8 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
-
-import AppShell from "../components/AppShell";
-import { Badge } from "../components/ui/badge";
+import { useLocation } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import ResultSubmitPanel from "../components/ResultSubmitPanel";
 
@@ -192,6 +189,10 @@ export default function QueueCommanderPage() {
   const [rotCharges, setRotCharges] = useState(cfg.rotMax);
   const [hint, setHint] = useState("Tap = Serve · Swipe down = Send Back · WAIT is safe");
 
+  // Timer for scoring + result submit
+  const startRef = useRef(performance.now());
+  const [timeMs, setTimeMs] = useState(0);
+
   const canvasRef = useRef(null);
   const canvasWrapRef = useRef(null);
   const rafRef = useRef(0);
@@ -236,6 +237,9 @@ export default function QueueCommanderPage() {
   function resetGame() {
     const s = simRef.current;
 
+    startRef.current = performance.now();
+    setTimeMs(0);
+
     s.queue = [];
     s.preview = [];
     s.rule = makeRule(cfg.typeCount, cfg.ruleLen);
@@ -271,6 +275,7 @@ export default function QueueCommanderPage() {
     const s = simRef.current;
     if (!s.running) return;
     s.running = false;
+    setTimeMs(Math.round(performance.now() - startRef.current));
     setStatus("lost");
     setHint(reason);
 
@@ -283,6 +288,7 @@ export default function QueueCommanderPage() {
     const s = simRef.current;
     if (!s.running) return;
     s.running = false;
+    setTimeMs(Math.round(performance.now() - startRef.current));
     setStatus("won");
     setHint("Mission complete!");
 
@@ -737,114 +743,133 @@ export default function QueueCommanderPage() {
     setBestState(getBest());
   }, []);
 
+  // Keyboard / desktop support
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (status !== "playing") return;
+
+      const k = (e.key || "").toLowerCase();
+      if (k === " " || k === "spacebar" || k === "enter") {
+        e.preventDefault();
+        serveFront();
+        return;
+      }
+      if (k === "s" || k === "backspace") {
+        if (rotCharges <= 0) return;
+        e.preventDefault();
+        sendBack();
+        return;
+      }
+      if (k === "w") {
+        e.preventDefault();
+        waitTurn();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown, { passive: false });
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [status, rotCharges]);
+
   const showResult = status !== "playing";
   const remaining = Math.max(0, cfg.targetRules - rulesDone);
+  const errors = Math.max(0, cfg.lives - lives);
+
+  const pillStyle = {
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.10)",
+    border: "1px solid rgba(255,255,255,0.10)",
+    color: "rgba(255,255,255,0.92)",
+    fontSize: 12,
+    fontWeight: 800,
+  };
 
   return (
-    <AppShell>
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        width: "100vw",
+        height: "100dvh",
+        display: "flex",
+        flexDirection: "column",
+        paddingTop: "calc(12px + env(safe-area-inset-top))",
+        paddingBottom: "calc(12px + env(safe-area-inset-bottom))",
+        paddingLeft: "calc(12px + env(safe-area-inset-left))",
+        paddingRight: "calc(12px + env(safe-area-inset-right))",
+        boxSizing: "border-box",
+        touchAction: "none",
+      }}
+    >
+      {/* HUD */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <div style={{ ...pillStyle, fontWeight: 900 }}>⭐ {score}</div>
+          <div style={pillStyle}>🎯 {remaining}</div>
+          <div style={pillStyle}>❤️ {lives}</div>
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <div style={pillStyle}>↩ {rotCharges}</div>
+          <div style={pillStyle}>🔥 {combo}</div>
+          <div style={{ color: "rgba(255,255,255,0.65)", fontSize: 12, fontWeight: 700 }}>Best {best}</div>
+        </div>
+      </div>
+
+      {/* Playfield */}
       <div
         style={{
-          height: "100dvh",
-          width: "100%",
-          display: "flex",
-          flexDirection: "column",
-          padding: 12,
-          boxSizing: "border-box",
-          touchAction: "none",
+          marginTop: 10,
+          flex: 1,
+          minHeight: 0,
+          borderRadius: 18,
+          overflow: "hidden",
+          background: "rgba(0,0,0,0.18)",
+          border: "1px solid rgba(255,255,255,0.10)",
         }}
+        ref={canvasWrapRef}
       >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <Badge variant="secondary">Queue Commander</Badge>
-            <Badge>{difficulty}</Badge>
-            <span style={{ color: "rgba(255,255,255,0.85)", fontSize: 12 }}>Best: {best}</span>
-          </div>
-          <Link to="/">
-            <Button variant="secondary" size="sm">
-              Back
-            </Button>
-          </Link>
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginTop: 10,
-            gap: 10,
-            flexWrap: "wrap",
-          }}
-        >
-          <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 800, fontSize: 18 }}>Score: {score}</div>
-          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
-            <div style={{ color: "rgba(255,255,255,0.9)", fontSize: 12 }}>🎯 {remaining} rules</div>
-            <div style={{ color: "rgba(255,255,255,0.9)", fontSize: 12 }}>❤️ {lives}</div>
-            <div style={{ color: "rgba(255,255,255,0.9)", fontSize: 12 }}>↩ {rotCharges}</div>
-            <div style={{ color: "rgba(255,255,255,0.9)", fontSize: 12 }}>🔥 {combo}</div>
-            <div style={{ color: "rgba(255,255,255,0.9)", fontSize: 12 }}>✅ {rulesDone}</div>
-          </div>
-        </div>
-
-        <div style={{ marginTop: 10, flex: 1, minHeight: 0, borderRadius: 16, overflow: "hidden" }} ref={canvasWrapRef}>
-          <canvas ref={canvasRef} style={{ width: "100%", height: "100%", display: "block", touchAction: "none" }} />
-        </div>
-
-        <div style={{ marginTop: 10, color: "rgba(255,255,255,0.85)", fontSize: 12, textAlign: "center" }}>{hint}</div>
-
-        <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
-          <Button
-            className="w-full"
-            style={{ height: 56, fontSize: 18, fontWeight: 800 }}
-            onClick={() => serveFront()}
-            disabled={status !== "playing"}
-          >
-            SERVE
-          </Button>
-          <Button
-            className="w-full"
-            style={{ height: 56, fontSize: 18, fontWeight: 800 }}
-            variant="secondary"
-            onClick={() => sendBack()}
-            disabled={status !== "playing" || rotCharges <= 0}
-          >
-            SEND BACK
-          </Button>
-        </div>
-
-        <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
-          <Button
-            className="w-full"
-            style={{ height: 50, fontSize: 16, fontWeight: 800 }}
-            variant="outline"
-            onClick={() => waitTurn()}
-            disabled={status !== "playing"}
-          >
-            WAIT
-          </Button>
-          <Button
-            className="w-full"
-            style={{ height: 50, fontSize: 16, fontWeight: 800 }}
-            variant="outline"
-            onClick={() => resetGame()}
-          >
-            RESTART
-          </Button>
-        </div>
-
-        {showResult && (
-          <div style={{ marginTop: 12 }}>
-            <ResultSubmitPanel
-              challenge={challenge}
-              score={score}
-              didWin={status === "won"}
-              onRestart={() => {
-                resetGame();
-              }}
-            />
-          </div>
-        )}
+        <canvas ref={canvasRef} style={{ width: "100%", height: "100%", display: "block", touchAction: "none" }} />
       </div>
-    </AppShell>
+
+      {/* Controls (only what's needed) */}
+      <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+        <Button
+          style={{ height: 58, fontSize: 18, fontWeight: 900, borderRadius: 18 }}
+          onClick={() => waitTurn()}
+          disabled={status !== "playing"}
+          variant="outline"
+        >
+          WAIT
+        </Button>
+        <Button
+          style={{ height: 58, fontSize: 18, fontWeight: 900, borderRadius: 18 }}
+          onClick={() => serveFront()}
+          disabled={status !== "playing"}
+        >
+          SERVE
+        </Button>
+        <Button
+          style={{ height: 58, fontSize: 18, fontWeight: 900, borderRadius: 18 }}
+          variant="secondary"
+          onClick={() => sendBack()}
+          disabled={status !== "playing" || rotCharges <= 0}
+        >
+          BACK
+        </Button>
+      </div>
+
+      {showResult && (
+        <div style={{ marginTop: 12 }}>
+          <ResultSubmitPanel
+            category="QUEUE_COMMANDER"
+            difficulty={difficulty}
+            timeMs={timeMs}
+            errors={errors}
+            won={status === "won"}
+            challengeId={challenge?.challengeInstanceId}
+          />
+        </div>
+      )}
+    </div>
   );
 }

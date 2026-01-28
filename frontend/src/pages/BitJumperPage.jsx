@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import ResultSubmitPanel from "../components/ResultSubmitPanel";
 
-// Bit Jumper (Doodle Jump-ish) — Arcade first, learning hidden in token pattern routing.
+// Bit Jumper (vertical platform jumper) — Arcade first, learning hidden in token pattern routing.
 
 const OPS = {
   SET: { label: "SET", color: "#3b82f6" },

@@ -225,8 +225,8 @@ button, input { font: inherit; }
 
 /* Brand (logo) in top-left where the back button used to be */
 .brandSlot{
-  height: 44px;
-  width: 44px;
+  height: 75px;
+  width: 75px;
   display: grid;
   place-items: center;
   border-radius: 999px;
@@ -237,8 +237,8 @@ button, input { font: inherit; }
 }
 
 .brandLogo{
-  width: 30px;
-  height: 30px;
+  width: 75px;
+  height: 75px;
   object-fit: contain;
   pointer-events: none;
   user-select: none;
@@ -392,6 +392,7 @@ button, input { font: inherit; }
 .nativeTitle{
   font-weight: 820;
   letter-spacing: -0.01em;
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
