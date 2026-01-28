@@ -1,11 +1,13 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { fetchEvents } from "../lib/player";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 
 // Mobile-friendly mini feed (collapsible) used in Play and Leaderboard.
+// NOTE: Expanding this panel must NEVER push/reflow the surrounding layout.
+// It should always behave like an overlay above other UI.
 
-export default function EventFeed({ sessionId, title = "Events", limit = 5, pollMs = 1500, floating = false }) {
+export default function EventFeed({ sessionId, title = "Events", limit = 5, pollMs = 1500 }) {
   const MAX_ITEMS = 15;
   const isSmall = useMemo(() => {
     try {
@@ -15,6 +17,7 @@ export default function EventFeed({ sessionId, title = "Events", limit = 5, poll
     }
   }, []);
   const storageKey = useMemo(() => (sessionId ? `cc_evtfeed_open_${sessionId}` : "cc_evtfeed_open"), [sessionId]);
+  const panelRef = useRef(null);
   const [open, setOpen] = useState(() => {
     try {
       const v = localStorage.getItem(storageKey);
@@ -101,28 +104,46 @@ export default function EventFeed({ sessionId, title = "Events", limit = 5, poll
   const effectiveLimit = isSmall ? Math.min(Math.max(limit, 1), 3) : Math.max(limit, 1);
   const shown = open ? bounded.slice(-Math.max(effectiveLimit, 1)) : bounded.slice(-1);
   const last = bounded.length ? bounded[bounded.length - 1] : null;
+  // Expose current overlay height so pages can reserve just enough space (no overlap, no huge gaps).
+  useLayoutEffect(() => {
+    try {
+      const el = panelRef.current;
+      if (!el) return;
+      const h = Math.ceil(el.getBoundingClientRect().height || 0);
+      document.documentElement.style.setProperty('--cc-eventfeed-h', `${h}px`);
+    } catch {}
+  }, [open, shown.length, last?.seq]);
 
-  const wrapperStyle = floating
-    ? {
-        position: "absolute",
-        top: 12,
-        left: 12,
-        right: 12,
-        maxWidth: 620,
-        marginLeft: "auto",
-        marginRight: "auto",
-        zIndex: 45,
-        pointerEvents: "none",
-      }
-    : null;
 
-  const panelStyle = floating
-    ? { display: "grid", gap: 10, pointerEvents: "auto" }
-    : { display: "grid", gap: 10 };
+  // Always overlay: fixed position so showing/hiding never reflows the page.
+  const wrapperStyle = {
+    position: "fixed",
+    top: 92,
+    left: 12,
+    right: 12,
+    maxWidth: 720,
+    marginLeft: "auto",
+    marginRight: "auto",
+    zIndex: 60,
+    pointerEvents: "none",
+  };
+
+  const panelStyle = { display: "grid", gap: 10, pointerEvents: "auto" };
+  // Expose the current feed panel height to the page via a CSS variable so pages can reserve
+  // just enough space under the fixed (collapsed) feed to avoid overlap, without adding big gaps.
+  useLayoutEffect(() => {
+    try {
+      const el = panelRef.current;
+      if (!el) return;
+      const h = Math.round(el.getBoundingClientRect().height || 0);
+      document.documentElement.style.setProperty('--eventfeed-h', String(h));
+    } catch {}
+  }, [open, shown.length, last?.message]);
+
 
   return (
-    <div style={wrapperStyle || undefined}>
-      <div className="panel" style={panelStyle}>
+    <div style={wrapperStyle}>
+      <div className="panel" style={panelStyle} ref={panelRef}>
       <div style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <div style={{ fontWeight: 800 }}>{title}</div>

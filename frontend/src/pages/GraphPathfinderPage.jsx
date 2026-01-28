@@ -1,10 +1,7 @@
 // src/pages/GraphPathfinderPage.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import AppShell from "../components/AppShell";
 import { Button } from "../components/ui/button";
-import { Badge } from "../components/ui/badge";
-import { Progress } from "../components/ui/progress";
-import { Link, useLocation } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import ResultSubmitPanel from "../components/ResultSubmitPanel";
 
 function clamp(n, a, b) {
@@ -509,17 +506,12 @@ export default function GraphPathfinderPage() {
 
     setMessage("");
     setPath((p) => p.concat(id));
-
-    // Auto-finish: when you reach goal, evaluate instantly (arcade feel).
-    if (id === goal) {
-      setTimeout(() => check(true), 0);
-    }
   }
 
   function check(fromAuto = false) {
     if (!safeOptimal) {
       setErrors((e) => e + 1);
-      setMessage("No path from START to GOAL in this graph. Click 'New graph'.");
+      setMessage("No path from START to GOAL in this graph.");
       return;
     }
 
@@ -578,299 +570,289 @@ export default function GraphPathfinderPage() {
     return safeOptimal + diffCfg.slack;
   }, [safeOptimal, diffCfg.slack]);
 
-  const closenessPct = useMemo(() => {
-    if (!Number.isFinite(currentWeight) || !safeOptimal || safeOptimal <= 0) return 0;
-    const r = currentWeight / safeOptimal;
-    return clamp(Math.round(100 - (r - 1) * 80), 0, 100);
-  }, [currentWeight, safeOptimal]);
-
   const pathEdges = useMemo(() => {
     const s = new Set();
     for (let i = 0; i < path.length - 1; i++) s.add(edgeKey(path[i], path[i + 1]));
     return s;
   }, [path]);
 
+  const timeLeftS = Math.max(0, Math.ceil(timeLeftMs / 1000));
+  const timePct = clamp(Math.round((timeLeftMs / (diffCfg.timeLimitSec * 1000)) * 100), 0, 100);
+
   return (
-    <AppShell
-      title="Code & Conquer"
-      subtitle="Graph Pathfinder (Dijkstra) — build a route, beat the shortest path"
-      headerBadges={
-        <>
-          <Badge>Category: GRAPH_PATH</Badge>
-          <Badge>Diff: {difficulty}</Badge>
-          <Badge>Errors: {errors}</Badge>
-          <Badge>Optimal: {safeOptimal ?? "?"}</Badge>
-          <Badge>Yours: {Number.isFinite(currentWeight) ? currentWeight : "-"}</Badge>
-        </>
-      }
-      rightPanel={
-        <div className="panel">
-          <div style={{ fontSize: 16, fontWeight: 650 }}>How to play</div>
-          <div className="muted" style={{ fontSize: 14, marginTop: 10 }}>
-            Click nodes to build a path from <strong>Start</strong> to <strong>Goal</strong>.
-            You may only move along edges.
-            <br />
-            <br />
-            Press <strong>Check</strong> to compare your cost to the optimal shortest path (Dijkstra).
-          </div>
+    <div className="gpfFS" aria-label="Graph Pathfinder">
+      <style>{`
+        /* True fullscreen: feels like a mobile game */
+        .gpfFS{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;min-height:0;
+          padding:calc(env(safe-area-inset-top) + 8px) 10px calc(env(safe-area-inset-bottom) + 10px);
+          background:radial-gradient(1200px 600px at 50% -200px, rgba(99,102,241,0.20), transparent 60%),
+                     linear-gradient(180deg, rgba(2,6,23,0.96), rgba(2,6,23,0.92));
+          overscroll-behavior:none;
+          touch-action:manipulation;
+        }
+        .gpfHud{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 2px;}
+        .gpfPills{display:flex;gap:8px;align-items:center;}
+        .gpfPill{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border-radius:999px;
+          border:1px solid rgba(148,163,184,0.18);background:rgba(2,6,23,0.40);backdrop-filter:blur(10px);
+          font-weight:850;font-size:13px;line-height:1;box-shadow:0 10px 28px rgba(0,0,0,0.35);
+        }
+        .gpfDim{opacity:0.85}
 
-          <div style={{ marginTop: 12 }}>
-            <Link to="/play">
-              <Button variant="ghost">Back to game</Button>
-            </Link>
-          </div>
+        .gpfTime{height:6px;border-radius:999px;overflow:hidden;margin:2px 2px 8px;
+          background:rgba(148,163,184,0.14);border:1px solid rgba(148,163,184,0.12);
+        }
+        .gpfTime > div{height:100%;border-radius:999px;background:rgba(129,140,248,0.65);}
+
+        .gpfBoardWrap{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:4px 0 10px;}
+        .gpfBoard{width:100%;height:100%;max-width:980px;max-height:78vh;
+          border-radius:22px;border:1px solid rgba(148,163,184,0.14);
+          background:rgba(2,6,23,0.26);backdrop-filter:blur(8px);
+          box-shadow:0 16px 40px rgba(0,0,0,0.35);
+          padding:8px;
+        }
+        .gpfSvg{width:100%;height:100%;display:block;}
+
+        .gpfBottom{padding-top:10px;}
+        .gpfPanel{padding:10px 10px 12px;border-radius:22px;border:1px solid rgba(148,163,184,0.18);
+          background:rgba(2,6,23,0.60);backdrop-filter:blur(10px);
+        }
+        .gpfPath{display:flex;gap:8px;overflow:auto;padding:2px 2px 6px;margin-bottom:8px;}
+        .gpfChip{flex:0 0 auto;min-width:34px;height:32px;border-radius:999px;
+          border:1px solid rgba(148,163,184,0.18);background:rgba(15,23,42,0.28);
+          display:flex;align-items:center;justify-content:center;font-weight:900;font-size:13px;
+          box-shadow:inset 0 0 0 1px rgba(255,255,255,0.02);
+        }
+        .gpfMsg{margin:8px 2px 10px;padding:10px 12px;border-radius:18px;
+          border:1px solid rgba(148,163,184,0.18);background:rgba(2,6,23,0.40);
+          font-weight:800;
+        }
+        .gpfMsgWin{border-color:rgba(52,211,153,0.35)}
+        .gpfMsgLose{border-color:rgba(251,113,133,0.35)}
+
+        .gpfControls{display:flex;gap:10px;align-items:center;justify-content:space-between;}
+        .gpfBtn{height:54px;border-radius:18px;font-weight:900;font-size:18px;flex:1;}
+        .gpfBtnConfirm{width:100%;font-size:22px;}
+
+        @media (max-width:440px){
+          .gpfBoard{max-height:72vh;}
+        }
+      `}</style>
+
+      <div className="gpfHud" aria-label="HUD">
+        <div className="gpfPills">
+          <div className="gpfPill" aria-label="Time left">⏱️ {timeLeftS}</div>
+          <div className="gpfPill gpfDim" aria-label="Budget">🎯 {budget ?? "—"}</div>
         </div>
-      }
-    >
-      <div style={{ display: "grid", gap: 12 }}>
-        <div className="panel">
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 8,
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <div style={{ fontWeight: 650 }}>Build a path</div>
-            <div className="muted" style={{ fontSize: 13 }}>
-              Start = <span style={{ color: "rgba(129,140,248,0.95)" }}>blue</span>, Goal ={" "}
-              <span style={{ color: "rgba(52,211,153,0.95)" }}>green</span>
-            </div>
-          </div>
+        <div className="gpfPills">
+          <div className="gpfPill" aria-label="Cost">⚡ {Number.isFinite(currentWeight) ? currentWeight : 0}</div>
+          <div className="gpfPill gpfDim" aria-label="Errors">💥 {errors}</div>
+        </div>
+      </div>
 
-          <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-              <div className="muted" style={{ fontSize: 12 }}>
-                Time left: <strong>{Math.ceil(timeLeftMs / 1000)}s</strong>
-              </div>
-              <div className="muted" style={{ fontSize: 12 }}>
-                Budget: <strong>{budget ?? "—"}</strong> · Cost: <strong>{Number.isFinite(currentWeight) ? currentWeight : 0}</strong>
-              </div>
-            </div>
-            <Progress value={clamp(Math.round((timeLeftMs / (diffCfg.timeLimitSec * 1000)) * 100), 0, 100)} />
-          </div>
+      <div className="gpfTime" aria-hidden="true">
+        <div style={{ width: `${timePct}%` }} />
+      </div>
 
-          <div style={{ marginTop: 12, overflowX: "auto" }}>
-            <svg viewBox={`0 0 ${layoutW} ${layoutH}`} preserveAspectRatio="xMidYMid meet" style={{ width: "100%", height: "auto", display: "block" }}>
-              <defs>
-  <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
-    <feGaussianBlur stdDeviation="2.2" result="blur" />
-    <feColorMatrix in="blur" type="matrix"
-      values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.9 0" result="glow" />
-    <feMerge>
-      <feMergeNode in="glow" />
-      <feMergeNode in="SourceGraphic" />
-    </feMerge>
-  </filter>
-  <linearGradient id="edgeGrad" x1="0" y1="0" x2="1" y2="0">
-    <stop offset="0%" stopColor="rgba(255,255,255,0.22)" />
-    <stop offset="50%" stopColor="rgba(255,255,255,0.42)" />
-    <stop offset="100%" stopColor="rgba(255,255,255,0.22)" />
-  </linearGradient>
-</defs>
-              {/* edges */}
-              {edges.map((e) => {
-                const a = nodes[e.u];
-                const b = nodes[e.v];
-                const k = edgeKey(e.u, e.v);
-                const onUser = pathEdges.has(k);
-                const onOptimal = status === "won" && optimalEdges.has(k);
+      <div className="gpfBoardWrap">
+        <div className="gpfBoard" aria-label="Playfield">
+          <svg className="gpfSvg" viewBox={`0 0 ${layoutW} ${layoutH}`} preserveAspectRatio="xMidYMid meet">
+            <defs>
+              <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="2.2" result="blur" />
+                <feColorMatrix
+                  in="blur"
+                  type="matrix"
+                  values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.9 0"
+                  result="glow"
+                />
+                <feMerge>
+                  <feMergeNode in="glow" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+              <linearGradient id="edgeGrad" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stopColor="rgba(255,255,255,0.22)" />
+                <stop offset="50%" stopColor="rgba(255,255,255,0.42)" />
+                <stop offset="100%" stopColor="rgba(255,255,255,0.22)" />
+              </linearGradient>
+            </defs>
 
-                return (
-                  <g key={k}>
-                    <line
-                      x1={a.x}
-                      y1={a.y}
-                      x2={b.x}
-                      y2={b.y}
-                      stroke={
-                        onOptimal
-                          ? "rgba(16,185,129,0.95)" // emerald shortest path
-                          : onUser
-                            ? "url(#edgeGrad)" // user path (gradient)
-                            : "rgba(148,163,184,0.35)"
-                      }
-                      filter={onOptimal || onUser ? "url(#softGlow)" : undefined}
-                      strokeWidth={onOptimal ? 5 : onUser ? 4 : 2.5}
+            {/* edges */}
+            {edges.map((e) => {
+              const a = nodes[e.u];
+              const b = nodes[e.v];
+              const k = edgeKey(e.u, e.v);
+              const onUser = pathEdges.has(k);
+              const onOptimal = status === "won" && optimalEdges.has(k);
+
+              return (
+                <g key={k}>
+                  <line
+                    x1={a.x}
+                    y1={a.y}
+                    x2={b.x}
+                    y2={b.y}
+                    stroke={
+                      onOptimal
+                        ? "rgba(16,185,129,0.95)"
+                        : onUser
+                          ? "url(#edgeGrad)"
+                          : "rgba(148,163,184,0.35)"
+                    }
+                    filter={onOptimal || onUser ? "url(#softGlow)" : undefined}
+                    strokeWidth={onOptimal ? 5 : onUser ? 4 : 2.5}
+                    strokeLinecap="round"
+                  />
+                  {(() => {
+                    const mx = (a.x + b.x) / 2;
+                    const my = (a.y + b.y) / 2;
+                    const label = String(e.w);
+                    const w = 10 + label.length * 8;
+                    const h = 18;
+                    return (
+                      <g>
+                        <rect
+                          x={mx - w / 2}
+                          y={my - h / 2 - 1}
+                          width={w}
+                          height={h}
+                          rx={8}
+                          fill="rgba(2,6,23,0.55)"
+                          stroke="rgba(148,163,184,0.35)"
+                        />
+                        <text
+                          x={mx}
+                          y={my + 4}
+                          textAnchor="middle"
+                          fill="rgba(226,232,240,0.92)"
+                          fontSize="12"
+                          fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
+                        >
+                          {label}
+                        </text>
+                      </g>
+                    );
+                  })()}
+                </g>
+              );
+            })}
+
+            {/* nodes */}
+            {nodes.map((n) => {
+              const isStart = n.id === start;
+              const isGoal = n.id === goal;
+              const inPath = path.includes(n.id);
+              const isCursor = n.id === cursor;
+              const isNext = status === "playing" && neighborSet.has(n.id) && !inPath;
+
+              const fill = isStart
+                ? "rgba(99,102,241,0.35)"
+                : isGoal
+                  ? "rgba(16,185,129,0.28)"
+                  : inPath
+                    ? "rgba(245,158,11,0.18)"
+                    : "rgba(15,23,42,0.35)";
+
+              const stroke = isStart
+                ? "rgba(129,140,248,0.55)"
+                : isGoal
+                  ? "rgba(52,211,153,0.55)"
+                  : inPath
+                    ? "rgba(252,211,77,0.45)"
+                    : "rgba(51,65,85,0.5)";
+
+              return (
+                <g
+                  key={n.id}
+                  onClick={() => onNodeClick(n.id)}
+                  style={{ cursor: status === "playing" ? "pointer" : "default" }}
+                >
+                  {/* bigger hit area */}
+                  <circle cx={n.x} cy={n.y} r="36" fill="transparent" />
+                  {isNext && (
+                    <circle
+                      cx={n.x}
+                      cy={n.y}
+                      r="28"
+                      fill="transparent"
+                      stroke="rgba(252,211,77,0.65)"
+                      strokeWidth="3"
+                      strokeDasharray="6 6"
                     />
-                    {(() => {
-                      const mx = (a.x + b.x) / 2;
-                      const my = (a.y + b.y) / 2;
-                      const label = String(e.w);
-                      const w = 10 + label.length * 8;
-                      const h = 18;
-                      return (
-                        <g>
-                          <rect
-                            x={mx - w / 2}
-                            y={my - h / 2 - 1}
-                            width={w}
-                            height={h}
-                            rx={8}
-                            fill="rgba(2,6,23,0.55)"
-                            stroke="rgba(148,163,184,0.35)"
-                          />
-                          <text
-                            x={mx}
-                            y={my + 4}
-                            textAnchor="middle"
-                            fill="rgba(226,232,240,0.92)"
-                            fontSize="12"
-                            fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
-                          >
-                            {label}
-                          </text>
-                        </g>
-                      );
-                    })()}
-                  </g>
-                );
-              })}
+                  )}
+                  {isCursor && (
+                    <circle
+                      cx={n.x}
+                      cy={n.y}
+                      r="28"
+                      fill="transparent"
+                      stroke="rgba(255,255,255,0.55)"
+                      strokeWidth="3"
+                    />
+                  )}
+                  <circle cx={n.x} cy={n.y} r="20" fill={fill} stroke={stroke} strokeWidth="2" />
 
-              {/* nodes */}
-              {nodes.map((n) => {
-                const isStart = n.id === start;
-                const isGoal = n.id === goal;
-                const inPath = path.includes(n.id);
-                const isCursor = n.id === cursor;
-                const isNext = status === "playing" && neighborSet.has(n.id) && !inPath;
-
-                const fill = isStart
-                  ? "rgba(99,102,241,0.35)"
-                  : isGoal
-                    ? "rgba(16,185,129,0.28)"
-                    : inPath
-                      ? "rgba(245,158,11,0.18)"
-                      : "rgba(15,23,42,0.35)";
-
-                const stroke = isStart
-                  ? "rgba(129,140,248,0.55)"
-                  : isGoal
-                    ? "rgba(52,211,153,0.55)"
-                    : inPath
-                      ? "rgba(252,211,77,0.45)"
-                      : "rgba(51,65,85,0.5)";
-
-                return (
-                  <g key={n.id} onClick={() => onNodeClick(n.id)} style={{ cursor: "pointer" }}>
-                    {/* bigger hit area */}
-                    <circle cx={n.x} cy={n.y} r="34" fill="transparent" />
-                    {isNext && (
-                      <circle cx={n.x} cy={n.y} r="26" fill="transparent" stroke="rgba(252,211,77,0.65)" strokeWidth="3" strokeDasharray="6 6" />
-                    )}
-                    {isCursor && (
-                      <circle cx={n.x} cy={n.y} r="26" fill="transparent" stroke="rgba(255,255,255,0.55)" strokeWidth="3" />
-                    )}
-                    <circle cx={n.x} cy={n.y} r="20" fill={fill} stroke={stroke} strokeWidth="2" />
-
-                    {isStart && (
-                      <text x={n.x} y={n.y - 26} textAnchor="middle" fill="rgba(199,210,254,0.95)" fontSize="11">
-                        START
-                      </text>
-                    )}
-                    {isGoal && (
-                      <text x={n.x} y={n.y - 26} textAnchor="middle" fill="rgba(167,243,208,0.95)" fontSize="11">
-                        GOAL
-                      </text>
-                    )}
-                    {isCursor && !isStart && !isGoal && (
-                      <text x={n.x} y={n.y - 26} textAnchor="middle" fill="rgba(248,250,252,0.9)" fontSize="11">
-                        YOU
-                      </text>
-                    )}
-                  </g>
-                );
-              })}
-            </svg>
-          </div>
+                  {isStart && (
+                    <text x={n.x} y={n.y - 26} textAnchor="middle" fill="rgba(199,210,254,0.95)" fontSize="11">
+                      START
+                    </text>
+                  )}
+                  {isGoal && (
+                    <text x={n.x} y={n.y - 26} textAnchor="middle" fill="rgba(167,243,208,0.95)" fontSize="11">
+                      GOAL
+                    </text>
+                  )}
+                  {isCursor && !isStart && !isGoal && (
+                    <text x={n.x} y={n.y - 26} textAnchor="middle" fill="rgba(248,250,252,0.9)" fontSize="11">
+                      YOU
+                    </text>
+                  )}
+                </g>
+              );
+            })}
+          </svg>
         </div>
+      </div>
 
-        <div className="panel">
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 8,
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <div style={{ fontWeight: 650 }}>Your path</div>
-            <div className="muted" style={{ fontSize: 13 }}>
-              Click a node already in your path to trim back to it.
-            </div>
-          </div>
-
-          <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 8 }}>
+      <div className="gpfBottom">
+        <div className="gpfPanel" aria-label="Controls">
+          <div className="gpfPath" aria-label="Current path">
             {path.map((p, i) => (
-              <Badge key={`${p}-${i}`}>{p}</Badge>
+              <div key={`${p}-${i}`} className="gpfChip" aria-hidden="true">
+                {p}
+              </div>
             ))}
           </div>
 
-          {message && (
-            <div
-              className="panel"
-              style={{
-                marginTop: 12,
-                borderColor:
-                  status === "invalid"
-                    ? "rgba(251,113,133,0.35)"
-                    : status === "won"
-                      ? "rgba(52,211,153,0.35)"
-                      : "rgba(129,140,248,0.35)",
-              }}
+          {message ? (
+            <div className={`gpfMsg ${status === "won" ? "gpfMsgWin" : status === "lost" ? "gpfMsgLose" : ""}`}>{message}</div>
+          ) : null}
+
+          <div className="gpfControls">
+            <Button
+              className="gpfBtn gpfBtnConfirm"
+              variant="secondary"
+              onClick={() => check(false)}
+              disabled={status !== "playing"}
+              aria-label="Confirm selection"
             >
-              {message}
-            </div>
-          )}
-
-          {status === "won" && optimalPath.length > 0 && (
-            <div className="panel" style={{ marginTop: 12, borderColor: "rgba(52,211,153,0.35)" }}>
-              <div style={{ fontWeight: 650 }}>Shortest path (Dijkstra)</div>
-              <div className="muted" style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {optimalPath.map((n, i) => (
-                  <Badge key={`opt-${n}-${i}`} style={{ borderColor: "rgba(52,211,153,0.45)" }}>
-                    {n}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 10 }}>
-            <Button variant="primary" onClick={check}>
-              Check
-            </Button>
-            <Button variant="secondary" onClick={undo} disabled={path.length <= 1 || status !== "playing"}>
-              Undo
-            </Button>
-            <Button variant="ghost" onClick={resetSameGraph}>
-              Reset path
-            </Button>
-            <Button variant="ghost" onClick={newGraph}>
-              New graph
+              ✓
             </Button>
           </div>
-
-          <div className="muted" style={{ fontSize: 12, marginTop: 10 }}>
-            Skillcheck: shortest path isn’t “fewest edges” — it’s minimum total weight (Dijkstra).
-          </div>
-
-          {status !== "playing" && (
-            <ResultSubmitPanel
-              category="GRAPH_PATH"
-              difficulty={difficulty}
-              timeMs={timeMs}
-              errors={errors}
-              won={status === "won"}
-              onPlayAgain={resetSameGraph}
-          challengeId={challenge?.challengeInstanceId}
-        />
-          )}
         </div>
       </div>
-    </AppShell>
+
+      {status !== "playing" && (
+        <ResultSubmitPanel
+          category="GRAPH_PATH"
+          difficulty={difficulty}
+          timeMs={timeMs}
+          errors={errors}
+          won={status === "won"}
+          onPlayAgain={resetSameGraph}
+          challengeId={challenge?.challengeInstanceId}
+        />
+      )}
+    </div>
   );
 }

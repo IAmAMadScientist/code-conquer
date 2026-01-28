@@ -1,10 +1,7 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import AppShell from "../components/AppShell";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "../components/ui/button";
-import { Badge } from "../components/ui/badge";
-import { Progress } from "../components/ui/progress";
 import { cn } from "../lib/utils";
-import { Link, useLocation } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import ResultSubmitPanel from "../components/ResultSubmitPanel";
 import {
   getHapticsEnabled,
@@ -214,8 +211,7 @@ export default function StackMazePage() {
   const [crashes, setCrashes] = useState(0);
   const [stars, setStars] = useState(() => placeStars(grid, difficulty === "HARD" ? 4 : difficulty === "MEDIUM" ? 3 : 2));
   const [collected, setCollected] = useState(() => new Set());
-  const [showPreview, setShowPreview] = useState(false);
-  const [infoOpen, setInfoOpen] = useState(false);
+  // Mobile-first UI: keep the screen clean (no preview/info panels).
   // Fog-of-war is implemented as a single soft vision mask overlay, so we don't
   // need per-tile discovery state.
 
@@ -356,7 +352,6 @@ export default function StackMazePage() {
     setCrashes(0);
     setCollected(new Set());
     setStars(placeStars(g, difficulty === "HARD" ? 4 : difficulty === "MEDIUM" ? 3 : 2));
-    setShowPreview(false);
   }
 
   function pushMove(d) {
@@ -472,376 +467,227 @@ export default function StackMazePage() {
     setTimeMs(Date.now() - startRef.current);
   }, [status]);
 
-  const energyPct = Math.round((energy / config.maxEnergy) * 100);
+  const starTotal = stars.length;
+  const starGot = collected.size;
+  const timeLeftS = Math.max(0, Math.ceil((config.timeLimitMs - timeMs) / 1000));
+
+  const robotStyle = {
+    width: Math.max(22, cellPx * 0.62),
+    height: Math.max(22, cellPx * 0.62),
+    transform: `translate(${pos.c * cellPx}px, ${pos.r * cellPx}px)`,
+  };
+
+  // Fit the board reliably on phones.
+  const gap = size >= 9 ? 4 : size >= 7 ? 5 : 6;
+  const btn = size >= 9 ? 48 : 52;
+
+  // Vision/fog as a *single* soft mask overlay (more gamey than per-tile darkening).
+  const fogR = (config.fogRadius ?? 2) + 0.9;
+  const fogStyle = config.fog
+    ? {
+        "--fogX": `${(pos.c + 0.5) * cellPx}px`,
+        "--fogY": `${(pos.r + 0.5) * cellPx}px`,
+        "--fogR": `${fogR * cellPx}px`,
+      }
+    : null;
 
   return (
-    <AppShell
-      title="Code & Conquer"
-      subtitle="Stack Maze — plan the stack, grab stars, reach the goal"
-      headerBadges={
-        <>
-          <Badge>Category: STACK_MAZE</Badge>
-          <Badge>
-            Time: {Math.max(0, Math.ceil((config.timeLimitMs - timeMs) / 1000))}s
-          </Badge>
-          <Badge>Stars: {collected.size}/{stars.length}</Badge>
-          <Badge>Energy: {energy}</Badge>
-          <Badge>Crashes: {crashes}</Badge>
-          {status === "won" && <Badge style={{ borderColor: "rgba(52,211,153,0.35)" }}>WON</Badge>}
-          {status === "lost" && <Badge style={{ borderColor: "rgba(251,113,133,0.35)" }}>LOST</Badge>}
-        </>
-      }
-      rightPanel={
-        <div className="panel">
-          <div style={{ fontSize: 16, fontWeight: 650 }}>How it works</div>
-          <div className="muted" style={{ marginTop: 10, fontSize: 14 }}>
-            You build a stack of moves. On Run, moves are popped from the top (LIFO).
-          </div>
-          <div style={{ marginTop: 12 }}>
-            <Link to="/play">
-              <Button variant="ghost">Back to game</Button>
-            </Link>
-          </div>
-        </div>
-      }
+    <div
+      ref={rootRef}
+      className="smxfs"
+      style={{ "--smxGap": `${gap}px`, "--smxBtn": `${btn}px`, "--smxBoardPx": `${boardSizePx}px` }}
     >
-      {(() => {
-        const starTotal = stars.length;
-        const starGot = collected.size;
-        const preview = (config.allowPreview && showPreview)
-          ? simulatePath({ grid, size, startPos: pos, stack, energy })
-          : null;
+      <style>{`
+        /* True fullscreen: looks/feels like a mobile game */
+        .smxfs{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;min-height:0;
+          padding:calc(env(safe-area-inset-top) + 8px) 10px calc(env(safe-area-inset-bottom) + 10px);
+          background:radial-gradient(1200px 600px at 50% -200px, rgba(99,102,241,0.22), transparent 60%),
+                     linear-gradient(180deg, rgba(2,6,23,0.96), rgba(2,6,23,0.92));
+          overscroll-behavior:none;
+          touch-action:manipulation;
+        }
+        .smx-top{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 2px;}
+        .smx-pills{display:flex;gap:8px;align-items:center;}
+        .smx-pill{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border-radius:999px;
+          border:1px solid rgba(148,163,184,0.18);background:rgba(2,6,23,0.40);backdrop-filter:blur(10px);
+          font-weight:850;font-size:13px;line-height:1;
+          box-shadow:0 10px 28px rgba(0,0,0,0.35);
+        }
+        .smx-pillDim{opacity:0.85}
 
-        const robotStyle = {
-          width: Math.max(22, cellPx * 0.62),
-          height: Math.max(22, cellPx * 0.62),
-          transform: `translate(${pos.c * cellPx}px, ${pos.r * cellPx}px)`,
-        };
+        .smx-boardWrap{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:6px 0;}
+        .smx-board{position:relative;width:var(--smxBoardPx);height:var(--smxBoardPx);}
+        .smx-grid{display:grid;gap:var(--smxGap, 6px);}
+        .smx-cell{aspect-ratio:1/1;border-radius:18px;border:1px solid rgba(51,65,85,0.40);background:rgba(2,6,23,0.20);position:relative;overflow:hidden;}
+        .smx-cell::before{content:"";position:absolute;inset:-40%;background:radial-gradient(circle at 30% 30%, rgba(99,102,241,0.16), transparent 60%);filter:blur(8px);}
+        .smx-wall{background:linear-gradient(180deg, rgba(30,41,59,0.72), rgba(15,23,42,0.55));}
+        .smx-wall::before{display:none}
+        .smx-goal{border-color:rgba(52,211,153,0.42);box-shadow:0 0 0 2px rgba(52,211,153,0.10), inset 0 0 0 1px rgba(255,255,255,0.02);}
+        .smx-starCell{display:flex;align-items:center;justify-content:center;}
+        .smx-starIcon{font-size:18px;filter:drop-shadow(0 6px 14px rgba(0,0,0,0.45));}
+        .smx-starCollected{opacity:0.12;filter:none}
+        .smx-vision{position:absolute;inset:0;pointer-events:none;z-index:3;border-radius:22px;
+          background:radial-gradient(circle at var(--fogX) var(--fogY),
+            rgba(2,6,23,0.02) 0px,
+            rgba(2,6,23,0.10) calc(var(--fogR) * 0.55),
+            rgba(2,6,23,0.55) calc(var(--fogR) * 1.0),
+            rgba(2,6,23,0.82) calc(var(--fogR) * 1.0 + 14px),
+            rgba(2,6,23,0.92) 100%);
+        }
+        .smx-robot{position:absolute;top:0;left:0;border-radius:18px;display:flex;align-items:center;justify-content:center;
+          background:linear-gradient(180deg, rgba(99,102,241,0.22), rgba(15,23,42,0.10));
+          border:1px solid rgba(129,140,248,0.45);
+          box-shadow:0 10px 30px rgba(0,0,0,0.45), 0 0 0 2px rgba(129,140,248,0.10);
+          transition:transform 240ms cubic-bezier(.2,.9,.2,1);
+        }
+        .smx-robotFace{font-size:22px;filter:drop-shadow(0 6px 14px rgba(0,0,0,0.45));animation:smxBob 1.1s ease-in-out infinite;}
+        @keyframes smxBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}
 
-        // Fit the board reliably on phones.
-        const gap = size >= 9 ? 4 : size >= 7 ? 5 : 6;
-        const btn = size >= 9 ? 48 : 52;
+        .smx-tray{padding:10px 8px;border-radius:18px;border:1px solid rgba(148,163,184,0.14);background:rgba(2,6,23,0.30);
+          backdrop-filter:blur(10px);
+        }
+        .smx-stackScroll{display:flex;gap:8px;overflow:auto;padding-bottom:2px;}
+        .smx-card{min-width:48px;height:44px;border-radius:16px;border:1px solid rgba(148,163,184,0.20);background:rgba(15,23,42,0.30);
+          display:flex;align-items:center;justify-content:center;font-weight:900;
+          box-shadow:inset 0 0 0 1px rgba(255,255,255,0.02);
+        }
+        .smx-cardTop{border-color:rgba(252,211,77,0.38);background:rgba(245,158,11,0.10);}
 
-        // Vision/fog as a *single* soft mask overlay (more gamey than per-tile darkening).
-        const fogR = (config.fogRadius ?? 2) + 0.9;
-        const fogStyle = config.fog
-          ? {
-              "--fogX": `${(pos.c + 0.5) * cellPx}px`,
-              "--fogY": `${(pos.r + 0.5) * cellPx}px`,
-              "--fogR": `${fogR * cellPx}px`,
-            }
-          : null;
+        .smx-controls{padding-top:10px;}
+        .smx-bar{display:flex;gap:12px;align-items:center;justify-content:space-between;
+          padding:12px;border-radius:22px;border:1px solid rgba(148,163,184,0.18);
+          background:rgba(2,6,23,0.60);backdrop-filter:blur(10px);
+        }
+        .smx-dpad{display:grid;grid-template-columns:var(--smxBtn, 52px) var(--smxBtn, 52px) var(--smxBtn, 52px);
+          grid-template-rows:var(--smxBtn, 52px) var(--smxBtn, 52px) var(--smxBtn, 52px);gap:8px;}
+        .smx-dbtn{border-radius:18px;font-weight:900;font-size:20px;}
+        .smx-dbtnGhost{opacity:0.20;pointer-events:none;}
+        .smx-actions{display:grid;gap:8px;min-width:154px;}
 
-        return (
-          <div
-            ref={rootRef}
-            className="smx"
-            style={{ "--smxGap": `${gap}px`, "--smxBtn": `${btn}px`, "--smxBoardPx": `${boardSizePx}px` }}
-          >
-            <style>{`
-              /* Fullscreen, no-scroll layout on mobile */
-              .smx{display:flex;flex-direction:column;gap:10px;min-height:0;}
-              .smx-hud{display:grid;gap:10px;}
-              .smx-hudRow{display:flex;gap:10px;align-items:center;justify-content:space-between;}
-              .smx-title{font-weight:750;font-size:16px;letter-spacing:-0.01em;}
-              .smx-mini{font-size:12px;opacity:0.72}
+        @media (max-width:440px){
+          .smx-bar{flex-direction:column;align-items:stretch;gap:10px;padding:10px;}
+          .smx-dpad{justify-content:center;align-self:center;}
+          .smx-actions{min-width:unset;width:100%;}
+        }
+      `}</style>
 
-              .smx-pill{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border-radius:999px;border:1px solid rgba(148,163,184,0.20);background:rgba(2,6,23,0.25);}
-              .smx-stars{display:inline-flex;align-items:center;gap:6px;}
-              .smx-star{filter:drop-shadow(0 6px 14px rgba(0,0,0,0.45));}
-              .smx-starDim{opacity:0.25}
+      <div ref={hudRef} className="smx-top" aria-label="HUD">
+        <div className="smx-pills">
+          <div className="smx-pill" aria-label="Time left">⏱️ {timeLeftS}</div>
+          <div className="smx-pill" aria-label="Stars">⭐ {starGot}/{starTotal}</div>
+        </div>
+        <div className="smx-pills">
+          <div className="smx-pill smx-pillDim" aria-label="Energy">⚡ {energy}</div>
+          <div className="smx-pill smx-pillDim" aria-label="Crashes">💥 {crashes}</div>
+        </div>
+      </div>
 
-              .smx-boardWrap{display:flex;justify-content:center;}
-              .smx-board{position:relative;width:var(--smxBoardPx);height:var(--smxBoardPx);}
-              .smx-grid{display:grid;gap:var(--smxGap, 6px);}
-              .smx-cell{aspect-ratio:1/1;border-radius:18px;border:1px solid rgba(51,65,85,0.40);background:rgba(2,6,23,0.20);position:relative;overflow:hidden;}
-              .smx-cell::before{content:"";position:absolute;inset:-40%;background:radial-gradient(circle at 30% 30%, rgba(99,102,241,0.16), transparent 60%);filter:blur(8px);}
-              .smx-wall{background:linear-gradient(180deg, rgba(30,41,59,0.72), rgba(15,23,42,0.55));}
-              .smx-wall::before{display:none}
-              .smx-vision{position:absolute;inset:0;pointer-events:none;z-index:3;border-radius:22px;
-                background:radial-gradient(circle at var(--fogX) var(--fogY),
-                  rgba(2,6,23,0.02) 0px,
-                  rgba(2,6,23,0.10) calc(var(--fogR) * 0.55),
-                  rgba(2,6,23,0.55) calc(var(--fogR) * 1.0),
-                  rgba(2,6,23,0.82) calc(var(--fogR) * 1.0 + 14px),
-                  rgba(2,6,23,0.92) 100%);
-              }
-              .smx-goal{border-color:rgba(52,211,153,0.42);box-shadow:0 0 0 2px rgba(52,211,153,0.10), inset 0 0 0 1px rgba(255,255,255,0.02);}
-
-              .smx-starCell{display:flex;align-items:center;justify-content:center;}
-              .smx-starIcon{font-size:18px;filter:drop-shadow(0 6px 14px rgba(0,0,0,0.45));}
-              .smx-starCollected{opacity:0.12;filter:none}
-
-              .smx-previewNum{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:rgba(226,232,240,0.90);text-shadow:0 8px 18px rgba(0,0,0,0.7);}
-              .smx-previewRing{position:absolute;inset:14%;border-radius:999px;border:2px solid rgba(252,211,77,0.50);box-shadow:0 0 0 2px rgba(252,211,77,0.10)}
-
-              .smx-robot{position:absolute;top:0;left:0;border-radius:18px;display:flex;align-items:center;justify-content:center;
-                background:linear-gradient(180deg, rgba(99,102,241,0.22), rgba(15,23,42,0.10));
-                border:1px solid rgba(129,140,248,0.45);
-                box-shadow:0 10px 30px rgba(0,0,0,0.45), 0 0 0 2px rgba(129,140,248,0.10);
-                transition:transform 240ms cubic-bezier(.2,.9,.2,1);
-              }
-              .smx-robotFace{font-size:22px;filter:drop-shadow(0 6px 14px rgba(0,0,0,0.45));animation:smxBob 1.1s ease-in-out infinite;}
-              @keyframes smxBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}
-
-              .smx-tray{display:grid;gap:8px;padding:12px;border-radius:18px;border:1px solid rgba(148,163,184,0.18);background:rgba(2,6,23,0.22);}
-              .smx-trayTop{display:flex;align-items:center;justify-content:space-between;gap:10px;}
-              .smx-infoBtn{height:36px;width:36px;border-radius:999px;border:1px solid rgba(71,85,105,0.38);
-                background:rgba(15,23,42,0.35);display:grid;place-items:center;cursor:pointer;
-                font-size:16px;line-height:1;}
-              .smx-infoBtn:active{transform:translateY(1px);}
-              .smx-stackScroll{display:flex;gap:8px;overflow:auto;padding-bottom:2px;}
-              .smx-card{min-width:48px;height:44px;border-radius:16px;border:1px solid rgba(148,163,184,0.20);background:rgba(15,23,42,0.30);
-                display:flex;align-items:center;justify-content:center;font-weight:900;
-                box-shadow:inset 0 0 0 1px rgba(255,255,255,0.02);
-              }
-              .smx-cardTop{border-color:rgba(252,211,77,0.38);background:rgba(245,158,11,0.10);}
-
-              /* Keep controls visible without relying on page scrolling */
-              .smx-controls{position:relative;z-index:5;margin-top:4px;padding-bottom:calc(env(safe-area-inset-bottom) + 10px);}
-              .smx-bar{display:flex;gap:12px;align-items:center;justify-content:space-between;
-                padding:12px;border-radius:22px;border:1px solid rgba(148,163,184,0.18);
-                background:rgba(2,6,23,0.55);backdrop-filter:blur(10px);
-              }
-              .smx-dpad{display:grid;grid-template-columns:var(--smxBtn, 52px) var(--smxBtn, 52px) var(--smxBtn, 52px);grid-template-rows:var(--smxBtn, 52px) var(--smxBtn, 52px) var(--smxBtn, 52px);gap:8px;}
-              .smx-dbtn{border-radius:18px;font-weight:900;}
-              .smx-dbtnGhost{opacity:0.28;pointer-events:none;}
-              .smx-actions{display:grid;gap:8px;min-width:154px;}
-              .smx-actionsRow{display:flex;gap:8px;}
-
-              @media (max-width:520px){
-                .smx-cell{border-radius:16px}
-                .smx-board{width:min(95vw, 58vh, 480px)}
-              }
-
-              /* Phones: avoid horizontal clipping by stacking controls */
-              @media (max-width:440px){
-                .smx-bar{flex-direction:column;align-items:stretch;gap:10px;padding:10px;}
-                .smx-dpad{justify-content:center;align-self:center;}
-                .smx-actions{min-width:unset;width:100%;}
-                .smx-actionsRow{width:100%;}
-              }
-
-              .smx-modalOverlay{position:fixed;inset:0;z-index:60;background:rgba(2,6,23,0.65);
-                display:flex;align-items:flex-end;justify-content:center;padding:12px;
-                padding-bottom:calc(env(safe-area-inset-bottom) + 12px);
-              }
-              .smx-modal{width:min(680px, 100%);border-radius:22px;border:1px solid rgba(148,163,184,0.18);
-                background:rgba(2,6,23,0.86);backdrop-filter:blur(14px);
-                box-shadow:0 22px 60px rgba(0,0,0,0.55);padding:14px;
-              }
-            `}</style>
-
-            <div ref={hudRef} className="smx-hud">
-              <div className="smx-hudRow">
-                <div>
-                  <div className="smx-title">Stack Maze</div>
-                  <div className="smx-mini">Program 🤖 with a Stack (LIFO). Collect ⭐ then reach 🏁.</div>
-                </div>
-                <div className="smx-pill">
-                  <div className="smx-stars" aria-label="Stars">
-                    {Array.from({ length: starTotal }).map((_, i) => (
-                      <span key={i} className={cn("smx-star", i < starGot ? "" : "smx-starDim")}>
-                        ⭐
-                      </span>
-                    ))}
-                  </div>
-                  <div className="muted" style={{ fontSize: 12 }}>
-                    {starGot}/{starTotal}
-                  </div>
-                </div>
-              </div>
-
-              <div className="smx-hudRow" style={{ gap: 10 }}>
-                <div style={{ flex: 1 }}>
-                  <Progress value={energyPct} />
-                  <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
-                    Energy: <strong>{energy}</strong> · Crashes: <strong>{crashes}</strong> · {difficulty} · {size}×{size}
-                  </div>
-                </div>
-                <Button
-                  variant={showPreview ? "secondary" : "ghost"}
-                  disabled={!config.allowPreview || running || status !== "playing"}
-                  onClick={() => {
-                    haptic(10);
-                    sfx(playUiTapSfx);
-                    setShowPreview((x) => !x);
-                  }}
-                >
-                  {!config.allowPreview ? "No preview" : showPreview ? "Hide" : "Preview"}
-                </Button>
-              </div>
-            </div>
-
-            <div className="smx-boardWrap">
-              <div className="smx-board" ref={boardRef}>
-                <div className="smx-grid" style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))` }}>
-                  {grid.map((row, r) =>
-                    row.map((cell, c) => {
-                      const isGoal = goal.r === r && goal.c === c;
-                      const isWall = cell === 1;
-                      const star = stars.find((s) => s.r === r && s.c === c);
-                      const starKey = star ? `${star.r},${star.c}` : null;
-                      const hasStar = Boolean(star);
-                      const starCollected = starKey ? collected.has(starKey) : false;
-
-                      let previewIndex = -1;
-                      if (preview && !isWall) {
-                        previewIndex = preview.path.findIndex((p) => p.r === r && p.c === c);
-                      }
-
-                      return (
-                        <div
-                          key={`${r}-${c}`}
-                          className={cn(
-                            "smx-cell",
-                            isWall && "smx-wall",
-                            isGoal && "smx-goal",
-                            hasStar && "smx-starCell",
-                          )}
-                        >
-                          {hasStar && (
-                            <span className={cn("smx-starIcon", starCollected && "smx-starCollected")}>
-                              ⭐
-                            </span>
-                          )}
-                          {isGoal && (
-                            <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, filter: "drop-shadow(0 6px 14px rgba(0,0,0,0.45))" }}>
-                              🏁
-                            </span>
-                          )}
-
-                          {preview && previewIndex > 0 && (
-                            <>
-                              <div className="smx-previewRing" />
-                              <div className="smx-previewNum">{previewIndex}</div>
-                            </>
-                          )}
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-
-                {config.fog ? (
+      <div className="smx-boardWrap">
+        <div className="smx-board" ref={boardRef}>
+          <div className="smx-grid" style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))` }}>
+            {grid.map((row, r) =>
+              row.map((cell, c) => {
+                const isGoal = goal.r === r && goal.c === c;
+                const isWall = cell === 1;
+                const star = stars.find((s) => s.r === r && s.c === c);
+                const starKey = star ? `${star.r},${star.c}` : null;
+                const hasStar = Boolean(star);
+                const starCollected = starKey ? collected.has(starKey) : false;
+                return (
                   <div
-                    className="smx-vision"
-                    style={fogStyle || undefined}
-                    aria-hidden="true"
-                  />
-                ) : null}
-
-                <div className="smx-robot" style={robotStyle}>
-                  <div className="smx-robotFace">🤖</div>
-                </div>
-              </div>
-            </div>
-
-            <div ref={trayRef} className="smx-tray">
-              <div className="smx-trayTop" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                <div style={{ fontWeight: 800 }}>Stack</div>
-                <button
-                  type="button"
-                  className="smx-infoBtn"
-                  aria-label="How to play"
-                  onClick={() => setInfoOpen(true)}
-                >
-                  ℹ️
-                </button>
-              </div>
-              <div className="smx-stackScroll" aria-label="Stack">
-                {stack.length === 0 ? (
-                  <div className="muted">Tap the D-pad to add moves.</div>
-                ) : (
-                  stack.map((d, i) => (
-                    <div key={i} className={cn("smx-card", i === stack.length - 1 && "smx-cardTop")}>
-                      {d === "U" ? "↑" : d === "D" ? "↓" : d === "L" ? "←" : "→"}
-                    </div>
-                  ))
-                )}
-              </div>
-              {showPreview && preview && (
-                <div className="muted" style={{ fontSize: 12 }}>
-                  Preview ends at <strong>({preview.endPos.r + 1},{preview.endPos.c + 1})</strong> · energy left <strong>{preview.energyLeft}</strong> · crashes <strong>{preview.crashes}</strong>
-                </div>
-              )}
-            </div>
-
-            {infoOpen ? (
-              <div className="smx-modalOverlay" onClick={() => setInfoOpen(false)}>
-                <div className="smx-modal" onClick={(e) => e.stopPropagation()}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                    <div style={{ fontWeight: 900, fontSize: 16 }}>How to play</div>
-                    <Button variant="ghost" onClick={() => setInfoOpen(false)} style={{ borderRadius: 14 }}>
-                      Close
-                    </Button>
-                  </div>
-                  <div className="muted" style={{ marginTop: 10, fontSize: 13, lineHeight: 1.5 }}>
-                    <div><strong>Goal:</strong> Collect all ⭐ then reach 🏁.</div>
-                    <div style={{ marginTop: 8 }}><strong>Stack (LIFO):</strong> The <em>top</em> move executes first.</div>
-                    <div style={{ marginTop: 8 }}><strong>Controls:</strong> Tap the D-pad to push moves. Tap ↩ to pop the top move.</div>
-                    <div style={{ marginTop: 8 }}><strong>Preview:</strong> Shows the simulated path before you press Run (if enabled on this difficulty).</div>
-                    <div style={{ marginTop: 8 }}><strong>Energy:</strong> Each executed move costs 1 energy. Crashes happen when you hit walls or borders.</div>
-                  </div>
-                </div>
-              </div>
-            ) : null}
-
-            <div ref={controlsRef} className="smx-controls">
-              <div className="smx-bar">
-                <div className="smx-dpad" aria-label="D-pad">
-                  <Button className="smx-dbtn smx-dbtnGhost" variant="ghost" />
-                  <Button className="smx-dbtn" onClick={() => pushMove("U")} disabled={running || status !== "playing"}>↑</Button>
-                  <Button className="smx-dbtn smx-dbtnGhost" variant="ghost" />
-                  <Button className="smx-dbtn" onClick={() => pushMove("L")} disabled={running || status !== "playing"}>←</Button>
-                  <Button className="smx-dbtn" onClick={popMove} disabled={running || status !== "playing" || stack.length === 0} variant="secondary">↩</Button>
-                  <Button className="smx-dbtn" onClick={() => pushMove("R")} disabled={running || status !== "playing"}>→</Button>
-                  <Button className="smx-dbtn smx-dbtnGhost" variant="ghost" />
-                  <Button className="smx-dbtn" onClick={() => pushMove("D")} disabled={running || status !== "playing"}>↓</Button>
-                  <Button className="smx-dbtn smx-dbtnGhost" variant="ghost" />
-                </div>
-
-                <div className="smx-actions">
-                  <Button
-                    onClick={() => {
-                      haptic(12);
-                      sfx(playUiTapSfx);
-                      setRunning((x) => !x);
-                    }}
-                    disabled={status !== "playing" || stack.length === 0}
-                    variant={running ? "danger" : "success"}
-                    style={{ height: 52, borderRadius: 18, fontWeight: 800 }}
+                    key={`${r}-${c}`}
+                    className={cn(
+                      "smx-cell",
+                      isWall && "smx-wall",
+                      isGoal && "smx-goal",
+                      hasStar && "smx-starCell",
+                    )}
                   >
-                    {running ? "Stop" : "Run"}
-                  </Button>
-                  <div className="smx-actionsRow">
-                    <Button onClick={reset} variant="ghost" disabled={running} style={{ flex: 1, borderRadius: 18 }}>
-                      New
-                    </Button>
-                    <Link to="/play" style={{ flex: 1 }}>
-                      <Button variant="ghost" style={{ width: "100%", borderRadius: 18 }}>
-                        Back
-                      </Button>
-                    </Link>
+                    {hasStar && (
+                      <span className={cn("smx-starIcon", starCollected && "smx-starCollected")}>⭐</span>
+                    )}
+                    {isGoal && (
+                      <span
+                        style={{
+                          position: "absolute",
+                          inset: 0,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: 18,
+                          filter: "drop-shadow(0 6px 14px rgba(0,0,0,0.45))",
+                        }}
+                      >
+                        🏁
+                      </span>
+                    )}
                   </div>
-                </div>
-              </div>
-            </div>
-
-            {status !== "playing" && (
-              <ResultSubmitPanel
-                category="STACK_MAZE"
-                difficulty={difficulty}
-                timeMs={timeMs}
-                errors={crashes}
-                won={status === "won"}
-                onPlayAgain={reset}
-                challengeId={challenge?.challengeInstanceId}
-              />
+                );
+              })
             )}
           </div>
-        );
-      })()}
-    </AppShell>
+
+          {config.fog ? <div className="smx-vision" style={fogStyle || undefined} aria-hidden="true" /> : null}
+
+          <div className="smx-robot" style={robotStyle}>
+            <div className="smx-robotFace">🤖</div>
+          </div>
+        </div>
+      </div>
+
+      <div ref={trayRef} className="smx-tray" aria-label="Stack">
+        <div className="smx-stackScroll">
+          {stack.map((d, i) => (
+            <div key={i} className={cn("smx-card", i === stack.length - 1 && "smx-cardTop")}>
+              {d === "U" ? "↑" : d === "D" ? "↓" : d === "L" ? "←" : "→"}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div ref={controlsRef} className="smx-controls" aria-label="Controls">
+        <div className="smx-bar">
+          <div className="smx-dpad" aria-label="D-pad">
+            <Button className="smx-dbtn smx-dbtnGhost" variant="ghost" />
+            <Button className="smx-dbtn" onClick={() => pushMove("U")} disabled={running || status !== "playing"} aria-label="Up">↑</Button>
+            <Button className="smx-dbtn smx-dbtnGhost" variant="ghost" />
+            <Button className="smx-dbtn" onClick={() => pushMove("L")} disabled={running || status !== "playing"} aria-label="Left">←</Button>
+            <Button className="smx-dbtn" onClick={popMove} disabled={running || status !== "playing" || stack.length === 0} variant="secondary" aria-label="Pop">↩</Button>
+            <Button className="smx-dbtn" onClick={() => pushMove("R")} disabled={running || status !== "playing"} aria-label="Right">→</Button>
+            <Button className="smx-dbtn smx-dbtnGhost" variant="ghost" />
+            <Button className="smx-dbtn" onClick={() => pushMove("D")} disabled={running || status !== "playing"} aria-label="Down">↓</Button>
+            <Button className="smx-dbtn smx-dbtnGhost" variant="ghost" />
+          </div>
+
+          <div className="smx-actions">
+            <Button
+              onClick={() => {
+                haptic(12);
+                sfx(playUiTapSfx);
+                setRunning((x) => !x);
+              }}
+              disabled={status !== "playing" || stack.length === 0}
+              variant={running ? "danger" : "success"}
+              style={{ height: 56, borderRadius: 18, fontWeight: 900, fontSize: 18 }}
+              aria-label={running ? "Stop" : "Run"}
+            >
+              {running ? "⏹" : "▶"}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {status !== "playing" && (
+        <ResultSubmitPanel
+          category="STACK_MAZE"
+          difficulty={difficulty}
+          timeMs={timeMs}
+          errors={crashes}
+          won={status === "won"}
+          onPlayAgain={reset}
+          challengeId={challenge?.challengeInstanceId}
+        />
+      )}
+    </div>
   );
 }

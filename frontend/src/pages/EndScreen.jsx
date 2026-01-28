@@ -55,7 +55,8 @@ export default function Endscreen() {
     <AppShell
       title="Game finished"
       subtitle={session?.sessionCode ? `Match: ${session.sessionCode}` : ""}
-      backTo="/"
+      backTo={false}
+      showBrand
       headerBadges={
         <>
           {session?.sessionCode ? <Badge variant="secondary">{session.sessionCode}</Badge> : null}

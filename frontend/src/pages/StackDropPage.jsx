@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
-import AppShell from "../components/AppShell";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import ResultSubmitPanel from "../components/ResultSubmitPanel";
@@ -97,6 +96,18 @@ export default function StackDropPage() {
   const difficulty = (challenge?.difficulty || "EASY").toUpperCase();
   const cfg = useMemo(() => configFor(difficulty), [difficulty]);
 
+  // Fullscreen mobile game: prevent page scroll / overscroll while playing.
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    const prevTouch = document.body.style.touchAction;
+    document.body.style.overflow = "hidden";
+    document.body.style.touchAction = "none";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.body.style.touchAction = prevTouch;
+    };
+  }, []);
+
   // Desktop testing support: enable keyboard controls and hover effects on non-touch devices.
   const isTouchDevice = useMemo(() => {
     try {
@@ -125,6 +136,21 @@ export default function StackDropPage() {
   const [things, setThings] = useState([]); // obstacles/coins {id,kind,lane,y}
   const [shake, setShake] = useState(false);
   const [hoverCmdId, setHoverCmdId] = useState(null);
+
+  // Responsive scaling for a fixed-size world (mobile fullscreen without overlap).
+  const playAreaRef = useRef(null);
+  const [playAreaSize, setPlayAreaSize] = useState({ w: 0, h: 0 });
+  useEffect(() => {
+    const el = playAreaRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const r = entries?.[0]?.contentRect;
+      if (!r) return;
+      setPlayAreaSize({ w: r.width, h: r.height });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const startRef = useRef(Date.now());
   const rafRef = useRef(null);
@@ -419,85 +445,75 @@ export default function StackDropPage() {
 
   const laneW = 58;
   const fieldW = cfg.lanes * laneW;
+  const fieldH = 640;
+  const scale = useMemo(() => {
+    if (!playAreaSize.w || !playAreaSize.h) return 1;
+    return clamp(Math.min(playAreaSize.w / fieldW, playAreaSize.h / fieldH), 0.65, 1.35);
+  }, [playAreaSize.w, playAreaSize.h, fieldW]);
+  const scaledW = Math.round(fieldW * scale);
+  const scaledH = Math.round(fieldH * scale);
 
   return (
-    <AppShell
-      title="Stack Drop"
-      subtitle="Tap to push, Execute to pop (LIFO)"
-      headerBadges={
-        <>
-          <Badge variant="secondary">Category: STACK_DROP</Badge>
-          <Badge variant="secondary">Coins: {coins}{cfg.targetCoins ? `/${cfg.targetCoins}` : ""}</Badge>
-          <Badge variant="secondary">Errors: {errors}</Badge>
-        </>
-      }
-      showTabs={false}
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        display: "flex",
+        flexDirection: "column",
+        background:
+          "radial-gradient(1200px 700px at 50% -10%, rgba(99,102,241,0.18), transparent 60%), linear-gradient(180deg, rgba(2,6,23,0.96), rgba(2,6,23,0.92))",
+        color: "rgba(255,255,255,0.92)",
+        paddingTop: "max(env(safe-area-inset-top), 10px)",
+        paddingBottom: "max(env(safe-area-inset-bottom), 10px)",
+        overflow: "hidden",
+        WebkitTapHighlightColor: "transparent",
+        touchAction: "manipulation",
+        userSelect: "none",
+      }}
     >
-      <div className="panel" style={{ padding: 14 }}>
+      {/* HUD */}
+      <div style={{ display: "flex", gap: 10, padding: "10px 12px", alignItems: "center", flexWrap: "wrap" }}>
+        <Badge variant="secondary">⏱️ {Math.max(0, Math.ceil((cfg.durationMs - timeMs) / 1000))}s</Badge>
+        <Badge variant="secondary">
+          🪙 {coins}
+          {cfg.targetCoins ? `/${cfg.targetCoins}` : ""}
+        </Badge>
+        <Badge variant="secondary">💥 {errors}</Badge>
+        <Badge variant="secondary">📦 {stack.length}/{cfg.maxStack}</Badge>
+        <div style={{ flex: 1 }} />
         {isDesktop ? (
-          <div className="stackdropHint" aria-label="keyboard controls">
-            <span className="stackdropKey">←</span>/<span className="stackdropKey">→</span> move
-            <span className="stackdropKey">A</span> push ⬅️
-            <span className="stackdropKey">D</span> push ➡️
-            <span className="stackdropKey">S</span> push ⏸
-            <span className="stackdropKey">SPACE</span> EXEC
-            <span className="stackdropKey">ESC</span> CLEAR
+          <div style={{ opacity: 0.7, fontSize: 12, whiteSpace: "nowrap" }}>
+            ←/→ move · A/D/S push · SPACE execute · ESC clear
           </div>
         ) : null}
+      </div>
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-          <Badge>Diff: {difficulty}</Badge>
-          <Badge variant="secondary">Stack max: {cfg.maxStack}</Badge>
-          <Badge variant="secondary">Time: {Math.max(0, Math.ceil((cfg.durationMs - timeMs) / 1000))}s</Badge>
-          <div style={{ flex: 1 }} />
-          <Button
-            variant={executing ? "ghost" : "primary"}
-            disabled={status !== "playing"}
-            onClick={executeStack}
-            style={{ minWidth: 120 }}
-          >
-            {executing ? "Executing…" : "EXECUTE"}
-          </Button>
+      {/* Time bar */}
+      <div style={{ padding: "0 12px 10px 12px" }}>
+        <div style={{ height: 6, borderRadius: 999, background: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
+          <div style={{ height: "100%", width: `${clamp(progressPct, 0, 100)}%`, background: "rgba(99,102,241,0.85)" }} />
         </div>
+      </div>
 
-        <div
-          style={{
-            marginTop: 12,
-            height: 8,
-            borderRadius: 999,
-            background: "rgba(255,255,255,0.08)",
-            overflow: "hidden",
-          }}
-        >
-          <div
-            style={{
-              height: "100%",
-              width: `${clamp(progressPct, 0, 100)}%`,
-              background: "rgba(99,102,241,0.85)",
-            }}
-          />
-        </div>
-
-        {/* Field */}
-        <div
-          style={{
-            marginTop: 14,
-            display: "flex",
-            justifyContent: "center",
-          }}
-        >
+      {/* Play area (scales to avoid overlap) */}
+      <div
+        ref={playAreaRef}
+        style={{ flex: 1, padding: "0 12px", display: "flex", alignItems: "center", justifyContent: "center" }}
+      >
+        <div style={{ width: scaledW, height: scaledH, position: "relative" }}>
           <div
             style={{
               width: fieldW,
-              height: 640,
+              height: fieldH,
+              transform: shake ? `scale(${scale}) translateX(-2px)` : `scale(${scale})`,
+              transformOrigin: "top left",
+              transition: "transform 120ms ease",
               borderRadius: 22,
               position: "relative",
               background: "rgba(2,6,23,0.28)",
               border: "1px solid rgba(148,163,184,0.18)",
               boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.02)",
               overflow: "hidden",
-              transform: shake ? "translateX(-2px)" : "none",
-              transition: "transform 120ms ease",
             }}
           >
             {/* lane guides */}
@@ -599,74 +615,78 @@ export default function StackDropPage() {
             >
               🤖
             </div>
-
-            {/* stack visual */}
-            <div
-              style={{
-                position: "absolute",
-                right: 10,
-                bottom: 12,
-                width: 88,
-                minHeight: 110,
-                display: "flex",
-                flexDirection: "column-reverse",
-                gap: 8,
-                alignItems: "stretch",
-              }}
-            >
-              {Array.from({ length: cfg.maxStack }).map((_, idx) => {
-                const v = stack[idx];
-                const filled = idx < stack.length;
-                return (
-                  <div
-                    key={idx}
-                    style={{
-                      height: 30,
-                      borderRadius: 12,
-                      border: "1px solid rgba(148,163,184,0.18)",
-                      background: filled ? "rgba(99,102,241,0.14)" : "rgba(15,23,42,0.12)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontWeight: 900,
-                      color: "rgba(255,255,255,0.92)",
-                      opacity: filled ? 1 : 0.45,
-                    }}
-                  >
-                    {filled ? cmdLabel(v) : ""}
-                  </div>
-                );
-              })}
-            </div>
           </div>
         </div>
+      </div>
 
-        {/* Bottom actions */}
-        <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
-          <Button variant="ghost" onClick={resetAll} disabled={status === "playing"} style={{ flex: 1 }}>
-            Try again
+      {/* Bottom controls + stack tray (never overlaps playfield) */}
+      <div style={{ padding: "10px 12px 12px 12px", display: "grid", gap: 10 }}>
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            overflowX: "auto",
+            paddingBottom: 2,
+            WebkitOverflowScrolling: "touch",
+          }}
+          aria-label="stack tray"
+        >
+          {Array.from({ length: cfg.maxStack }).map((_, idx) => {
+            const v = stack[idx];
+            const filled = idx < stack.length;
+            return (
+              <div
+                key={idx}
+                style={{
+                  minWidth: 44,
+                  height: 34,
+                  borderRadius: 14,
+                  border: "1px solid rgba(148,163,184,0.18)",
+                  background: filled ? "rgba(99,102,241,0.14)" : "rgba(15,23,42,0.14)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontWeight: 900,
+                  color: "rgba(255,255,255,0.92)",
+                  opacity: filled ? 1 : 0.45,
+                }}
+              >
+                {filled ? cmdLabel(v) : ""}
+              </div>
+            );
+          })}
+        </div>
+
+        <div style={{ display: "flex", gap: 10 }}>
+          <Button variant="ghost" onClick={clearStack} disabled={status !== "playing" || executing} style={{ flex: 1, minHeight: 48 }}>
+            Clear
           </Button>
           <Button
-            variant="primary"
+            variant={executing ? "ghost" : "primary"}
+            disabled={status !== "playing"}
             onClick={executeStack}
-            disabled={status !== "playing" || executing}
-            style={{ flex: 1 }}
+            style={{ flex: 2, minHeight: 48 }}
           >
-            Execute
+            {executing ? "Executing…" : "EXECUTE"}
           </Button>
         </div>
 
         {typeof won === "boolean" ? (
-          <ResultSubmitPanel
-            category="STACK_DROP"
-            difficulty={difficulty}
-            timeMs={timeMs}
-            errors={errors}
-            won={won}
-            challengeId={challenge?.challengeInstanceId}
-          />
+          <div style={{ display: "grid", gap: 10 }}>
+            <Button variant="primary" onClick={resetAll} style={{ minHeight: 48 }}>
+              Play again
+            </Button>
+            <ResultSubmitPanel
+              category="STACK_DROP"
+              difficulty={difficulty}
+              timeMs={timeMs}
+              errors={errors}
+              won={won}
+              challengeId={challenge?.challengeInstanceId}
+            />
+          </div>
         ) : null}
       </div>
-    </AppShell>
+    </div>
   );
 }

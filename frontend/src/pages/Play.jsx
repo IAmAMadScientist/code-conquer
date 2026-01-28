@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
 import AppShell from "../components/AppShell";
 import { Button } from "../components/ui/button";
@@ -8,6 +9,7 @@ import { getPlayer, fetchLobby, leaveSession, clearPlayer, rollTurnD6, chooseTur
 import D6Die from "../components/D6Die";
 import EventFeed from "../components/EventFeed";
 import PullToRefresh from "../components/PullToRefresh";
+import ConfirmModal from "../components/ConfirmModal";
 // Sound toggle is global (AppShell header) and dice SFX timing is handled by the dice overlay.
 
 export default function Play() {
@@ -28,6 +30,8 @@ export default function Play() {
   const [specialTarget, setSpecialTarget] = useState("");
   const [boostOptions, setBoostOptions] = useState([]);
   const [boostTo, setBoostTo] = useState("");
+
+  const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
 
   const canView = !!(session?.sessionId && me?.playerId);
 
@@ -98,15 +102,19 @@ useEffect(() => {
 
   // Auto-open the Special deck modal when the backend requests it.
   useEffect(() => {
-    const isMine = !!(state?.currentPlayerId && me?.playerId && state.currentPlayerId === me.playerId);
-    if (isMine && state?.turnStatus === "AWAITING_SPECIAL_CARD") {
+    const ts = String(state?.turnStatus || "");
+    const awaiting = ts === "AWAITING_SPECIAL_CARD";
+    const hinted = !awaiting && state?.lastEventType === "SPECIAL" && state?.currentPlayerId && me?.playerId && state.currentPlayerId === me.playerId;
+    // Be robust: sometimes currentPlayerId can briefly be stale during polling.
+    // When awaiting a special card, always show the modal. Only the current player can act.
+    if (awaiting || hinted) {
       setSpecialOpen(true);
-    } else {
-      setSpecialOpen(false);
-      setSpecialTarget("");
-      setBoostOptions([]);
-      setBoostTo("");
+      return;
     }
+    setSpecialOpen(false);
+    setSpecialTarget("");
+    setBoostOptions([]);
+    setBoostTo("");
   }, [state?.turnStatus, state?.currentPlayerId, me?.playerId]);
 
 
@@ -225,12 +233,10 @@ useEffect(() => {
   }
 
   async function leaveGame() {
-    const ok = window.confirm(
-      "Willst du das Spiel wirklich verlassen?\n\n" +
-      "Du verlässt das Match und musst beim nächsten QR-Join wieder Name + Icon auswählen."
-    );
-    if (!ok) return;
+    setConfirmLeaveOpen(true);
+  }
 
+  async function performLeaveGame() {
     if (session?.sessionId && me?.playerId) {
       try { await leaveSession(session.sessionId, me.playerId); } catch {}
     }
@@ -243,7 +249,7 @@ useEffect(() => {
 
   if (!canView) {
     return (
-      <AppShell title="Play" subtitle="Join a match and set your profile first." showTabs activeTab="play" backTo="/">
+      <AppShell title="Play" subtitle="Join a match and set your profile first." showTabs activeTab="play" backTo={false} showBrand>
         <div className="panel">
           <div style={{ fontWeight: 750, marginBottom: 8 }}>Not ready</div>
           <div className="muted">You need to be in a match and have a player profile.</div>
@@ -284,6 +290,7 @@ useEffect(() => {
       showTabs
       activeTab="play"
       backTo={false}
+      showBrand
       headerBadges={
         <>
           {session?.sessionCode ? <Badge variant="secondary">Match: {session.sessionCode}</Badge> : null}
@@ -292,13 +299,13 @@ useEffect(() => {
         </>
       }
     >
-      {specialOpen ? (
+      {specialOpen ? createPortal((
         <div
           style={{
             position: "fixed",
             inset: 0,
             background: "rgba(0,0,0,0.55)",
-            zIndex: 80,
+            zIndex: 200,
             display: "grid",
             placeItems: "center",
             padding: 16,
@@ -320,12 +327,22 @@ useEffect(() => {
               Ziehe <strong>eine Karte in real life</strong> vom Special-Stapel und wähle sie hier aus.
             </div>
 
+            {!isMyTurn ? (
+              <div className="panel" style={{ marginBottom: 12, border: "1px solid rgba(148,163,184,0.18)" }}>
+                <div style={{ fontWeight: 800 }}>⏳ Waiting…</div>
+                <div className="muted" style={{ marginTop: 4, lineHeight: 1.4 }}>
+                  The current player is selecting their Special card.
+                </div>
+              </div>
+            ), document.body) : null}
+
             <div style={{ display: "grid", gap: 10 }}>
               <label style={{ display: "grid", gap: 6 }}>
                 <div style={{ fontWeight: 700 }}>Welche Karte hast du gezogen?</div>
                 <select
                   value={specialCard}
                   onChange={(e) => setSpecialCard(e.target.value)}
+                  disabled={!isMyTurn}
                   style={{
                     padding: "10px 12px",
                     borderRadius: 12,
@@ -356,6 +373,7 @@ useEffect(() => {
                   <select
                     value={specialTarget}
                     onChange={(e) => setSpecialTarget(e.target.value)}
+                    disabled={!isMyTurn}
                     style={{
                       padding: "10px 12px",
                       borderRadius: 12,
@@ -378,6 +396,7 @@ useEffect(() => {
                   <select
                     value={boostTo}
                     onChange={(e) => setBoostTo(e.target.value)}
+                    disabled={!isMyTurn}
                     style={{
                       padding: "10px 12px",
                       borderRadius: 12,
@@ -395,7 +414,7 @@ useEffect(() => {
               ) : null}
 
               <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 6 }}>
-                <Button onClick={doApplySpecial}>Aktivieren</Button>
+                <Button onClick={doApplySpecial} disabled={!isMyTurn}>Aktivieren</Button>
               </div>
             </div>
           </div>
@@ -417,10 +436,12 @@ useEffect(() => {
       <PullToRefresh onRefresh={load}>
         <div className="playRoot">
           <div className="playTop">
-            <EventFeed sessionId={session.sessionId} title="Game feed" limit={5} floating={false} />
+            <EventFeed sessionId={session.sessionId} title="Game feed" limit={5} />
           </div>
 
           <div className="playMid">
+            {/* Reserve space under the fixed (collapsed) EventFeed so it never overlaps content. */}
+            <div style={{ height: "calc(var(--cc-eventfeed-h, 72px) + 8px)" }} aria-hidden />
             <div className="panel playCard">
               {err ? <div style={{ opacity: 0.9 }}>⚠️ {err}</div> : null}
 
@@ -517,6 +538,23 @@ useEffect(() => {
           </div>
         </div>
       </PullToRefresh>
+
+      <ConfirmModal
+        open={confirmLeaveOpen}
+        title="Leave game?"
+        message={
+          "Willst du das Spiel wirklich verlassen?\n\n" +
+          "Du verlässt das Match und musst beim nächsten QR-Join wieder Name + Icon auswählen."
+        }
+        confirmText="Leave"
+        cancelText="Stay"
+        danger
+        onConfirm={() => {
+          setConfirmLeaveOpen(false);
+          performLeaveGame();
+        }}
+        onClose={() => setConfirmLeaveOpen(false)}
+      />
     </AppShell>
   );
 }

@@ -8,6 +8,7 @@ import { getSession, clearSession, setSessionStarted } from "../lib/session";
 import { getPlayer, fetchLobby, setReady, leaveSession, clearPlayer, rollLobbyD20 } from "../lib/player";
 import D20Die from "../components/D20Die";
 import { useDiceOverlay } from "../components/dice/DiceOverlayProvider";
+import ConfirmModal from "../components/ConfirmModal";
 // Sound toggle is global (AppShell header) and dice SFX timing is handled by the dice overlay.
 
 export default function Lobby() {
@@ -22,6 +23,7 @@ export default function Lobby() {
   const diceOverlay = useDiceOverlay();
   const [err, setErr] = useState(null);
   const [qrOpen, setQrOpen] = useState(false);
+  const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
 
   // Floating player bubbles (no-scroll lobby)
   const cloudRef = useRef(null);
@@ -116,11 +118,6 @@ export default function Lobby() {
   }
 
   async function leaveLobby() {
-    const ok = window.confirm(
-      "Willst du das Spiel wirklich verlassen?\n\n" +
-      "Du verlässt das Match und musst beim nächsten QR-Join wieder Name + Icon auswählen."
-    );
-    if (!ok) return;
     if (session?.sessionId && me?.playerId) {
       try { await leaveSession(session.sessionId, me.playerId); } catch {}
     }
@@ -131,7 +128,7 @@ export default function Lobby() {
 
   if (!canView) {
     return (
-      <AppShell title="Lobby" subtitle="Join a match and set your profile first." showTabs activeTab="play" backTo={false}>
+      <AppShell title="Lobby" subtitle="Join a match and set your profile first." showTabs activeTab="play" backTo={false} showBrand>
         <div className="panel">
           <div style={{ fontWeight: 750, marginBottom: 8 }}>Not ready</div>
           <div className="muted" style={{ marginBottom: 12 }}>
@@ -174,6 +171,7 @@ export default function Lobby() {
       showTabs
       activeTab="play"
       backTo={false}
+      showBrand
       headerBadges={
         <>
           <Badge>Lobby</Badge>
@@ -192,11 +190,12 @@ export default function Lobby() {
         .lobbyWrap{ height:100%; width:100%; max-width: 720px; position:relative; }
         /* TabBar reserve in AppShell is ~84px (see ui.css). Keep it as a local var so we can pin buttons
            directly above the tab bar even though AppShell adds padding at the bottom. */
-        :root{ --cc_tab_pad: 84px; --cc_lobby_actions_h: 132px; --cc_lobby_top_hud: 58px; }
+        :root{ --cc_tab_pad: 84px; --cc_lobby_actions_h: 100px; --cc_lobby_edge_h: 152px; }
         .lobbyStage{ position:absolute; left:12px; right:12px;
-          top: calc(12px + var(--cc_lobby_top_hud));
+          /* keep all edge buttons ABOVE the stage */
+          top: calc(12px + var(--cc_lobby_edge_h));
           /* leave room for the fixed bottom actions AND the fixed tab bar */
-          bottom: calc(16px + var(--cc_tab_pad) + var(--cc_lobby_actions_h));
+          bottom: calc(12px + var(--cc_tab_pad) + var(--cc_lobby_actions_h));
           overflow:hidden; border-radius:20px;
           border: 1px solid rgba(148,163,184,0.16);
           background: rgba(2,6,23,0.18);
@@ -213,6 +212,21 @@ export default function Lobby() {
         /* Edge buttons live OUTSIDE the stage (top row). */
         .edgeTopLeft{ position:absolute; left:12px; top:12px; z-index:30; display:grid; justify-items:center; gap:6px; }
         .edgeTopRight{ position:absolute; right:12px; top:12px; z-index:30; display:grid; justify-items:center; gap:10px; }
+        .edgeDieWrap{ width: 96px; height: 96px; border-radius: 22px; overflow:hidden;
+          display:grid; place-items:center;
+          background: rgba(2,6,23,0.35);
+          border: 1px solid rgba(148,163,184,0.18);
+          box-shadow: 0 10px 30px rgba(0,0,0,0.22);
+        }
+        .edgeDieWrap > div{ transform: scale(0.86); transform-origin: center; }
+        .edgeDiceWrap{ width: 96px; height: 96px; display:grid; place-items:center; overflow:hidden;
+          border-radius: 18px;
+          border: 1px solid rgba(148,163,184,0.18);
+          background: rgba(2,6,23,0.20);
+          backdrop-filter: blur(8px);
+          -webkit-backdrop-filter: blur(8px);
+        }
+        .edgeDiceWrap > button{ transform: scale(0.82); transform-origin: center; }
         .edgeBtn{ border-radius:16px; padding:10px 12px; font-weight:850; }
         .edgeHint{ font-size:11px; opacity:0.85; }
         .pBubble{ position:absolute; display:grid; justify-items:center; gap:6px; padding:10px 12px; border-radius:16px;
@@ -259,7 +273,7 @@ export default function Lobby() {
         .lobbyBottomRow{ display:grid; gap:10px; }
 
         /* Compact toast for transient lobby events/errors (no stacked boxes) */
-        .lobbyToast{ position:absolute; left:12px; right:12px; top: calc(12px + var(--cc_lobby_top_hud)); z-index:40;
+        .lobbyToast{ position:absolute; left:12px; right:12px; top: calc(12px + var(--cc_lobby_edge_h)); z-index:40;
           padding: 10px 12px; border-radius: 16px;
           border: 1px solid rgba(148,163,184,0.18);
           background: rgba(2,6,23,0.72);
@@ -332,19 +346,11 @@ export default function Lobby() {
 
         {/* Edge buttons live OUTSIDE the player stage (same height). */}
         <div className="edgeTopLeft">
-          <button
-            onClick={doLobbyRoll}
-            disabled={!canRoll || busy}
-            aria-label="Roll D20"
-            style={{
-              padding: 0,
-              border: "none",
-              background: "transparent",
-              borderRadius: 18,
-            }}
-          >
-            <D20Die value={meRow?.lobbyRoll ?? "?"} rolling={rolling} disabled={!canRoll || busy} onClick={doLobbyRoll} />
-          </button>
+          <div className="edgeDieWrap">
+            <div>
+              <D20Die value={meRow?.lobbyRoll ?? "?"} rolling={rolling} disabled={!canRoll || busy} onClick={doLobbyRoll} />
+            </div>
+          </div>
           <div className="edgeHint">
             {state?.turnOrderLocked
               ? "Locked"
@@ -370,7 +376,7 @@ export default function Lobby() {
           >
             {meRow?.ready ? "Unready" : "Ready"}
           </Button>
-          <Button className="fullWidthBtn" variant="ghost" onClick={leaveLobby}>Leave lobby</Button>
+          <Button className="fullWidthBtn" variant="ghost" onClick={() => setConfirmLeaveOpen(true)}>Leave lobby</Button>
         </div>
 
         {/* Tiny toast-like message (no stacked panels) */}
@@ -396,6 +402,23 @@ export default function Lobby() {
             </div>
           </div>
         ) : null}
+
+        <ConfirmModal
+          open={confirmLeaveOpen}
+          title="Leave lobby?"
+          message={
+            "Willst du das Spiel wirklich verlassen?\n\n" +
+            "Du verlässt das Match und musst beim nächsten QR-Join wieder Name + Icon auswählen."
+          }
+          confirmText="Leave"
+          cancelText="Stay"
+          danger
+          onConfirm={() => {
+            setConfirmLeaveOpen(false);
+            leaveLobby();
+          }}
+          onClose={() => setConfirmLeaveOpen(false)}
+        />
         </div>
       </div>
     </AppShell>

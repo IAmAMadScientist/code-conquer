@@ -1,8 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
-import AppShell from "../components/AppShell";
-import { Badge } from "../components/ui/badge";
-import { Button } from "../components/ui/button";
+import { useLocation } from "react-router-dom";
 import ResultSubmitPanel from "../components/ResultSubmitPanel";
 
 // Bit Jumper (Doodle Jump-ish) — Arcade first, learning hidden in token pattern routing.
@@ -78,6 +75,14 @@ function makeToken(allowedOps) {
   const op = allowedOps[randInt(0, allowedOps.length - 1)];
   const bit = Math.random() < 0.5 ? 0 : 1;
   return { op, bit };
+}
+
+function makeFixedToken(op, bit) {
+  return { op, bit };
+}
+
+function makeBlankToken() {
+  return { op: "BLANK", bit: null };
 }
 
 function makePattern(diff) {
@@ -172,8 +177,16 @@ export default function BitJumperPage() {
     const startY = H - 90;
     const startX = W * 0.5;
 
-    function spawnPlatform(y, mustTypeOrNull = null) {
-      const type = mustTypeOrNull || pickWeighted([
+    // Create the learning pattern up-front so platform spawning can always
+    // offer the correct next-bit choices from the very first jump.
+    const pattern = makePattern(diff);
+    let patternIndex = 0;
+
+    function spawnPlatform(y, mustTypeOrNull = null, forceBlank = false) {
+      const type = forceBlank
+        ? "BLANK"
+        : mustTypeOrNull ||
+          pickWeighted([
         { v: "STATIC", w: 1.0 },
         { v: "MOVING", w: cfg.moveW },
         { v: "BREAKING", w: cfg.breakW },
@@ -181,7 +194,7 @@ export default function BitJumperPage() {
       ]);
 
       const x = randInt(12, Math.max(12, W - PLATFORM_W - 12));
-      const token = makeToken(cfg.ops);
+      const token = forceBlank ? makeBlankToken() : makeToken(cfg.ops);
       const vx = type === "MOVING" ? (Math.random() < 0.5 ? -1 : 1) * randInt(70, 120) : 0;
       return {
         id: `${Math.random().toString(16).slice(2)}${Date.now().toString(16)}`,
@@ -197,14 +210,67 @@ export default function BitJumperPage() {
       };
     }
 
-    // initial platforms (ensure variety is visible)
+    // Helper: ensure per height band there is always a neutral BLANK + a 0 + a 1 choice.
+    // The 0/1 platforms use the *current* expected op so you always have the next-bit choice.
+    function spreadBandX() {
+      const margin = 12;
+      const maxX = Math.max(margin, W - PLATFORM_W - margin);
+      const xs = [
+        Math.round(W * 0.18 - PLATFORM_W / 2),
+        Math.round(W * 0.50 - PLATFORM_W / 2),
+        Math.round(W * 0.82 - PLATFORM_W / 2),
+      ].map((v) => clamp(v, margin, maxX));
+      // tiny shuffle so it doesn't feel too rigid
+      for (let i = xs.length - 1; i > 0; i--) {
+        const j = randInt(0, i);
+        [xs[i], xs[j]] = [xs[j], xs[i]];
+      }
+      return xs;
+    }
+
+    // initial platforms (ensure variety is visible) + always give BLANK/0/1 per band
     const platforms = [];
-    platforms.push({ ...spawnPlatform(startY + 44, "STATIC"), x: Math.round(startX - PLATFORM_W / 2) });
-    platforms.push(spawnPlatform(startY - cfg.gap * 1.0, "MOVING"));
-    platforms.push(spawnPlatform(startY - cfg.gap * 2.0, "BREAKING"));
-    platforms.push(spawnPlatform(startY - cfg.gap * 3.0, "BOUNCY"));
+    function pushBand(y, mustTypeOrNull = null) {
+      const want = pattern[patternIndex] || makeToken(cfg.ops);
+      const op = want?.op || cfg.ops[0] || "SET";
+
+      const blank = spawnPlatform(y, "STATIC", true);
+      const p0 = spawnPlatform(y, mustTypeOrNull, false);
+      const p1 = spawnPlatform(y, mustTypeOrNull, false);
+      p0.token = makeFixedToken(op, 0);
+      p1.token = makeFixedToken(op, 1);
+
+      // spread x so all three choices are always reachable
+      const [xA, xB, xC] = spreadBandX();
+      blank.x = xA;
+      p0.x = xB;
+      p1.x = xC;
+
+      platforms.push(blank, p0, p1);
+    }
+
+    // Start band: always BLANK + 0 + 1.
+    {
+      const want = pattern[0] || makeToken(cfg.ops);
+      const op = want?.op || cfg.ops[0] || "SET";
+      const blank = spawnPlatform(startY + 44, "STATIC", true);
+      const p0 = spawnPlatform(startY + 44, "STATIC", false);
+      const p1 = spawnPlatform(startY + 44, "STATIC", false);
+      p0.token = makeFixedToken(op, 0);
+      p1.token = makeFixedToken(op, 1);
+      const [xA, xB, xC] = spreadBandX();
+      // Always start on a BLANK platform.
+      blank.x = Math.round(startX - PLATFORM_W / 2);
+      // Ensure the next choice always offers 0 and 1 (reachable and not overlapping controls).
+      p0.x = xA;
+      p1.x = xC;
+      platforms.push(blank, p0, p1);
+    }
+    pushBand(startY - cfg.gap * 1.0, "MOVING");
+    pushBand(startY - cfg.gap * 2.0, "BREAKING");
+    pushBand(startY - cfg.gap * 3.0, "BOUNCY");
     for (let i = 4; i < 11; i++) {
-      platforms.push(spawnPlatform(startY - cfg.gap * i));
+      pushBand(startY - cfg.gap * i);
     }
 
     const s = {
@@ -238,8 +304,8 @@ export default function BitJumperPage() {
       score: 0,
       best: loadBest(diff),
       combo: 0,
-      pattern: makePattern(diff),
-      patternIndex: 0,
+      pattern,
+      patternIndex,
       shakeT: 0,
       shakeAmp: 0,
       errors: 0,
@@ -378,6 +444,31 @@ export default function BitJumperPage() {
       }
     }
 
+    function endGame(s, now, won) {
+      if (s.gameOver) return;
+      s.gameOver = true;
+
+      const finalScore = Math.max(0, Math.round(s.score));
+      if (finalScore > s.best) {
+        s.best = finalScore;
+        saveBest(diff, finalScore);
+      }
+
+      const survivedMs = Math.round(now - s.startedAt);
+      setUi((u) => ({
+        ...u,
+        gameOver: true,
+        timeMs: survivedMs,
+        won: !!won,
+        best: s.best,
+        score: finalScore,
+        errors: s.errors,
+        pattern: s.pattern,
+        patternIndex: s.patternIndex,
+        combo: s.combo,
+      }));
+    }
+
     function update(s, dt, now) {
       const { W, H } = s;
       const p = s.player;
@@ -441,9 +532,13 @@ export default function BitJumperPage() {
             pl.breakAt = now + s.BREAK_DELAY_MS;
           }
 
-          // Token check
-          const want = s.pattern[s.patternIndex];
-          if (tokenEq(pl.token, want)) {
+          // Token check — BLANK platforms are neutral so you can "wait" for the right token.
+          if (pl.token?.op === "BLANK") {
+            // tiny reward for safe landings to keep flow; no pattern reset.
+            s.score += 2;
+          } else {
+            const want = s.pattern[s.patternIndex];
+            if (tokenEq(pl.token, want)) {
             s.patternIndex += 1;
             s.combo = Math.min(999, s.combo + 1);
 
@@ -461,14 +556,15 @@ export default function BitJumperPage() {
             } else {
               haptic(10);
             }
-          } else {
-            s.patternIndex = 0;
-            s.combo = 0;
-            s.errors += 1;
-            p.vy += s.PENALTY_VY;
-            s.shakeT = s.SHAKE_MS;
-            s.shakeAmp = s.SHAKE_PX;
-            haptic(18);
+            } else {
+              // Wrong token = instant loss (mobile-arcade feel).
+              s.errors += 1;
+              s.combo = 0;
+              s.shakeT = s.SHAKE_MS;
+              s.shakeAmp = s.SHAKE_PX;
+              haptic([18, 40, 18]);
+              endGame(s, now, false);
+            }
           }
 
           break;
@@ -486,18 +582,56 @@ export default function BitJumperPage() {
         s.score += Math.round(dy * 0.12);
       }
 
-      // Remove broken/off platforms + spawn new
+      // Remove broken/off platforms + spawn new.
+      // Every height band gets a neutral "BLANK" platform so you're not forced to take a wrong token.
       s.platforms = s.platforms.filter((pl) => !pl.brokeAt && pl.y < H + 120);
       let topMost = s.platforms.reduce((m, pl) => Math.min(m, pl.y), Infinity);
-      while (s.platforms.length < 18) {
+
+      function spreadBandXRuntime() {
+        const margin = 12;
+        const maxX = Math.max(margin, s.W - s.PLATFORM_W - margin);
+        const xs = [
+          Math.round(s.W * 0.18 - s.PLATFORM_W / 2),
+          Math.round(s.W * 0.50 - s.PLATFORM_W / 2),
+          Math.round(s.W * 0.82 - s.PLATFORM_W / 2),
+        ].map((v) => clamp(v, margin, maxX));
+        for (let i = xs.length - 1; i > 0; i--) {
+          const j = randInt(0, i);
+          [xs[i], xs[j]] = [xs[j], xs[i]];
+        }
+        return xs;
+      }
+
+      function pushBandRuntime(y) {
+        // Always offer three choices per jump band:
+        // BLANK (safe) + BIT=0 + BIT=1 for the *current* required OP.
+        const want = s.pattern[s.patternIndex] || makeToken(s.cfg.ops);
+        const op = want?.op || s.cfg.ops[0] || "SET";
+
+        const blank = spawnPlatformRuntime(s, y, true);
+        const p0 = spawnPlatformRuntime(s, y, false);
+        const p1 = spawnPlatformRuntime(s, y, false);
+        p0.token = makeFixedToken(op, 0);
+        p1.token = makeFixedToken(op, 1);
+
+        const [xA, xB, xC] = spreadBandXRuntime();
+        blank.x = xA;
+        p0.x = xB;
+        p1.x = xC;
+
+        s.platforms.push(blank, p0, p1);
+      }
+
+      const DESIRED = 22;
+      while (s.platforms.length < DESIRED) {
         const y = Math.min(topMost - s.cfg.gap, -randInt(20, 60));
-        s.platforms.push(spawnPlatformRuntime(s, y));
+        pushBandRuntime(y);
         topMost = Math.min(topMost, y);
       }
       // Ensure we always have some above the screen.
       while (topMost > -140) {
         const y = topMost - s.cfg.gap;
-        s.platforms.push(spawnPlatformRuntime(s, y));
+        pushBandRuntime(y);
         topMost = y;
       }
 
@@ -512,44 +646,28 @@ export default function BitJumperPage() {
 
       // Game over
       if (p.y - s.PLAYER_R > H + 90) {
-        s.gameOver = true;
-        const finalScore = Math.max(0, Math.round(s.score));
-        if (finalScore > s.best) {
-          s.best = finalScore;
-          saveBest(diff, finalScore);
-        }
-
         // "Won" heuristic for board scoring: survive longer / complete at least one pattern.
         // Keeps it arcade-first while still fitting the existing points formula.
         const survivedMs = Math.round(now - s.startedAt);
         const targetMs = diff === "HARD" ? 25000 : diff === "MEDIUM" ? 20000 : 15000;
         const won = survivedMs >= targetMs || s.completed >= 1;
-        setUi((u) => ({
-          ...u,
-          gameOver: true,
-          timeMs: survivedMs,
-          won,
-          best: s.best,
-          score: finalScore,
-          errors: s.errors,
-          pattern: s.pattern,
-          patternIndex: s.patternIndex,
-          combo: s.combo,
-        }));
+        endGame(s, now, won);
       }
     }
 
-    function spawnPlatformRuntime(s, y) {
+    function spawnPlatformRuntime(s, y, forceBlank = false) {
       const cfg = s.cfg;
       const W = s.W;
-      const type = pickWeighted([
-        { v: "STATIC", w: 1.0 },
-        { v: "MOVING", w: cfg.moveW },
-        { v: "BREAKING", w: cfg.breakW },
-        { v: "BOUNCY", w: cfg.bouncyW },
-      ]);
+      const type = forceBlank
+        ? "BLANK"
+        : pickWeighted([
+            { v: "STATIC", w: 1.0 },
+            { v: "MOVING", w: cfg.moveW },
+            { v: "BREAKING", w: cfg.breakW },
+            { v: "BOUNCY", w: cfg.bouncyW },
+          ]);
       const x = randInt(12, Math.max(12, W - s.PLATFORM_W - 12));
-      const token = makeToken(cfg.ops);
+      const token = forceBlank ? makeBlankToken() : makeToken(cfg.ops);
       const vx = type === "MOVING" ? (Math.random() < 0.5 ? -1 : 1) * randInt(70, 135) : 0;
       return {
         id: `${Math.random().toString(16).slice(2)}${Date.now().toString(16)}`,
@@ -598,30 +716,39 @@ export default function BitJumperPage() {
       // platforms
       for (const pl of s.platforms) {
         if (pl.brokeAt) continue;
+        const isBlank = pl.type === "BLANK" || pl.token?.op === "BLANK";
         const opInfo = OPS[pl.token.op] || OPS.SET;
 
         // base platform
-        ctx.fillStyle = "rgba(255,255,255,0.10)";
+        ctx.fillStyle = isBlank ? "rgba(255,255,255,0.16)" : "rgba(255,255,255,0.10)";
         ctx.fillRect(pl.x, pl.y, pl.w, pl.h);
 
-        // token stripe
-        ctx.fillStyle = opInfo.color;
-        ctx.fillRect(pl.x, pl.y, pl.w, Math.max(3, Math.floor(pl.h * 0.55)));
+        if (!isBlank) {
+          // token stripe
+          ctx.fillStyle = opInfo.color;
+          ctx.fillRect(pl.x, pl.y, pl.w, Math.max(3, Math.floor(pl.h * 0.55)));
 
-        // bit bubble
-        ctx.fillStyle = "rgba(0,0,0,0.35)";
-        const r = 9;
-        const cx = pl.x + pl.w - (r + 6);
-        const cy = pl.y + pl.h / 2;
-        ctx.beginPath();
-        ctx.arc(cx, cy, r, 0, Math.PI * 2);
-        ctx.fill();
+          // bit bubble
+          ctx.fillStyle = "rgba(0,0,0,0.35)";
+          const r = 9;
+          const cx = pl.x + pl.w - (r + 6);
+          const cy = pl.y + pl.h / 2;
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, 0, Math.PI * 2);
+          ctx.fill();
 
-        ctx.fillStyle = "rgba(255,255,255,0.95)";
-        ctx.font = `${Math.round(12)}px ui-sans-serif, system-ui, -apple-system`;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(String(pl.token.bit), cx, cy + 0.5);
+          ctx.fillStyle = "rgba(255,255,255,0.95)";
+          ctx.font = `${Math.round(12)}px ui-sans-serif, system-ui, -apple-system`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(String(pl.token.bit), cx, cy + 0.5);
+        } else {
+          // blank indicator
+          ctx.strokeStyle = "rgba(255,255,255,0.22)";
+          ctx.setLineDash([6, 5]);
+          ctx.strokeRect(pl.x - 1, pl.y - 1, pl.w + 2, pl.h + 2);
+          ctx.setLineDash([]);
+        }
 
         // type indicators
         ctx.strokeStyle = "rgba(255,255,255,0.35)";
@@ -648,14 +775,16 @@ export default function BitJumperPage() {
         }
 
         // mini op label
-        ctx.fillStyle = "rgba(0,0,0,0.35)";
-        const tagW = 40;
-        const tagH = 16;
-        ctx.fillRect(pl.x + 6, pl.y - tagH - 2, tagW, tagH);
-        ctx.fillStyle = "rgba(255,255,255,0.92)";
-        ctx.font = `${Math.round(10)}px ui-sans-serif, system-ui, -apple-system`;
-        ctx.textAlign = "left";
-        ctx.fillText(opInfo.label, pl.x + 10, pl.y - tagH / 2 - 2);
+        if (!isBlank) {
+          ctx.fillStyle = "rgba(0,0,0,0.35)";
+          const tagW = 40;
+          const tagH = 16;
+          ctx.fillRect(pl.x + 6, pl.y - tagH - 2, tagW, tagH);
+          ctx.fillStyle = "rgba(255,255,255,0.92)";
+          ctx.font = `${Math.round(10)}px ui-sans-serif, system-ui, -apple-system`;
+          ctx.textAlign = "left";
+          ctx.fillText(opInfo.label, pl.x + 10, pl.y - tagH / 2 - 2);
+        }
       }
 
       // player
@@ -714,106 +843,155 @@ export default function BitJumperPage() {
 
   const active = ui.pattern[ui.patternIndex] || null;
 
-  return (
-    <AppShell
-      title="Bit Jumper"
-      subtitle="One finger. Hit the token pattern. Don’t fall."
-      showTabs
-      activeTab="play"
-      backTo="/play"
-      headerBadges={
-        <>
-          <Badge variant="secondary">Diff: {diff}</Badge>
-          <Badge variant="secondary">Score: {ui.score}</Badge>
-          <Badge variant="secondary">Best: {ui.best}</Badge>
-          {ui.combo > 0 ? <Badge>Combo x{ui.combo}</Badge> : null}
-        </>
-      }
-      rightPanel={
-        <div className="panel">
-          <div style={{ fontSize: 16, fontWeight: 750 }}>How to play</div>
-          <div className="muted" style={{ marginTop: 10, fontSize: 13, lineHeight: 1.5 }}>
-            Move left/right with your finger (or mouse). You auto-jump on landing.
-            <br />
-            Match the token pattern in order — wrong token resets progress and gives you a nasty drop.
-          </div>
-          <div className="muted" style={{ marginTop: 10, fontSize: 12, opacity: 0.9 }}>
-            Platform types: ↔ moving · ⟂ breaking · ↑ bouncy
-          </div>
-        </div>
-      }
+  useEffect(() => {
+    // lock scroll for a true mobile-game feel
+    const prevOverflow = document.body.style.overflow;
+    const prevOverscroll = document.body.style.overscrollBehavior;
+    document.body.style.overflow = "hidden";
+    document.body.style.overscrollBehavior = "none";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.body.style.overscrollBehavior = prevOverscroll;
+    };
+  }, []);
+
+  const Pill = ({ children }) => (
+    <div
+      style={{
+        padding: "8px 10px",
+        borderRadius: 999,
+        background: "rgba(2,6,23,0.55)",
+        border: "1px solid rgba(148,163,184,0.22)",
+        color: "rgba(255,255,255,0.92)",
+        fontSize: 12,
+        fontWeight: 800,
+        letterSpacing: 0.2,
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        backdropFilter: "blur(8px)",
+        WebkitBackdropFilter: "blur(8px)",
+      }}
     >
-      <div className="panel" style={{ padding: 12 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-            <Badge>Target</Badge>
-            {ui.pattern.map((t, i) => {
-              const op = OPS[t.op] || OPS.SET;
-              const isActive = i === ui.patternIndex;
-              const isDone = i < ui.patternIndex;
-              return (
-                <div
-                  key={`${t.op}${t.bit}${i}`}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    padding: "6px 10px",
-                    borderRadius: 12,
-                    border: "1px solid rgba(148,163,184,0.25)",
-                    background: isDone
-                      ? "rgba(34,197,94,0.14)"
-                      : isActive
-                      ? "rgba(59,130,246,0.16)"
-                      : "rgba(2,6,23,0.35)",
-                    transform: isActive ? "translateY(-1px)" : "none",
-                    boxShadow: isActive ? "0 10px 24px rgba(0,0,0,0.25)" : "none",
-                  }}
-                >
-                  <span style={{ fontWeight: 800, color: op.color, fontSize: 12 }}>{t.op}</span>
-                  <span style={{ fontWeight: 900, fontSize: 12 }}>{t.bit}</span>
-                </div>
-              );
-            })}
+      {children}
+    </div>
+  );
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "#050b10",
+        color: "rgba(255,255,255,0.95)",
+        paddingTop: "env(safe-area-inset-top)",
+        paddingBottom: "env(safe-area-inset-bottom)",
+        paddingLeft: "env(safe-area-inset-left)",
+        paddingRight: "env(safe-area-inset-right)",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      {/* HUD */}
+      <div
+        style={{
+          flex: "0 0 auto",
+          padding: "12px 12px 10px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 10,
+        }}
+      >
+        <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <Pill>
+              ⭐ <span style={{ opacity: 0.9 }}>Score</span> {ui.score}
+            </Pill>
+            <Pill>
+              🏁 <span style={{ opacity: 0.9 }}>Best</span> {ui.best}
+            </Pill>
+            {ui.combo > 0 ? (
+              <Pill>
+                ⚡ <span style={{ opacity: 0.9 }}>Combo</span> x{ui.combo}
+              </Pill>
+            ) : null}
           </div>
 
-          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <Link to="/play">
-              <Button variant="ghost">Back</Button>
-            </Link>
-            <Button
-              variant="secondary"
-              onClick={() => {
-                resetGame();
-                haptic(12);
-              }}
-            >
-              Restart
-            </Button>
-          </div>
+          <Pill>
+            {diff === "HARD" ? "H" : diff === "MEDIUM" ? "M" : "E"}
+          </Pill>
         </div>
 
-        {active ? (
-          <div className="muted" style={{ marginTop: 8, fontSize: 12 }}>
-            Next: <strong style={{ color: (OPS[active.op] || OPS.SET).color }}>{active.op}</strong> <strong>{active.bit}</strong>
-          </div>
-        ) : null}
+        {/* target pattern (tiny, game-relevant) */}
+        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+          {ui.pattern.map((t, i) => {
+            const op = OPS[t.op] || OPS.SET;
+            const isActive = i === ui.patternIndex;
+            const isDone = i < ui.patternIndex;
+            return (
+              <div
+                key={`${t.op}${t.bit}${i}`}
+                style={{
+                  padding: "7px 10px",
+                  borderRadius: 14,
+                  border: "1px solid rgba(148,163,184,0.18)",
+                  background: isDone
+                    ? "rgba(34,197,94,0.14)"
+                    : isActive
+                    ? "rgba(59,130,246,0.16)"
+                    : "rgba(2,6,23,0.45)",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  transform: isActive ? "translateY(-1px)" : "none",
+                  boxShadow: isActive ? "0 12px 24px rgba(0,0,0,0.35)" : "none",
+                }}
+              >
+                <span style={{ fontWeight: 900, fontSize: 11, color: op.color }}>{t.op}</span>
+                <span style={{ fontWeight: 950, fontSize: 12 }}>{t.bit}</span>
+              </div>
+            );
+          })}
+          {active ? (
+            <div style={{ marginLeft: "auto" }}>
+              <Pill>
+                Next: <span style={{ color: (OPS[active.op] || OPS.SET).color, fontWeight: 950 }}>{active.op}</span> {active.bit}
+              </Pill>
+            </div>
+          ) : null}
+        </div>
 
+        <div style={{ height: 6, borderRadius: 999, background: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
+          <div
+            style={{
+              height: "100%",
+              width: `${ui.pattern.length ? Math.round((ui.patternIndex / ui.pattern.length) * 100) : 0}%`,
+              background: "rgba(255,255,255,0.55)",
+              transition: "width 160ms ease",
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Play area */}
+      <div style={{ flex: "1 1 auto", minHeight: 0, padding: "0 12px 12px" }}>
         <div
           style={{
-            marginTop: 12,
             width: "100%",
-            height: "min(66vh, 720px)",
-            borderRadius: 16,
+            height: "100%",
+            borderRadius: 18,
             overflow: "hidden",
-            border: "1px solid rgba(148,163,184,0.20)",
+            border: "1px solid rgba(148,163,184,0.18)",
+            background: "rgba(2,6,23,0.25)",
           }}
         >
           <canvas ref={canvasRef} style={{ width: "100%", height: "100%", display: "block" }} />
         </div>
+      </div>
 
-        {/* Auto-submit to board when the run ends */}
-        {typeof ui.won === "boolean" ? (
+      {/* Auto-submit to board when the run ends */}
+      {typeof ui.won === "boolean" ? (
+        <div style={{ flex: "0 0 auto", padding: "0 12px 12px" }}>
           <ResultSubmitPanel
             category="BIT_JUMPER"
             difficulty={diff}
@@ -822,13 +1000,8 @@ export default function BitJumperPage() {
             won={ui.won}
             challengeId={challenge?.challengeInstanceId}
           />
-        ) : null}
-
-        <div className="muted" style={{ marginTop: 10, fontSize: 12, lineHeight: 1.5 }}>
-          Balancing knobs: gravity ({diff === "HARD" ? "snappy" : "stable"}), jumpVy, gap (~{(DIFF_CFG[diff] || DIFF_CFG.EASY).gap}px),
-          weights (moving/break/bouncy), penaltyVy (mismatch drop), COYOTE_PX/X_PAD (landing forgiveness).
         </div>
-      </div>
-    </AppShell>
+      ) : null}
+    </div>
   );
 }
