@@ -186,8 +186,8 @@ export default function Lobby() {
            - Edge buttons (QR, D20) outside the stage
            - Bottom actions pinned right above the tab bar
         */
-        .lobbyRoot{ height:100%; overflow:hidden; display:flex; justify-content:center; }
-        .lobbyWrap{ height:100%; width:100%; max-width: 720px; position:relative; }
+                .lobbyRoot{ flex:1; min-height:0; overflow:hidden; display:flex; justify-content:center; width:100%; }
+        .lobbyWrap{ flex:1; min-height:0; width:100%; max-width: 720px; position:relative; }
         /* TabBar reserve in AppShell is ~84px (see ui.css). Keep it as a local var so we can pin buttons
            directly above the tab bar even though AppShell adds padding at the bottom. */
         :root{ --cc_tab_pad: 84px; --cc_lobby_actions_h: 100px; --cc_lobby_edge_h: 152px; }
@@ -201,6 +201,8 @@ export default function Lobby() {
           background: rgba(2,6,23,0.18);
         }
         .playerCloud{ position:absolute; inset:0; }
+
+        .lobbyHeaderRow{ position:relative; z-index:31; }
 
         /* Minimal HUD inside the stage */
         .stageHud{ position:absolute; left:12px; top:12px; display:flex; gap:8px; flex-wrap:wrap; z-index:5; }
@@ -295,6 +297,21 @@ export default function Lobby() {
           .pSub{ display:none; }
           .pName{ max-width: 92px; }
         }
+
+        /* Desktop / wide screens:
+           Keep the mobile look, but avoid viewport-fixed elements that can drift
+           outside the centered screenSurface.
+           On wider screens we pin the bottom actions inside the lobby surface. */
+        @media (min-width: 768px){
+          /* Desktop: normal flow layout so stage + actions never disappear on wide screens */
+          .lobbyWrap{ display:flex; flex-direction:column; gap:12px; }
+          .lobbyHeaderRow{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+          .edgeTopLeft, .edgeTopRight{ position:static; }
+          .edgeTopLeft{ display:flex; align-items:center; gap:10px; }
+          .edgeTopRight{ display:flex; align-items:center; gap:10px; }
+          .lobbyStage{ position:relative; left:auto; right:auto; top:auto; bottom:auto; flex:1; min-height:420px; }
+          .lobbyBottom{ position:static; left:auto; right:auto; transform:none; width:100%; }
+        }
       `}</style>
 
       <div className="lobbyRoot">
@@ -347,6 +364,8 @@ export default function Lobby() {
           </div>
         </div>
 
+        {/* Header actions (desktop flow). On mobile, edge buttons are absolutely positioned. */}
+        <div className="lobbyHeaderRow">
         {/* Edge buttons live OUTSIDE the player stage (same height). */}
         <div className="edgeTopLeft">
           <div className="edgeDieWrap">
@@ -367,6 +386,8 @@ export default function Lobby() {
           <Button className="edgeBtn" variant="secondary" onClick={() => setQrOpen(true)} disabled={!joinUrl}>
             Show QR
           </Button>
+        </div>
+
         </div>
 
         {/* Bottom actions pinned directly above the tab bar */}

@@ -44,12 +44,12 @@ export default function InfoCenter({ onRequestClose }) {
         key: "how",
         title: "How to play (Boardgame)",
         icon: "🎲",
-        subtitle: "Turns, dice, forks, specials — the essentials",
+        subtitle: "Turns, dice, forks, specials - the essentials",
         render: () => (
           <div style={{ display: "grid", gap: 12 }}>
             <div style={{ fontWeight: 900, fontSize: 16 }}>How to play</div>
             <div style={{ color: "var(--muted)", fontSize: 13, lineHeight: 1.45 }}>
-              You play the physical boardgame at the table — the web app supports dice, rules, and minigames.
+              You play the physical boardgame at the table, the web app supports dice, rules, and minigames.
             </div>
             <div className="ui-card">
               <div className="ui-cardContent" style={{ display: "grid", gap: 10, padding: 16 }}>
@@ -60,7 +60,7 @@ export default function InfoCenter({ onRequestClose }) {
                   <b>Fork:</b> If multiple paths are available, the player chooses the path.
                 </Bullet>
                 <Bullet>
-                  <b>Challenge:</b> Start a minigame — the result counts for the boardgame.
+                  <b>Challenge:</b> Start a minigame, the result counts for the boardgame.
                 </Bullet>
                 <Bullet>
                   <b>Special Field:</b> Draw a real-life card and select it in the dialog.
@@ -95,7 +95,7 @@ export default function InfoCenter({ onRequestClose }) {
                   If scanning fails: use the link under the QR code (or share it via messenger).
                 </Bullet>
                 <Bullet>
-                  Tip: increase screen brightness — QR codes scan worse on dark displays.
+                  Increase screen brightness, QR codes scan worse on dark displays.
                 </Bullet>
               </div>
             </div>
@@ -119,7 +119,7 @@ export default function InfoCenter({ onRequestClose }) {
                   When you press <b>Run</b>, moves execute <b>LIFO</b>: <i>top executes next</i>.
                 </Bullet>
                 <Bullet>
-                  Goal: collect ⭐ and reach 🏁 — without crashing into walls.
+                  Goal: collect ⭐ and reach 🏁, without crashing into walls.
                 </Bullet>
                 <Bullet>
                   Tip: plan the last step first, then the one before it (because the stack runs backwards).
@@ -143,7 +143,7 @@ export default function InfoCenter({ onRequestClose }) {
                   A new number starts at the root. <b>Smaller</b> → left, <b>larger</b> → right.
                 </Bullet>
                 <Bullet>
-                  You don’t choose the path — you choose the <b>slot</b> where the node will be inserted.
+                  You don’t choose the path, you choose the <b>slot</b> where the node will be inserted.
                 </Bullet>
                 <Bullet>
                   For <b>Equal</b>, follow the rule shown (e.g. Equal → RIGHT).
@@ -197,7 +197,7 @@ export default function InfoCenter({ onRequestClose }) {
                   Collect <b>bit tokens</b> (0/1) in the <b>correct order</b> shown at the top.
                 </Bullet>
                 <Bullet>
-                  A wrong bit is an instant loss — but bits are always avoidable.
+                  A wrong bit is an instant loss, but bits are always avoidable.
                 </Bullet>
                 <Bullet>
                   Collect <b>coins</b> for bonus points. Breakable platforms reappear after a short delay.
@@ -225,7 +225,7 @@ export default function InfoCenter({ onRequestClose }) {
                   Use <b>ENQUEUE</b> to push the incoming number to the back of the queue.
                 </Bullet>
                 <Bullet>
-                  Use <b>DEQUEUE</b> to send the <b>front</b> element to the output — it must match the next target.
+                  Use <b>DEQUEUE</b> to send the <b>front</b> element to the output, it must match the next target.
                 </Bullet>
                 <Bullet>
                   Use <b>DISCARD</b> to skip an incoming number. If you enqueue a mistake, you can <b>REMOVE</b> (limited) or <b>ROTATE</b> the queue.
