@@ -178,6 +178,7 @@ export default function QueueCommanderPage() {
   const canDiscard = status === "playing";
   const canDequeue = status === "playing" && queue.length > 0;
   const canRemove = status === "playing" && selectedIdx >= 0 && selectedIdx < queue.length && removeCharges > 0;
+  const canRotate = status === "playing" && queue.length >= 2;
 
   function enqueue() {
     if (!canEnqueue) return;
@@ -220,6 +221,24 @@ export default function QueueCommanderPage() {
     setSelectedIdx(-1);
     setHint("Removed from queue");
     vibrate(12);
+  }
+
+  function rotateQueue() {
+    if (!canRotate) return;
+    setQueue((q) => {
+      if (q.length < 2) return q;
+      const next = [...q.slice(1), q[0]];
+      // Keep selection stable relative to the same item.
+      setSelectedIdx((cur) => {
+        if (cur < 0) return cur;
+        if (cur === 0) return q.length - 1;
+        if (cur >= q.length) return -1;
+        return cur - 1;
+      });
+      return next;
+    });
+    setHint("Rotated queue");
+    vibrate(10);
   }
 
   // Infinite input: no "out of numbers" failure.
@@ -427,14 +446,27 @@ export default function QueueCommanderPage() {
           </Button>
         </div>
 
-        <Button
-          style={{ height: 54, fontSize: "clamp(13px, 3.8vw, 16px)", fontWeight: 900, borderRadius: 18, minWidth: 0, width: "100%" }}
-          variant="destructive"
-          onClick={removeSelected}
-          disabled={!canRemove}
-        >
-          REMOVE SELECTED ({removeCharges})
-        </Button>
+        {/* Bottom actions (equal width) */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
+          <Button
+            style={{ height: 54, fontSize: "clamp(13px, 3.8vw, 16px)", fontWeight: 900, borderRadius: 18, minWidth: 0, width: "100%" }}
+            variant="destructive"
+            onClick={removeSelected}
+            disabled={!canRemove}
+          >
+            REMOVE SELECTED ({removeCharges})
+          </Button>
+
+          <Button
+            style={{ height: 54, fontSize: "clamp(13px, 3.8vw, 16px)", fontWeight: 900, borderRadius: 18, minWidth: 0, width: "100%" }}
+            variant="secondary"
+            onClick={rotateQueue}
+            disabled={!canRotate}
+            title="Rotate queue: front goes to back"
+          >
+            ROTATE
+          </Button>
+        </div>
 
         {status !== "playing" ? (
           <ResultSubmitPanel
@@ -443,7 +475,8 @@ export default function QueueCommanderPage() {
             timeMs={timeMs}
             errors={errors}
             won={status === "won"}
-            challengeId={challenge?.challengeId}
+            // Turn token provided by /play
+            challengeId={challenge?.challengeInstanceId}
           />
         ) : null}
       </div>

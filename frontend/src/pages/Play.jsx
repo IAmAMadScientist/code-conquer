@@ -10,6 +10,8 @@ import D6Die from "../components/D6Die";
 import EventFeed from "../components/EventFeed";
 import PullToRefresh from "../components/PullToRefresh";
 import ConfirmModal from "../components/ConfirmModal";
+import mapImg from "../assets/map.png";
+import nodeMapPositions from "../assets/nodeMapPositions.json";
 // Sound toggle is global (AppShell header) and dice SFX timing is handled by the dice overlay.
 
 export default function Play() {
@@ -31,6 +33,8 @@ export default function Play() {
 
   const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
 
+  const [mapOpen, setMapOpen] = useState(false);
+
   const canView = !!(session?.sessionId && me?.playerId);
 
   // Reset per-card sub-selections when switching card.
@@ -38,6 +42,15 @@ export default function Play() {
     setBoostOptions([]);
     setBoostTo("");
   }, [specialCard]);
+
+  useEffect(() => {
+    if (!mapOpen) return;
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") setMapOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [mapOpen]);
 
   async function load() {
     if (!session?.sessionId) return;
@@ -305,6 +318,14 @@ export default function Play() {
           {session?.sessionCode ? <Badge variant="secondary">Match: {session.sessionCode}</Badge> : null}
           {me?.playerName ? <Badge variant="secondary">You: {me.playerIcon || "🙂"} {me.playerName}</Badge> : null}
           <Badge variant={isMyTurn ? "secondary" : "outline"}>{turnLabel}</Badge>
+                    <Button
+                      variant="secondary"
+                      style={{ height: 34, padding: "0 12px", borderRadius: 999, fontWeight: 800 }}
+                      onClick={() => setMapOpen(true)}
+                    >
+                      Show map
+                    </Button>
+
         </>
       }
     >
@@ -433,6 +454,96 @@ export default function Play() {
           </div>
         </div>
       ), document.body) : null}
+
+{mapOpen ? createPortal((
+  <div
+    style={{
+      position: "fixed",
+      inset: 0,
+      background: "rgba(0,0,0,0.65)",
+      zIndex: 250,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "max(env(safe-area-inset-top), 12px) 12px max(env(safe-area-inset-bottom), 12px)",
+    }}
+    onClick={() => setMapOpen(false)}   // ✅ tap outside closes
+  >
+    <div
+      className="panel"
+      style={{
+        position: "relative",
+        width: "min(900px, 96vw)",
+        maxWidth: "96vw",
+        maxHeight: "90dvh",
+        overflow: "hidden",
+        border: "1px solid rgba(148,163,184,0.22)",
+      }}
+      onClick={(e) => e.stopPropagation()} // ✅ don't close when clicking map itself
+    >
+      {/* Close button */}
+      <button
+        onClick={() => setMapOpen(false)}
+        aria-label="Close map"
+        style={{
+          position: "absolute",
+          top: 10,
+          right: 10,
+          zIndex: 5,
+          width: 44,
+          height: 44,
+          borderRadius: 999,
+          border: "1px solid rgba(148,163,184,0.25)",
+          background: "rgba(15,23,42,0.65)",
+          color: "rgba(255,255,255,0.92)",
+          fontSize: 22,
+          fontWeight: 900,
+          cursor: "pointer",
+        }}
+      >
+        ✕
+      </button>
+
+      {/* Map container */}
+      <div style={{ position: "relative", width: "100%", height: "100%" }}>
+        <img
+          src={mapImg}
+          alt="Map"
+          style={{
+            width: "100%",
+            height: "auto",
+            display: "block",
+            maxHeight: "90dvh",
+            objectFit: "contain",
+          }}
+        />
+
+        {/* Player marker */}
+        {(() => {
+          const nodeId = meState?.positionNodeId; // e.g. "n23"
+          const pos = nodeId ? nodeMapPositions[nodeId] : null; // { x: 0..1, y: 0..1 }
+          if (!pos) return null;
+
+          return (
+            <div
+              style={{
+                position: "absolute",
+                left: `${pos.x * 100}%`,
+                top: `${pos.y * 100}%`,
+                transform: "translate(-50%, -50%)",
+                width: 16,
+                height: 16,
+                borderRadius: 999,
+                background: "rgba(255, 60, 60, 0.95)",
+                boxShadow: "0 0 18px rgba(255,60,60,0.95), 0 0 40px rgba(255,60,60,0.55)",
+              }}
+            />
+          );
+        })()}
+      </div>
+    </div>
+  </div>
+), document.body) : null}
 
       <style>{`
         .playRoot{ height:100%; min-height:0; display:flex; flex-direction:column; gap:12px; overflow:hidden; }
