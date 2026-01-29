@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "./ui/button";
 import { Separator } from "./ui/separator";
@@ -26,11 +26,22 @@ export default function AppShell({
 }) {
   const nav = useNavigate();
   const loc = useLocation();
+  const headerRef = useRef(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [soundEnabled, setSoundEnabled] = useSoundSetting();
   const [hapticsEnabled, setHapticsEnabled] = useHapticsSetting();
 
   const showBack = backTo !== false && (loc?.pathname || "/") !== "/";
+
+  // Expose current top bar height for fixed overlays (e.g., EventFeed) so they never overlap the header.
+  useLayoutEffect(() => {
+    try {
+      const el = headerRef.current;
+      if (!el) return;
+      const h = Math.ceil(el.getBoundingClientRect().height || 0);
+      document.documentElement.style.setProperty("--cc-topbar-h", `${h}px`);
+    } catch {}
+  }, [title, subtitle, headerBadges, showBack]);
 
   const hasSession = !!getSession()?.sessionId;
   const startedFlag = hasSession && isSessionStarted();
@@ -61,9 +72,19 @@ export default function AppShell({
     else nav(-1);
   }
 
+  // Expose topbar height so fixed overlays (e.g., EventFeed) can position below it.
+  useLayoutEffect(() => {
+    try {
+      const el = headerRef.current;
+      if (!el) return;
+      const h = Math.ceil(el.getBoundingClientRect().height || 0);
+      document.documentElement.style.setProperty("--cc-topbar-h", `${h}px`);
+    } catch {}
+  }, [title, subtitle, headerBadges, showBack]);
+
   return (
     <div className="appRoot">
-      <header className="topBar">
+      <header className="topBar" ref={headerRef}>
         <div className="topBarRow">
           <div className="topBarLeft">
             {showBack ? (

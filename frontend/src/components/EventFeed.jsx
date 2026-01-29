@@ -18,6 +18,7 @@ export default function EventFeed({ sessionId, title = "Events", limit = 5, poll
   }, []);
   const storageKey = useMemo(() => (sessionId ? `cc_evtfeed_open_${sessionId}` : "cc_evtfeed_open"), [sessionId]);
   const panelRef = useRef(null);
+  const collapsedHRef = useRef(0);
   const [open, setOpen] = useState(() => {
     try {
       const v = localStorage.getItem(storageKey);
@@ -104,13 +105,21 @@ export default function EventFeed({ sessionId, title = "Events", limit = 5, poll
   const effectiveLimit = isSmall ? Math.min(Math.max(limit, 1), 3) : Math.max(limit, 1);
   const shown = open ? bounded.slice(-Math.max(effectiveLimit, 1)) : bounded.slice(-1);
   const last = bounded.length ? bounded[bounded.length - 1] : null;
-  // Expose current overlay height so pages can reserve just enough space (no overlap, no huge gaps).
+  // Pages should reserve ONLY the *collapsed* height so expanding the feed never pushes/reflows layout.
+  // When collapsed, measure and store; when expanded, keep using the stored collapsed height.
   useLayoutEffect(() => {
     try {
       const el = panelRef.current;
       if (!el) return;
-      const h = Math.ceil(el.getBoundingClientRect().height || 0);
-      document.documentElement.style.setProperty('--cc-eventfeed-h', `${h}px`);
+
+      if (!open) {
+        const h = Math.ceil(el.getBoundingClientRect().height || 0);
+        collapsedHRef.current = h;
+        document.documentElement.style.setProperty("--cc-eventfeed-h", `${h}px`);
+      } else {
+        const h = collapsedHRef.current || Math.ceil(el.getBoundingClientRect().height || 0);
+        document.documentElement.style.setProperty("--cc-eventfeed-h", `${h}px`);
+      }
     } catch {}
   }, [open, shown.length, last?.seq]);
 
@@ -118,7 +127,7 @@ export default function EventFeed({ sessionId, title = "Events", limit = 5, poll
   // Always overlay: fixed position so showing/hiding never reflows the page.
   const wrapperStyle = {
     position: "fixed",
-    top: 92,
+    top: "calc(var(--cc-topbar-h, 92px) + 10px)",
     left: 12,
     right: 12,
     maxWidth: 720,
@@ -129,16 +138,13 @@ export default function EventFeed({ sessionId, title = "Events", limit = 5, poll
   };
 
   const panelStyle = { display: "grid", gap: 10, pointerEvents: "auto" };
-  // Expose the current feed panel height to the page via a CSS variable so pages can reserve
-  // just enough space under the fixed (collapsed) feed to avoid overlap, without adding big gaps.
+  // (Legacy var) Keep in sync with the collapsed height var.
   useLayoutEffect(() => {
     try {
-      const el = panelRef.current;
-      if (!el) return;
-      const h = Math.round(el.getBoundingClientRect().height || 0);
-      document.documentElement.style.setProperty('--eventfeed-h', String(h));
+      const h = Number(collapsedHRef.current || 0);
+      if (h > 0) document.documentElement.style.setProperty("--eventfeed-h", String(h));
     } catch {}
-  }, [open, shown.length, last?.message]);
+  }, [open]);
 
 
   return (
