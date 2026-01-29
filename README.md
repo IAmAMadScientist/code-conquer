@@ -115,4 +115,4 @@ npm run dev
 
 ## 📜 License
 
-To be defined.
+MIT.
