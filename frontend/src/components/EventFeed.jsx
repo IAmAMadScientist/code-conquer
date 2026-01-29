@@ -99,12 +99,46 @@ export default function EventFeed({ sessionId, title = "Events", limit = 5, poll
     } catch {}
   }
 
-  // Hard-cap the feed for readability on mobile.
+  // Keep items bounded for performance.
   const bounded = events.slice(-MAX_ITEMS);
-  // On small screens keep it compact even when expanded.
-  const effectiveLimit = isSmall ? Math.min(Math.max(limit, 1), 3) : Math.max(limit, 1);
+  // Respect the caller's limit (no hidden mobile cap).
+  const effectiveLimit = Math.max(limit, 1);
   const shown = open ? bounded.slice(-Math.max(effectiveLimit, 1)) : bounded.slice(-1);
   const last = bounded.length ? bounded[bounded.length - 1] : null;
+
+  function extractLastNumber(str) {
+    const m = String(str || "").match(/(\d+)\s*$/);
+    return m ? m[1] : null;
+  }
+
+  function formatEvent(e) {
+    const type = String(e?.type || "");
+    const raw = String(e?.message || "");
+    // Remove leading emojis to save horizontal space.
+    const msg = raw.replace(/^\s*[\p{Emoji_Presentation}\p{Extended_Pictographic}]+\s*/u, "");
+
+    if (type === "D6_ROLL") {
+      // Server message: "🎲 <player> würfelt D6: <n>"
+      const n = (raw.match(/D6\s*:\s*(\d+)/i) || [])[1] || extractLastNumber(raw);
+      // Goal: keep the important info visible in one line: "<name> D6=4"
+      const compactMsg = msg
+        .replace(/würfelt\s*D6\s*:\s*\d+/i, (n ? `D6=${n}` : "D6"))
+        .replace(/\s{2,}/g, " ")
+        .trim();
+      return { badge: n ? `D6=${n}` : "D6", message: compactMsg };
+    }
+
+    if (type === "DICE_ADV") {
+      // Server message: "🎲✨ <player> würfelt zweimal: 2 & 5 → 7"
+      const total = extractLastNumber(raw);
+      const compactMsg = msg
+        .replace(/würfelt\s*zweimal\s*:\s*/i, "rolls 2x: ")
+        .replace(/\s*→\s*/g, " -> ");
+      return { badge: total ? `D6=${total}` : "D6", message: compactMsg };
+    }
+
+    return { badge: type || "evt", message: msg };
+  }
   // Pages should reserve ONLY the *collapsed* height so expanding the feed never pushes/reflows layout.
   // When collapsed, measure and store; when expanded, keep using the stored collapsed height.
   useLayoutEffect(() => {
@@ -165,8 +199,8 @@ export default function EventFeed({ sessionId, title = "Events", limit = 5, poll
       {err ? <div className="muted" style={{ fontSize: 13 }}>⚠️ {err}</div> : null}
 
       {!open && last ? (
-        <div className="muted" style={{ fontSize: 14, lineHeight: 1.35 }}>
-          {last.message}
+        <div className="muted" style={{ fontSize: 12, lineHeight: 1.3 }}>
+          {formatEvent(last).message}
         </div>
       ) : null}
 
@@ -175,18 +209,32 @@ export default function EventFeed({ sessionId, title = "Events", limit = 5, poll
           {shown.length === 0 ? <div className="muted">No events yet.</div> : null}
           <div className="nativeList">
             {shown.map((e) => (
+              (() => {
+                const fe = formatEvent(e);
+                return (
               <div key={e.seq} className="nativeItem">
                 <div className="nativeLeft">
-                  <div className="nativeAvatar" style={{ fontSize: 14, fontVariantNumeric: "tabular-nums" }}>#{e.seq}</div>
+                  <div className="nativeAvatar" style={{ fontSize: 12, fontVariantNumeric: "tabular-nums" }}>#{e.seq}</div>
                   <div className="nativeText">
-                    <div className="nativeTitle" style={{ fontWeight: 750 }}>{e.message}</div>
-                    <div className="nativeSub">Feed</div>
+                    <div
+                      className="nativeTitle"
+                      style={{ fontWeight: 750, fontSize: 13, lineHeight: 1.2, wordBreak: "break-word" }}
+                    >
+                      {fe.message}
+                    </div>
                   </div>
                 </div>
                 <div className="nativeTrail">
-                  <Badge variant="outline">{String(e.type || "evt")}</Badge>
+                  <Badge
+                    variant="outline"
+                    style={{ fontSize: 11, padding: "2px 8px", fontVariantNumeric: "tabular-nums" }}
+                  >
+                    {fe.badge}
+                  </Badge>
                 </div>
               </div>
+                );
+              })()
             ))}
           </div>
         </div>
