@@ -6,6 +6,7 @@ import "./dice/dice.css";
  * Intentionally lightweight (no 3D assets) but reads as a D20.
  */
 export default function D20Die({ value, rolling = false, disabled = false, onClick }) {
+  const isText = typeof value === "string" && value.length > 2;
   function handleClick() {
     if (disabled) return;
     onClick?.();
@@ -56,7 +57,7 @@ export default function D20Die({ value, rolling = false, disabled = false, onCli
           <polyline points="12,26 50,52 88,26" fill="none" stroke="rgba(226,232,240,0.12)" strokeWidth="2" />
         </svg>
 
-        <div className="cc-d20Number">{value ?? "?"}</div>
+        <div className={`cc-d20Number ${isText ? "cc-d20Text" : ""}`}>{value ?? "?"}</div>
       </div>
     </button>
   );

@@ -304,9 +304,9 @@ export default function Lobby() {
           <div className="stageHud">
             <div className="pill">Players: {players.length}</div>
             {hasTies ? (
-              <div className="pill" style={{ borderColor: "rgba(251,191,36,0.35)" }}>
-                ⚠️ Tie: {tiedPlayers.map((p) => p.icon || "🙂").join(" ")}
-              </div>
+			  <div className="pill" style={{ borderColor: "rgba(251,191,36,0.35)" }}>
+				⚠️ Tie — roll again: {tiedPlayers.map((p) => (p.icon || "🙂")).join(" ")}
+			  </div>
             ) : null}
           </div>
 
@@ -335,9 +335,12 @@ export default function Lobby() {
                   {rank ? <div className="pRank">{rank}</div> : null}
                   <div className="pAvatar">{p.icon || "🙂"}</div>
                   <div className="pName">{p.name || "Player"}</div>
-                  <div className="pSub">
-                    {p.lobbyRoll == null ? "Tap D20" : `D20 ${p.lobbyRoll}${p.tied ? " (tie)" : ""}`} • {p.ready ? "Ready" : "Not ready"}
-                  </div>
+				  <div className="pSub">
+					{p.lobbyRoll == null
+					  ? "Tap D20"
+					  : (p.tied ? `TIE — D20=${p.lobbyRoll} • Roll again` : `D20=${p.lobbyRoll}`)}
+					 • {p.ready ? "Ready" : "Not ready"}
+				  </div>
                 </div>
               );
             })}
@@ -348,14 +351,14 @@ export default function Lobby() {
         <div className="edgeTopLeft">
           <div className="edgeDieWrap">
             <div>
-              <D20Die value={meRow?.lobbyRoll ?? "?"} rolling={rolling} disabled={!canRoll || busy} onClick={doLobbyRoll} />
+			<D20Die value={meRow?.tied ? "ROLL AGAIN" : (meRow?.lobbyRoll ?? "?")} rolling={rolling} disabled={!canRoll || busy} onClick={doLobbyRoll} />
             </div>
           </div>
           <div className="edgeHint">
             {state?.turnOrderLocked
               ? "Locked"
               : canRoll
-                ? (meRow?.tied ? "Tie – reroll" : "Tap")
+			  ? (meRow?.tied ? "Tie — roll again" : "Tap")
                 : (meRow?.lobbyRoll != null ? "Rolled" : "Waiting")}
           </div>
         </div>

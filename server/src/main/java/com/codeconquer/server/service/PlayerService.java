@@ -126,6 +126,21 @@ public class PlayerService {
             throw new IllegalStateException("Du hast bereits gewürfelt.");
         }
 
+        // IMPORTANT:
+        // If the player is currently part of a tie, everyone in that tie group must re-roll.
+        // Otherwise the first re-roll would "break" the tie and the remaining tied players would be stuck
+        // with their old value (and no longer be considered tied).
+        Integer previousRoll = p.getLobbyRoll();
+        if (previousRoll != null && tied.contains(p.getId())) {
+            for (Player other : players) {
+                if (other.getLobbyRoll() != null && other.getLobbyRoll().equals(previousRoll)) {
+                    other.setLobbyRoll(null);
+                    other.setReady(false);
+                }
+            }
+            playerRepository.saveAll(players);
+        }
+
         int roll = random.nextInt(20) + 1;
         p.setLobbyRoll(roll);
         // Reset ready if player re-rolls (keeps flow consistent)

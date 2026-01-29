@@ -141,6 +141,14 @@
     0 0 18px rgba(99,102,241,0.30);
 }
 
+.cc-d20Number.cc-d20Text {
+  font-size: 11px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  padding: 0 10px;
+  line-height: 1.05;
+}
+
 .cc-d20Rolling .cc-d20Svg {
   animation: cc_d20_spin 980ms cubic-bezier(0.15, 0.9, 0.2, 1);
 }
