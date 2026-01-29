@@ -289,7 +289,10 @@ public class TurnService {
 
             // Landing effects
             BoardNodeType landedType = board.getType(next);
-            if (landedType == BoardNodeType.SPECIAL) {
+
+            // SPECIAL/JAIL should only trigger if the player *ends* their move on that node.
+            // Passing over those nodes during a multi-step move should not interrupt movement.
+            if (remaining == 0 && landedType == BoardNodeType.SPECIAL) {
                 // SPECIAL: player must draw a special card (real-life) and then select it in the app.
                 s.setTurnStatus(GameSessionService.TURN_AWAITING_SPECIAL_CARD);
                 sessionService.publishEvent(s, "SPECIAL", "🃏 " + formatPlayer(p) + " zieht eine Special-Karte.");
@@ -298,7 +301,7 @@ public class TurnService {
                 mr.awaitingChoice = false;
                 return mr;
             }
-            if (landedType == BoardNodeType.JAIL) {
+            if (remaining == 0 && landedType == BoardNodeType.JAIL) {
                 p.setSkipTurns(1);
                 sessionService.publishEvent(s, "JAIL", formatPlayer(p) + " ist im Gefängnis und setzt 1 Runde aus. ⛓️");
                 mr.turnEnded = true;

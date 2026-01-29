@@ -116,7 +116,7 @@ export default function Play() {
     // Only open when the backend is explicitly waiting for a Special card.
     // (Opening just because we *saw* a SPECIAL event can desync with the backend and cause a 423 Locked loop.)
     // Only the current player (who landed on SPECIAL) should see the selection modal.
-    if (awaiting) {
+    if (awaiting && amCurrent) {
       setSpecialOpen(true);
       return;
     }
