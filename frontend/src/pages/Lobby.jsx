@@ -407,8 +407,8 @@ export default function Lobby() {
           open={confirmLeaveOpen}
           title="Leave lobby?"
           message={
-            "Willst du das Spiel wirklich verlassen?\n\n" +
-            "Du verlässt das Match und musst beim nächsten QR-Join wieder Name + Icon auswählen."
+            "Do you really want to leave?\n\n" +
+            "You will leave this match and will have to pick your name and icon again when you join next time."
           }
           confirmText="Leave"
           cancelText="Stay"

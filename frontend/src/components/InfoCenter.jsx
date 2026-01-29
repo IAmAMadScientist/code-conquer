@@ -160,7 +160,7 @@ export default function InfoCenter({ onRequestClose }) {
         key: "graph",
         title: "Graph Pathfinder",
         icon: "🗺️",
-        subtitle: "Find the path — edge weights matter",
+        subtitle: "Pick the lowest-cost path (Dijkstra)",
         render: () => (
           <div style={{ display: "grid", gap: 12 }}>
             <div style={{ fontWeight: 900, fontSize: 16 }}>Graph Pathfinder</div>
@@ -170,10 +170,10 @@ export default function InfoCenter({ onRequestClose }) {
                   You move node by node. Only <b>edges</b> have costs (edge weights).
                 </Bullet>
                 <Bullet>
-                  Goal: reach GOAL with the lowest total cost.
+                  Goal: reach <b>GOAL</b> with the <b>lowest total cost</b>.
                 </Bullet>
                 <Bullet>
-                  Tip: the smallest next edge isn’t always best — sometimes a detour wins.
+                  Win condition: your final path cost must match the <b>shortest path</b> (Dijkstra optimal).
                 </Bullet>
               </div>
             </div>
@@ -184,7 +184,7 @@ export default function InfoCenter({ onRequestClose }) {
         key: "bitjumper",
         title: "Bit Jumper",
         icon: "🕹️",
-        subtitle: "Vertical platform jumper + bit pattern",
+        subtitle: "Jump, collect the correct bits, avoid mistakes",
         render: () => (
           <div style={{ display: "grid", gap: 12 }}>
             <div style={{ fontWeight: 900, fontSize: 16 }}>Bit Jumper</div>
@@ -194,10 +194,13 @@ export default function InfoCenter({ onRequestClose }) {
                   You jump automatically. You only steer horizontally (finger/mouse).
                 </Bullet>
                 <Bullet>
-                  Hit token platforms in the <b>correct order</b> (pattern at the top).
+                  Collect <b>bit tokens</b> (0/1) in the <b>correct order</b> shown at the top.
                 </Bullet>
                 <Bullet>
-                  A wrong token ends the run (you lose).
+                  A wrong bit is an instant loss — but bits are always avoidable.
+                </Bullet>
+                <Bullet>
+                  Collect <b>coins</b> for bonus points. Breakable platforms reappear after a short delay.
                 </Bullet>
               </div>
             </div>
@@ -207,22 +210,28 @@ export default function InfoCenter({ onRequestClose }) {
 
       {
         key: "queue",
-        title: "Queue Commander",
+        title: "Queue Puzzle",
         icon: "🚦",
-        subtitle: "Queue/FIFO — process the front element",
+        subtitle: "FIFO puzzle — enqueue, dequeue, discard",
         render: () => (
           <div style={{ display: "grid", gap: 12 }}>
-            <div style={{ fontWeight: 900, fontSize: 16 }}>Queue Commander</div>
+            <div style={{ fontWeight: 900, fontSize: 16 }}>Queue Puzzle</div>
             <div className="ui-card">
               <div className="ui-cardContent" style={{ display: "grid", gap: 10, padding: 16 }}>
                 <Bullet>
-                  A <b>queue</b> is FIFO: first in → first out.
+                  A <b>queue</b> is FIFO: <b>first in → first out</b>.
                 </Bullet>
                 <Bullet>
-                  You can only handle the <b>front</b> element (dequeue). Enqueue happens at the back.
+                  Use <b>ENQUEUE</b> to push the incoming number to the back of the queue.
                 </Bullet>
                 <Bullet>
-                  Goal: serve correctly without letting the queue overflow.
+                  Use <b>DEQUEUE</b> to send the <b>front</b> element to the output — it must match the next target.
+                </Bullet>
+                <Bullet>
+                  Use <b>DISCARD</b> to skip an incoming number. If you enqueue a mistake, you can <b>REMOVE</b> (limited) or <b>ROTATE</b> the queue.
+                </Bullet>
+                <Bullet>
+                  Goal: complete the full target output <b>before the timer runs out</b>.
                 </Bullet>
               </div>
             </div>

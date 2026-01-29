@@ -109,10 +109,10 @@ export default function TurnSummary() {
       <div className="panel" style={{ display: "grid", gap: 12 }}>
         {err ? <div style={{ opacity: 0.9 }}>⚠️ {err}</div> : null}
 
-        <div style={{ fontWeight: 800, fontSize: 18 }}>✅ Score gespeichert</div>
+        <div style={{ fontWeight: 800, fontSize: 18 }}>✅ Score saved</div>
 
         <div className="muted" style={{ lineHeight: 1.5 }}>
-          Nächster Zug:
+          Next turn:
           {nextPlayer ? (
             <span style={{ marginLeft: 6, fontWeight: 750 }}>
               {nextPlayer.icon || "🙂"} {nextPlayer.name}
@@ -124,12 +124,12 @@ export default function TurnSummary() {
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <Button variant="primary" onClick={confirm} disabled={busy}>
-            {busy ? "Confirming…" : "OK, weitergeben"}
+            {busy ? "Confirming…" : "OK, pass to next player"}
           </Button>
         </div>
 
         <div className="muted" style={{ fontSize: 13, lineHeight: 1.5 }}>
-          Erst nach dieser Bestätigung ist wirklich der nächste Spieler dran.
+          The next player can only take their turn after you confirm here.
         </div>
       </div>
     </AppShell>
