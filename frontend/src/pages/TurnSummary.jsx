@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import AppShell from "../components/AppShell";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
+import { Card, CardContent } from "../components/ui/card";
+import { useToast } from "../components/ui/use-toast";
 import { getSession } from "../lib/session";
 import { fetchLobby, getPlayer } from "../lib/player";
 import { API_BASE } from "../lib/api";
@@ -31,6 +33,7 @@ function computeNextPlayer(players, currentTurnOrder) {
 
 export default function TurnSummary() {
   const nav = useNavigate();
+  const { toast } = useToast();
 
   const session = useMemo(() => getSession(), []);
   const me = useMemo(() => getPlayer(), []);
@@ -38,6 +41,11 @@ export default function TurnSummary() {
   const [state, setState] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+
+  useEffect(() => {
+    if (!err) return;
+    toast({ title: "Error", description: err, variant: "destructive" });
+  }, [err, toast]);
 
   const canView = !!(session?.sessionId && me?.playerId);
 
@@ -82,10 +90,12 @@ export default function TurnSummary() {
   if (!canView) {
     return (
       <AppShell title="Turn Summary" subtitle="Join a match and set your profile first." showTabs activeTab="play" backTo="/">
-        <div className="panel">
-          <div style={{ fontWeight: 750, marginBottom: 8 }}>Not ready</div>
-          <div className="muted">You need an active match and a player profile.</div>
-        </div>
+        <Card>
+          <CardContent className="space-y-s2">
+            <div className="text-fs2 font-extrabold">Not ready</div>
+            <div className="text-muted">You need an active match and a player profile.</div>
+          </CardContent>
+        </Card>
       </AppShell>
     );
   }
@@ -100,7 +110,7 @@ export default function TurnSummary() {
       activeTab="play"
       backTo="/play"
       actions={
-        <div className="actionRow">
+        <div className="flex w-full">
           <Button variant="primary" onClick={confirm} disabled={busy}>
             {busy ? "Confirming…" : "OK, pass to next player"}
           </Button>
@@ -113,28 +123,30 @@ export default function TurnSummary() {
         </>
       }
     >
-      <div className="panel stack">
-        {err ? <div style={{ opacity: 0.9 }}>⚠️ {err}</div> : null}
+      <Card>
+        <CardContent className="space-y-s4">
+          {/* Errors are shown via toast */}
 
-        <div className="title">✅ Score saved</div>
+          <div className="text-fs3 font-extrabold">✅ Score saved</div>
 
-        <div className="panel">
-          <div className="kicker">Next turn</div>
-          <div style={{ fontWeight: 850, fontSize: 18, marginTop: 6 }}>
-            {nextPlayer ? (
-              <>
-                {nextPlayer.icon || "🙂"} {nextPlayer.name}
-              </>
-            ) : (
-              <>—</>
-            )}
+          <div className="rounded-lg border border-border bg-surface2 px-s4 py-s3">
+            <div className="text-muted text-fs0 font-semibold">Next turn</div>
+            <div className="mt-s2 text-fs2 font-extrabold">
+              {nextPlayer ? (
+                <>
+                  {nextPlayer.icon || "🙂"} {nextPlayer.name}
+                </>
+              ) : (
+                <>—</>
+              )}
+            </div>
           </div>
-        </div>
 
-        <div className="muted" style={{ fontSize: 13, lineHeight: 1.5 }}>
-          The next player can only take their turn after you confirm here.
-        </div>
-      </div>
+          <div className="text-muted text-fs0 leading-relaxed">
+            The next player can only take their turn after you confirm here.
+          </div>
+        </CardContent>
+      </Card>
     </AppShell>
   );
 }

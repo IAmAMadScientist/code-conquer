@@ -3,6 +3,9 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import AppShell from "../components/AppShell";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
+import { Card, CardContent } from "../components/ui/card";
+import { useToast } from "../components/ui/use-toast";
+import { toastError } from "../lib/toast-helpers";
 import { getSession } from "../lib/session";
 import { getPlayer } from "../lib/player";
 import { API_BASE } from "../lib/api";
@@ -22,6 +25,7 @@ async function parseJsonOrThrow(res) {
 
 export default function Challenge() {
   const nav = useNavigate();
+  const { toast } = useToast();
   const [sp] = useSearchParams();
 
   const session = useMemo(() => getSession(), []);
@@ -32,7 +36,6 @@ export default function Challenge() {
 
   const [loading, setLoading] = useState(true);
   const [picked, setPicked] = useState(null);
-  const [err, setErr] = useState(null);
 
   const canPlay = !!(session?.sessionId && player?.playerId);
 
@@ -46,7 +49,6 @@ export default function Challenge() {
       }
 
       setLoading(true);
-      setErr(null);
 
       try {
         const qs = new URLSearchParams();
@@ -64,7 +66,7 @@ export default function Challenge() {
         nav(data.route, { state: { challenge: data } });
       } catch (e) {
         if (cancelled) return;
-        setErr(e?.message || "Failed to fetch random challenge");
+        toastError(toast, e, "Failed to fetch random challenge");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -81,15 +83,14 @@ export default function Challenge() {
       title="Challenge"
       subtitle="Selecting a random minigame…"
       rightPanel={
-        <div className="panel stack">
-          <div>
-            <div style={{ fontWeight: 850 }}>How it works</div>
-            <div className="muted" style={{ marginTop: 6, lineHeight: 1.5 }}>
-              The backend selects a random minigame based on difficulty (and category, if provided).
-              You will be redirected automatically.
+        <Card>
+          <CardContent className="space-y-s2">
+            <div className="text-fs2 font-extrabold">How it works</div>
+            <div className="text-muted leading-relaxed">
+              The backend selects a random minigame based on difficulty (and category, if provided). You will be redirected automatically.
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       }
       headerBadges={
         <>
@@ -100,40 +101,44 @@ export default function Challenge() {
       }
     >
       {!canPlay ? (
-        <div className="panel stack">
-          <div>
-            <div style={{ fontWeight: 850 }}>Not ready</div>
-            <div className="muted" style={{ marginTop: 6, lineHeight: 1.5 }}>
-              You need to be in a match and have a player profile.
+        <Card>
+          <CardContent className="space-y-s3">
+            <div>
+              <div className="text-fs2 font-extrabold">Not ready</div>
+              <div className="mt-s1 text-muted leading-relaxed">
+                You need to be in a match and have a player profile.
+              </div>
             </div>
-          </div>
-          <div className="row wrap">
-            <Button variant="ghost" onClick={() => nav("/leaderboard")}>Leaderboard</Button>
-          </div>
-        </div>
+            <div className="flex flex-wrap gap-s2">
+              <Button variant="ghost" onClick={() => nav("/leaderboard")}>Leaderboard</Button>
+            </div>
+          </CardContent>
+        </Card>
       ) : (
         <>
           {loading && (
-            <div className="panel stack">
-              <div className="muted">Requesting random minigame from backend…</div>
-            </div>
+            <Card><CardContent className="text-muted">Requesting random minigame from backend…</CardContent></Card>
           )}
 
           {err && (
-            <div className="panel stack">
-              <div style={{ fontWeight: 850 }}>Info</div>
-              <div className="muted" style={{ lineHeight: 1.5 }}>{err}</div>
-              <div className="row wrap">
-                <Button variant="primary" onClick={() => nav("/play")}>Back to game</Button>
-                <Button variant="ghost" onClick={() => nav("/leaderboard")}>Leaderboard</Button>
-              </div>
-            </div>
+            <Card>
+              <CardContent className="space-y-s3">
+                <div className="text-fs2 font-extrabold">Info</div>
+                <div className="text-muted leading-relaxed">{err}</div>
+                <div className="flex flex-wrap gap-s2">
+                  <Button variant="primary" onClick={() => nav("/play")}>Back to game</Button>
+                  <Button variant="ghost" onClick={() => nav("/leaderboard")}>Leaderboard</Button>
+                </div>
+              </CardContent>
+            </Card>
           )}
 
           {!loading && !err && picked && (
-            <div className="panel">
-              Redirecting to: <strong>{picked.route}</strong>
-            </div>
+            <Card>
+              <CardContent>
+                Redirecting to: <strong>{picked.route}</strong>
+              </CardContent>
+            </Card>
           )}
         </>
       )}

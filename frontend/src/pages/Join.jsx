@@ -3,6 +3,10 @@ import { useNavigate, useParams } from "react-router-dom";
 import AppShell from "../components/AppShell";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
+import { Card, CardContent } from "../components/ui/card";
+import { Input } from "../components/ui/input";
+import { useToast } from "../components/ui/use-toast";
+import { toastError, toastSuccess } from "../lib/toast-helpers";
 import { joinSessionByCode, getSession } from "../lib/session";
 import { getPlayer, registerPlayer } from "../lib/player";
 
@@ -11,15 +15,15 @@ const EMOJIS = ["🦊","🐱","🐶","🐸","🐼","🦁","🐙","🦄","🐝","
 export default function Join() {
   const nav = useNavigate();
   const { code } = useParams();
+  const { toast } = useToast();
 
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState(null);
 
   const [playerName, setPlayerName] = useState("");
   const [icon, setIcon] = useState("🦊");
 
-  const liveSession = useMemo(() => getSession(), [busy, err]);
-  const livePlayer = useMemo(() => getPlayer(), [busy, err]);
+  const liveSession = useMemo(() => getSession(), [busy]);
+  const livePlayer = useMemo(() => getPlayer(), [busy]);
 
   useEffect(() => {
     let cancelled = false;
@@ -31,13 +35,13 @@ export default function Join() {
       if (s?.sessionCode && s.sessionCode.toUpperCase() === code.toUpperCase()) return;
 
       setBusy(true);
-      setErr(null);
       try {
         await joinSessionByCode(code);
+        toastSuccess(toast, "Joined match", `Code: ${code.toUpperCase()}`);
         if (cancelled) return;
       } catch (e) {
         if (cancelled) return;
-        setErr(e?.message || "Failed to join match");
+        toastError(toast, e, "Failed to join match");
       } finally {
         if (!cancelled) setBusy(false);
       }
@@ -55,12 +59,12 @@ export default function Join() {
     if (!playerName.trim()) return;
 
     setBusy(true);
-    setErr(null);
     try {
       await registerPlayer(s.sessionId, playerName.trim(), icon);
+      toastSuccess(toast, "Profile saved", `${icon} ${playerName.trim()}`);
       setPlayerName("");
     } catch (e) {
-      setErr(e?.message || "Failed to set player profile");
+      toastError(toast, e, "Failed to set player profile");
     } finally {
       setBusy(false);
     }
@@ -82,72 +86,77 @@ export default function Join() {
         </>
       }
       rightPanel={
-        <div className="panel stack">
-          <div>
-            <div style={{ fontWeight: 850 }}>Flow</div>
-            <div className="muted" style={{ marginTop: 6, lineHeight: 1.5 }}>
-              1) Join the match by QR/code.
-              <br />
-              2) Pick your <strong>name</strong> and <strong>emoji</strong> once.
-              <br />
-              3) Go to the <strong>Lobby</strong> and press Ready.
+        <Card>
+          <CardContent className="space-y-s4">
+            <div>
+              <div className="text-fs2 font-extrabold">Flow</div>
+              <div className="mt-s1 text-muted leading-relaxed">
+                1) Join the match by QR/code.
+                <br />
+                2) Pick your <strong>name</strong> and <strong>emoji</strong> once.
+                <br />
+                3) Go to the <strong>Lobby</strong> and press Ready.
+              </div>
             </div>
-          </div>
-          <div className="divider" />
-          <div className="muted" style={{ fontSize: 13, lineHeight: 1.5 }}>
-            If this page looks like desktop on your phone, open the link in your browser (not inside an app).
-          </div>
-        </div>
+            <div className="h-px w-full bg-border/60" />
+            <div className="text-muted text-fs0 leading-relaxed">
+              If this page looks like desktop on your phone, open the link in your browser (not inside an app).
+            </div>
+          </CardContent>
+        </Card>
       }
       actions={
-        <div className="actionRow">
+        <div className="flex w-full">
           <Button variant="primary" disabled={!readyToLobby} onClick={() => nav("/lobby")}>
             Go to Lobby
           </Button>
         </div>
       }
     >
-      <div className="panel stack">
-        <div className="row wrap">
+      <Card>
+        <CardContent className="space-y-s4">
+        <div className="flex flex-wrap items-center gap-s2">
           <Badge>Code: {(code || "").toUpperCase()}</Badge>
-          {busy ? <span className="muted">Working…</span> : null}
-          {err ? <span style={{ opacity: 0.9 }}>⚠️ {err}</span> : null}
+          {busy ? <span className="text-muted">Working…</span> : null}
+          {/* Errors are shown via toast */}
         </div>
 
         {!liveSession?.sessionId ? (
-          <div className="muted">Joining… (if this stays forever, the code might be invalid)</div>
+          <div className="text-muted">Joining… (if this stays forever, the code might be invalid)</div>
         ) : livePlayer?.playerId ? (
-          <div style={{ display: "grid", gap: 10 }}>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+          <div className="grid gap-s3">
+            <div className="flex flex-wrap items-center gap-s2">
               <Badge variant="secondary">You are: {livePlayer.playerIcon || "🙂"} {livePlayer.playerName || "Player"}</Badge>
             </div>
           </div>
         ) : (
-          <div className="stack mobileCenter" style={{ maxWidth: 520, margin: "0 auto" }}>
-            <div className="muted">Pick your player name and emoji:</div>
+          <div className="mx-auto w-full max-w-[520px] space-y-s4">
+            <div className="text-muted">Pick your player name and emoji:</div>
 
-            <div className="row wrap mobileRow">
-              <div className="grow min0">
-                <input
-                  className="ui-input"
-                  value={playerName}
-                  onChange={(e) => setPlayerName(e.target.value)}
-                  placeholder="e.g. Alex"
-                />
-              </div>
+            <div className="flex flex-wrap gap-s2">
+              <Input
+                className="min-w-0 flex-1"
+                value={playerName}
+                onChange={(e) => setPlayerName(e.target.value)}
+                placeholder="e.g. Alex"
+              />
               <Button variant="primary" onClick={onSetProfile} disabled={busy || !playerName.trim()}>
                 Save profile
               </Button>
             </div>
 
-            <div className="stack tight">
-              <div className="kicker">Emoji</div>
-              <div className="chips" style={{ justifyContent: "center" }}>
+            <div className="space-y-s2">
+              <div className="text-muted text-fs0 font-semibold">Emoji</div>
+              <div className="flex flex-wrap justify-center gap-s2">
                 {EMOJIS.map((e) => (
                   <button
                     key={e}
                     onClick={() => setIcon(e)}
-                    className={e === icon ? "emojiPick active" : "emojiPick"}
+                    className={
+                      e === icon
+                        ? "grid h-11 w-11 place-items-center rounded-full border border-border bg-surface2 text-[20px] shadow-panel"
+                        : "grid h-11 w-11 place-items-center rounded-full border border-border bg-surface text-[20px]"
+                    }
                     aria-label={`Pick ${e}`}
                     type="button"
                   >
@@ -155,17 +164,18 @@ export default function Join() {
                   </button>
                 ))}
               </div>
-              <div className="muted" style={{ fontSize: 12 }}>Selected: {icon}</div>
+              <div className="text-muted text-fs0">Selected: {icon}</div>
             </div>
           </div>
         )}
 
         {!readyToLobby ? (
-          <div className="muted" style={{ fontSize: 13 }}>
+          <div className="text-muted text-fs0">
             Note: you can only enter the lobby after you joined the match and saved your profile.
           </div>
         ) : null}
-      </div>
+        </CardContent>
+      </Card>
     </AppShell>
   );
 }

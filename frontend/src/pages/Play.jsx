@@ -4,6 +4,11 @@ import { useNavigate } from "react-router-dom";
 import AppShell from "../components/AppShell";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
+import { Card, CardContent } from "../components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import { useToast } from "../components/ui/use-toast";
+import { toastError, toastInfo } from "../lib/toast-helpers";
 import { getSession, clearSession, setSessionStarted } from "../lib/session";
 import { getPlayer, fetchLobby, leaveSession, clearPlayer, rollTurnD6, chooseTurnPath, startTurnChallenge, applySpecialCard } from "../lib/player";
 import D6Die from "../components/D6Die";
@@ -16,13 +21,15 @@ import nodeMapPositions from "../assets/nodeMapPositions.json";
 
 export default function Play() {
   const nav = useNavigate();
+  const { toast } = useToast();
   const session = useMemo(() => getSession(), []);
   const me = useMemo(() => getPlayer(), []);
 
   const [state, setState] = useState(null);
-  const [err, setErr] = useState(null);
+  
   const [pendingChoices, setPendingChoices] = useState(null);
 
+  // Standardize errors as toasts
   // Special deck modal (when landing on SPECIAL)
   const [specialOpen, setSpecialOpen] = useState(false);
   const [specialCard, setSpecialCard] = useState("BOOST");
@@ -34,7 +41,6 @@ export default function Play() {
   const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
 
   const [mapOpen, setMapOpen] = useState(false);
-
   const canView = !!(session?.sessionId && me?.playerId);
 
   // Reset per-card sub-selections when switching card.
@@ -54,7 +60,6 @@ export default function Play() {
 
   async function load() {
     if (!session?.sessionId) return;
-    setErr(null);
     try {
       const s = await fetchLobby(session.sessionId);
       setState(s);
@@ -93,7 +98,7 @@ export default function Play() {
       // Options are now included in lobby payload (pendingForkOptions) so refresh is safe.
 
     } catch (e) {
-      setErr(e?.message || "Failed to load game state");
+      toastError(toast, e, "Failed to load game state");
     }
   }
 
@@ -131,18 +136,16 @@ export default function Play() {
 
   async function doStartChallenge() {
     if (!session?.sessionId || !me?.playerId) return;
-    setErr(null);
     try {
       const ch = await startTurnChallenge(session.sessionId, me.playerId);
       nav(ch.route, { state: { challenge: ch } });
     } catch (e) {
-      setErr(e?.message || "Failed to start challenge");
+      toastError(toast, e, "Failed to start challenge");
     }
   }
 
   async function doRollD6() {
     if (!session?.sessionId || !me?.playerId) return;
-    setErr(null);
     try {
       const r = await rollTurnD6(session.sessionId, me.playerId);
       if (r?.turnStatus === "AWAITING_PATH_CHOICE") {
@@ -159,14 +162,13 @@ export default function Play() {
       load();
       return r;
     } catch (e) {
-      setErr(e?.message || "Roll failed");
+      toastError(toast, e, "Roll failed");
       throw e;
     }
   }
 
   async function doChoosePath(toNodeId) {
     if (!session?.sessionId || !me?.playerId) return;
-    setErr(null);
     try {
       const r = await chooseTurnPath(session.sessionId, me.playerId, toNodeId);
       if (r?.turnStatus === "AWAITING_PATH_CHOICE") {
@@ -181,7 +183,7 @@ export default function Play() {
       }
       load();
     } catch (e) {
-      setErr(e?.message || "Choice failed");
+      toastError(toast, e, "Choice failed");
     }
   }
 
@@ -199,18 +201,17 @@ export default function Play() {
   async function doApplySpecial() {
     if (!session?.sessionId || !me?.playerId) return;
     if (specialSubmitting) return;
-    setErr(null);
     setSpecialSubmitting(true);
     try {
       const cardDef = SPECIAL_CARDS.find((c) => c.id === specialCard);
       if (cardDef?.needsTarget && !specialTarget) {
-        setErr("Please choose a target player for this card.");
+        toastInfo(toast, "Action required", "Please choose a target player for this card.");
         setSpecialSubmitting(false);
         return;
       }
       // BOOST: if backend detected a fork, it will respond with needChoice + options.
       if (specialCard === "BOOST" && boostOptions.length > 0 && !boostTo) {
-        setErr("Please choose a path for Boost.");
+        toastInfo(toast, "Action required", "Please choose a path for Boost.");
         setSpecialSubmitting(false);
         return;
       }
@@ -226,7 +227,7 @@ export default function Play() {
       if (r?.needChoice) {
         setBoostOptions(r.options || []);
         setBoostTo("");
-        setErr("Boost hit a fork — please choose the path.");
+        toastInfo(toast, "Choose a path", "Boost hit a fork — please choose the path.");
         setSpecialSubmitting(false);
         return;
       }
@@ -250,7 +251,7 @@ export default function Play() {
         return;
       }
       setSpecialSubmitting(false);
-      setErr(e?.message || "Special card failed");
+      toastError(toast, e, "Special card failed");
     }
   }
 
@@ -272,10 +273,12 @@ export default function Play() {
   if (!canView) {
     return (
       <AppShell title="Play" subtitle="Join a match and set your profile first." showTabs activeTab="play" backTo={false} showBrand>
-        <div className="panel">
-          <div style={{ fontWeight: 750, marginBottom: 8 }}>Not ready</div>
-          <div className="muted">You need to be in a match and have a player profile.</div>
-        </div>
+        <Card>
+          <CardContent className="space-y-s2">
+            <div className="text-fs3 font-extrabold">Not ready</div>
+            <div className="text-muted">You need to be in a match and have a player profile.</div>
+          </CardContent>
+        </Card>
       </AppShell>
     );
   }
@@ -323,20 +326,22 @@ export default function Play() {
         </>
       }
       rightPanel={
-        <div className="panel stack">
-          <div>
-            <div style={{ fontWeight: 850 }}>Quick actions</div>
-            <div className="muted" style={{ marginTop: 6, lineHeight: 1.5 }}>
-              Open the board map and keep an eye on the turn status.
+        <Card>
+          <CardContent className="space-y-s3">
+            <div>
+              <div className="text-fs2 font-extrabold">Quick actions</div>
+              <div className="mt-s2 text-muted leading-relaxed">
+                Open the board map and keep an eye on the turn status.
+              </div>
             </div>
-          </div>
-          <Button variant="secondary" onClick={() => setMapOpen(true)}>
-            Show map
-          </Button>
-        </div>
+            <Button variant="secondary" onClick={() => setMapOpen(true)}>
+              Show map
+            </Button>
+          </CardContent>
+        </Card>
       }
       actions={
-        <div className="actionRow">
+        <div className="flex w-full items-center gap-s3">
           <Button
             variant="primary"
             onClick={doStartChallenge}
@@ -347,199 +352,131 @@ export default function Play() {
           <Button variant="secondary" onClick={() => setMapOpen(true)} title="Show board map">
             Map
           </Button>
-          <Button variant="ghost" onClick={leaveGame}>
+          <Button variant="ghost" onClick={leaveGame} className="ml-auto">
             Leave
           </Button>
         </div>
       }
     >
-      {specialOpen ? createPortal((
-        <div
-          className="specialOverlay"
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.65)",
-            zIndex: 200,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-          onClick={() => {
-            // Don't allow closing: special resolution is required to continue.
-          }}
+      <Dialog open={specialOpen} onOpenChange={(o) => setSpecialOpen(o)}>
+        <DialogContent
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+          className="w-[min(92vw,560px)]"
         >
-          <div
-            className="panel specialPanel"
-            style={{
-              width: "min(520px, 100vw)",
-              border: "1px solid rgba(148,163,184,0.22)",
-              maxHeight: "calc(100dvh - 24px)",
-              overflow: "auto",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ fontWeight: 900, fontSize: 18, marginBottom: 6 }}>🃏 Special Field</div>
-            <div className="muted" style={{ lineHeight: 1.5, marginBottom: 12 }}>
+          <DialogHeader>
+            <DialogTitle>🃏 Special Field</DialogTitle>
+            <DialogDescription className="leading-relaxed">
               Draw <strong>a real-life card</strong> from the Special deck and select it here.
-            </div>
+            </DialogDescription>
+          </DialogHeader>
 
-            {!isMyTurn ? (
-              <div className="panel" style={{ marginBottom: 12, border: "1px solid rgba(148,163,184,0.18)" }}>
-                <div style={{ fontWeight: 800 }}>⏳ Waiting…</div>
-                <div className="muted" style={{ marginTop: 4, lineHeight: 1.4 }}>
-                  The current player is selecting their Special card.
-                </div>
+          {!isMyTurn ? (
+            <div className="mt-s3 rounded-lg border border-border bg-surface2 p-s4">
+              <div className="font-extrabold">⏳ Waiting…</div>
+              <div className="mt-1 text-sm text-muted">The current player is selecting their Special card.</div>
+            </div>
+          ) : null}
+
+          <div className="mt-s4 grid gap-s3">
+            <label className="grid gap-2">
+              <div className="text-sm font-extrabold">Which card did you draw?</div>
+              <Select value={specialCard} onValueChange={(v) => setSpecialCard(v)} disabled={!isMyTurn}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {SPECIAL_CARDS.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </label>
+
+            {SPECIAL_CARDS.find((c) => c.id === specialCard)?.img ? (
+              <div className="grid place-items-center">
+                <img
+                  src={SPECIAL_CARDS.find((c) => c.id === specialCard).img}
+                  alt={specialCard}
+                  className="block h-auto w-[min(300px,86vw)] rounded-md border border-border"
+                />
               </div>
             ) : null}
 
-            <div style={{ display: "grid", gap: 10 }}>
-              <label style={{ display: "grid", gap: 6 }}>
-                <div style={{ fontWeight: 700 }}>Which card did you draw?</div>
-                <select
-                  value={specialCard}
-                  onChange={(e) => setSpecialCard(e.target.value)}
-                  disabled={!isMyTurn}
-                  style={{
-                    padding: "10px 12px",
-                    borderRadius: 12,
-                    border: "1px solid rgba(148,163,184,0.25)",
-                    background: "rgba(15,23,42,0.35)",
-                    color: "inherit",
-                  }}
-                >
-                  {SPECIAL_CARDS.map((c) => (
-                    <option key={c.id} value={c.id}>{c.label}</option>
-                  ))}
-                </select>
+            {SPECIAL_CARDS.find((c) => c.id === specialCard)?.needsTarget ? (
+              <label className="grid gap-2">
+                <div className="text-sm font-extrabold">Target player</div>
+                <Select value={specialTarget} onValueChange={(v) => setSpecialTarget(v)} disabled={!isMyTurn}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(state?.players || [])
+                      .filter((p) => p.id !== me?.playerId)
+                      .map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {(p.icon || "🙂") + " " + (p.name || "Player")}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
               </label>
+            ) : null}
 
-              {SPECIAL_CARDS.find((c) => c.id === specialCard)?.img ? (
-                <div style={{ display: "grid", placeItems: "center" }}>
-                  <img
-                    src={SPECIAL_CARDS.find((c) => c.id === specialCard).img}
-                    alt={specialCard}
-                    className="specialCardImg"
-                    style={{ width: "min(300px, 86vw)", borderRadius: 12, border: "1px solid rgba(148,163,184,0.18)", height: "auto" }}
-                  />
-                </div>
-              ) : null}
-
-              {SPECIAL_CARDS.find((c) => c.id === specialCard)?.needsTarget ? (
-                <label style={{ display: "grid", gap: 6 }}>
-                  <div style={{ fontWeight: 700 }}>Target player</div>
-                  <select
-                    value={specialTarget}
-                    onChange={(e) => setSpecialTarget(e.target.value)}
-                    disabled={!isMyTurn}
-                    style={{
-                      padding: "10px 12px",
-                      borderRadius: 12,
-                      border: "1px solid rgba(148,163,184,0.25)",
-                      background: "rgba(15,23,42,0.35)",
-                      color: "inherit",
-                    }}
-                  >
-                    <option value="">Select…</option>
-                    {(state?.players || []).filter((p) => p.id !== me?.playerId).map((p) => (
-                      <option key={p.id} value={p.id}>{(p.icon || "🙂") + " " + (p.name || "Player")}</option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
-
-              {specialCard === "BOOST" && boostOptions.length > 0 ? (
-                <label style={{ display: "grid", gap: 6 }}>
-                  <div style={{ fontWeight: 700 }}>Boost: choose the path (fork)</div>
-                  <select
-                    value={boostTo}
-                    onChange={(e) => setBoostTo(e.target.value)}
-                    disabled={!isMyTurn}
-                    style={{
-                      padding: "10px 12px",
-                      borderRadius: 12,
-                      border: "1px solid rgba(148,163,184,0.25)",
-                      background: "rgba(15,23,42,0.35)",
-                      color: "inherit",
-                    }}
-                  >
-                    <option value="">Select…</option>
+            {specialCard === "BOOST" && boostOptions.length > 0 ? (
+              <label className="grid gap-2">
+                <div className="text-sm font-extrabold">Boost: choose the path (fork)</div>
+                <Select value={boostTo} onValueChange={(v) => setBoostTo(v)} disabled={!isMyTurn}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select…" />
+                  </SelectTrigger>
+                  <SelectContent>
                     {boostOptions.map((o) => (
-                      <option key={o.to} value={o.to}>{o.label}</option>
+                      <SelectItem key={o.to} value={o.to}>
+                        {o.label}
+                      </SelectItem>
                     ))}
-                  </select>
-                </label>
-              ) : null}
-
-              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 6 }}>
-                <Button onClick={doApplySpecial} disabled={!isMyTurn || specialSubmitting}>Activate</Button>
-              </div>
-            </div>
+                  </SelectContent>
+                </Select>
+              </label>
+            ) : null}
           </div>
-        </div>
-      ), document.body) : null}
+
+          <DialogFooter>
+            <Button onClick={doApplySpecial} disabled={!isMyTurn || specialSubmitting}>
+              Activate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
 {mapOpen ? createPortal((
   <div
+    className="fixed inset-0 z-[250] flex items-center justify-center bg-black/70"
     style={{
-      position: "fixed",
-      inset: 0,
-      background: "rgba(0,0,0,0.65)",
-      zIndex: 250,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
       padding: "max(env(safe-area-inset-top), 12px) 12px max(env(safe-area-inset-bottom), 12px)",
     }}
-    onClick={() => setMapOpen(false)}   // ✅ tap outside closes
+    onClick={() => setMapOpen(false)}
   >
-    <div
-      className="panel"
-      style={{
-        position: "relative",
-        width: "min(900px, 96vw)",
-        maxWidth: "96vw",
-        maxHeight: "90dvh",
-        overflow: "hidden",
-        border: "1px solid rgba(148,163,184,0.22)",
-      }}
-      onClick={(e) => e.stopPropagation()} // ✅ don't close when clicking map itself
+    <Card
+      className="relative w-[min(900px,96vw)] max-w-[96vw] overflow-hidden"
+      onClick={(e) => e.stopPropagation()}
     >
-      {/* Close button */}
       <button
         onClick={() => setMapOpen(false)}
         aria-label="Close map"
-        style={{
-          position: "absolute",
-          top: 10,
-          right: 10,
-          zIndex: 5,
-          width: 44,
-          height: 44,
-          borderRadius: 999,
-          border: "1px solid rgba(148,163,184,0.25)",
-          background: "rgba(15,23,42,0.65)",
-          color: "rgba(255,255,255,0.92)",
-          fontSize: 22,
-          fontWeight: 900,
-          cursor: "pointer",
-        }}
+        className="absolute right-s3 top-s3 z-[5] grid h-11 w-11 place-items-center rounded-full border border-border bg-surface2 text-text"
       >
         ✕
       </button>
 
-      {/* Map container */}
-      <div style={{ position: "relative", width: "100%", height: "100%" }}>
+      <div className="relative h-full w-full">
         <img
           src={mapImg}
           alt="Map"
-          style={{
-            width: "100%",
-            height: "auto",
-            display: "block",
-            maxHeight: "90dvh",
-            objectFit: "contain",
-          }}
+          className="block h-auto max-h-[90dvh] w-full object-contain"
         />
 
         {/* Player marker */}
@@ -565,52 +502,25 @@ export default function Play() {
           );
         })()}
       </div>
-    </div>
+    </Card>
   </div>
 ), document.body) : null}
 
-      <style>{`
-        /* Special card modal: mobile-first full-screen sheet */
-        .specialOverlay{
-          padding: max(env(safe-area-inset-top), 12px) 12px max(env(safe-area-inset-bottom), 12px);
-        }
-        .specialPanel{ -webkit-overflow-scrolling: touch; }
-        .specialCardImg{ display:block; max-width:100%; }
-        @media (max-width: 640px){
-          .specialOverlay{
-            padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
-            align-items: stretch;
-          }
-          .specialPanel{
-            width: 100vw !important;
-            height: 100dvh;
-            max-height: 100dvh !important;
-            border-radius: 0 !important;
-            border-left: 0 !important;
-            border-right: 0 !important;
-          }
-          .specialCardImg{ width: min(360px, 88vw) !important; }
-        }
-      `}</style>
-
       <PullToRefresh onRefresh={load}>
-        <div className="stack" style={{ height: "100%", minHeight: 0 }}>
-          {/* Fixed overlay (does not affect layout). */}
-          <EventFeed sessionId={session.sessionId} title="Game feed" limit={5} />
+        <div className="h-full flex min-h-0 flex-col gap-s4">          <EventFeed sessionId={session.sessionId} title="Game feed" limit={5} />
 
-          {/* Reserve space under the fixed (collapsed) EventFeed so it never overlaps content. */}
-          <div style={{ height: "calc(var(--cc-eventfeed-h, 72px) + 8px)" }} aria-hidden />
 
-          <div className="panel stack" style={{ flex: 1, minHeight: 0, overflow: "auto", paddingRight: 4 }}>
-              {err ? <div style={{ opacity: 0.9 }}>⚠️ {err}</div> : null}
+          <Card className="flex-1 min-h-0 overflow-hidden">
+            <CardContent className="h-full space-y-s4 overflow-auto">
+              {/* Errors are shown via toast */}
 
               {!state?.started ? (
-                <div className="muted" style={{ lineHeight: 1.5 }}>
+                <div className="text-muted leading-relaxed">
                   Match not started yet. Use the <strong>Lobby</strong> tab below to roll the D20 and press Ready.
                 </div>
               ) : (
                 <>
-                  <div className="row wrap">
+                  <div className="flex flex-wrap gap-s2">
                     {currentPlayer ? (
                       <Badge variant="secondary">Current: {currentPlayer.icon || "🙂"} {currentPlayer.name}</Badge>
                     ) : null}
@@ -624,34 +534,35 @@ export default function Play() {
 
                   {/* D6 roll */}
                   {isMyTurn && waitingForDice ? (
-                    <div className="stack tight">
+                    <div className="space-y-s2">
                       <D6Die value={state?.lastDiceRoll || null} onRoll={doRollD6} disabled={!isMyTurn} />
                     </div>
                   ) : null}
 
                   {/* Fork choice */}
                   {isMyTurn && waitingForPath ? (
-                    <div className="stack tight">
-                      <div className="muted">Fork! Choose your path:</div>
-                      <div className="row wrap">
+                    <div className="space-y-s2">
+                      <div className="text-muted">Fork! Choose your path:</div>
+                      <div className="flex flex-wrap gap-s2">
                         {(pendingChoices?.options || []).map((opt) => (
                           <Button key={opt?.to || opt} variant="secondary" onClick={() => doChoosePath(opt?.to || opt)}>
                             {opt?.label ? opt.label : "Choose"}
                           </Button>
                         ))}
-                        {!pendingChoices?.options?.length ? <div className="muted">(Loading options…)</div> : null}
+                        {!pendingChoices?.options?.length ? <div className="text-muted">(Loading options…)</div> : null}
                       </div>
                     </div>
                   ) : null}
 
                   {!canStartChallenge ? (
-                    <div className="muted" style={{ fontSize: 13 }}>
+                    <div className="text-muted text-fs0">
                       {waitingForDice ? "Roll the D6." : waitingForPath ? "Choose a fork path." : ""}
                     </div>
                   ) : null}
                 </>
               )}
-          </div>
+            </CardContent>
+          </Card>
         </div>
       </PullToRefresh>
 

@@ -19,7 +19,8 @@ import { getSession } from "./lib/session";
 import { getPlayer, leaveSessionBeacon, registerPlayer } from "./lib/player";
 import { API_BASE } from "./lib/api";
 import { DiceOverlayProvider } from "./components/dice/DiceOverlayProvider";
-import { MinigameResultToastProvider } from "./components/MinigameResultToastProvider";
+import { ToastProvider } from "./components/ui/use-toast";
+import { Toaster } from "./components/ui/toaster";
 
 export default function App() {
   // Best-effort: when the tab/window is closed, remove the player from the match.
@@ -58,7 +59,7 @@ export default function App() {
 
   return (
     <DiceOverlayProvider>
-      <MinigameResultToastProvider>
+      <ToastProvider>
         <Router>
           <Routes>
         <Route path="/" element={<Home />} />
@@ -76,7 +77,8 @@ export default function App() {
         <Route path="/bitjumper" element={<BitJumperPage />} />
           </Routes>
         </Router>
-      </MinigameResultToastProvider>
+        <Toaster />
+      </ToastProvider>
     </DiceOverlayProvider>
   );
 }

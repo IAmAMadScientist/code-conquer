@@ -3,8 +3,11 @@ import { useNavigate } from "react-router-dom";
 import AppShell from "../components/AppShell";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
+import { Card, CardContent } from "../components/ui/card";
 import QRCode from "react-qr-code";
 import ConfirmModal from "../components/ConfirmModal";
+import { useToast } from "../components/ui/use-toast";
+import { toastError, toastInfo } from "../lib/toast-helpers";
 import { useDiceOverlay } from "../components/dice/DiceOverlayProvider";
 import D20Die from "../components/D20Die";
 import { getSession, clearSession, setSessionStarted } from "../lib/session";
@@ -15,12 +18,11 @@ export default function Lobby() {
   const session = useMemo(() => getSession(), []);
   const me = useMemo(() => getPlayer(), []);
   const diceOverlay = useDiceOverlay();
+  const { toast } = useToast();
 
   const [state, setState] = useState(null);
   const [busy, setBusy] = useState(false);
   const [rolling, setRolling] = useState(false);
-  const [err, setErr] = useState(null);
-  const [eventMsg, setEventMsg] = useState(null);
   const [qrOpen, setQrOpen] = useState(false);
   const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
 
@@ -29,7 +31,6 @@ export default function Lobby() {
 
   async function load() {
     if (!session?.sessionId) return;
-    setErr(null);
     try {
       const s = await fetchLobby(session.sessionId);
       setState(s);
@@ -45,14 +46,13 @@ export default function Lobby() {
         const lastSeen = Number(sessionStorage.getItem(key) || "0");
         if (s.lastEventSeq > lastSeen) {
           sessionStorage.setItem(key, String(s.lastEventSeq));
-          setEventMsg(s.lastEventMessage);
-          setTimeout(() => setEventMsg(null), 4200);
+          toastInfo(toast, "Game update", s.lastEventMessage, { duration: 2600 });
         }
       }
 
       if (s?.started) nav("/play");
     } catch (e) {
-      setErr(e?.message || "Failed to load lobby");
+      toastError(toast, e, "Failed to load lobby");
     }
   }
 
@@ -69,12 +69,11 @@ export default function Lobby() {
     const currentlyReady = !!state?.players?.find((p) => p.id === me.playerId)?.ready;
 
     setBusy(true);
-    setErr(null);
     try {
       await setReady(session.sessionId, me.playerId, !currentlyReady);
       await load();
     } catch (e) {
-      setErr(e?.message || "Failed to set ready");
+      toastError(toast, e, "Failed to set ready");
     } finally {
       setBusy(false);
     }
@@ -84,12 +83,11 @@ export default function Lobby() {
     if (!session?.sessionId || !me?.playerId) return;
     setRolling(true);
     setBusy(true);
-    setErr(null);
     try {
       await diceOverlay.rollD20(() => rollLobbyD20(session.sessionId, me.playerId));
       await load();
     } catch (e) {
-      setErr(e?.message || "Failed to roll");
+      toastError(toast, e, "Failed to roll");
       await load();
     } finally {
       setTimeout(() => setRolling(false), 980);
@@ -113,15 +111,17 @@ export default function Lobby() {
   if (!canView) {
     return (
       <AppShell title="Lobby" subtitle="Join a match and set your profile first." showTabs activeTab="play" backTo={false}>
-        <div className="panel stack">
-          <div>
-            <div className="title" style={{ fontSize: "var(--fs-3)" }}>Not ready</div>
-            <div className="subtitle">You need to join a match and set your name + emoji first.</div>
-          </div>
-          <div className="row wrap">
-            <Button variant="primary" onClick={() => nav("/")}>Go to Home</Button>
-          </div>
-        </div>
+				<Card>
+					<CardContent className="space-y-s3">
+						<div>
+							<div className="text-fs3 font-extrabold">Not ready</div>
+							<div className="mt-s1 text-muted">You need to join a match and set your name + emoji first.</div>
+						</div>
+						<div className="flex flex-wrap gap-s2">
+							<Button variant="primary" onClick={() => nav("/")}>Go to Home</Button>
+						</div>
+					</CardContent>
+				</Card>
       </AppShell>
     );
   }
@@ -142,11 +142,9 @@ export default function Lobby() {
   async function copyJoinLink() {
     try {
       await navigator.clipboard.writeText(joinUrl);
-      setEventMsg("Copied join link");
-      setTimeout(() => setEventMsg(null), 2500);
+      toast({ title: "Copied join link" });
     } catch {
-      setEventMsg("Couldn't copy (clipboard blocked)");
-      setTimeout(() => setEventMsg(null), 2500);
+      toast({ title: "Couldn't copy", description: "Clipboard blocked by the browser.", variant: "destructive" });
     }
   }
 
@@ -165,33 +163,35 @@ export default function Lobby() {
         </>
       }
       rightPanel={
-        <div className="panel stack">
-          <div>
-            <div className="kicker">Invite</div>
-            <div className="title" style={{ fontSize: "var(--fs-3)" }}>Let others join</div>
-          </div>
+        <Card>
+          <CardContent className="space-y-s4">
+            <div>
+              <div className="text-muted text-fs0 font-semibold">Invite</div>
+              <div className="mt-s1 text-fs3 font-extrabold">Let others join</div>
+            </div>
 
-          <div className="stack tight">
-            <div className="kicker">Join code</div>
-            <div className="row between wrap">
-              <Badge variant="secondary" style={{ fontSize: 14, padding: "8px 12px" }}>{session.sessionCode}</Badge>
-              <Button variant="secondary" onClick={() => setQrOpen(true)} disabled={!joinUrl}>Show QR</Button>
+            <div className="space-y-s2">
+              <div className="text-muted text-fs0 font-semibold">Join code</div>
+              <div className="flex flex-wrap items-center justify-between gap-s2">
+                <Badge variant="secondary" className="px-s3 py-s2 text-fs1">{session.sessionCode}</Badge>
+                <Button variant="secondary" onClick={() => setQrOpen(true)} disabled={!joinUrl}>Show QR</Button>
+              </div>
+              <div className="text-muted text-fs0 leading-relaxed">
+                Tip: If QR scanning opens a weird in-app browser, open it in Safari/Chrome for best layout.
+              </div>
             </div>
-            <div className="muted" style={{ fontSize: "var(--fs-1)", lineHeight: 1.5 }}>
-              Tip: If QR scanning opens a weird in-app browser, open it in Safari/Chrome for best layout.
-            </div>
-          </div>
 
-          {joinUrl ? (
-            <div className="stack tight">
-              <Button variant="ghost" onClick={copyJoinLink}>Copy join link</Button>
-              <div className="muted" style={{ fontSize: "var(--fs-0)" }}>{joinUrl}</div>
-            </div>
-          ) : null}
-        </div>
+            {joinUrl ? (
+              <div className="space-y-s2">
+                <Button variant="ghost" onClick={copyJoinLink}>Copy join link</Button>
+                <div className="break-words text-muted text-fs0">{joinUrl}</div>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
       }
       actions={
-        <div className="actionRow">
+        <div className="flex w-full items-center gap-s3">
           <Button variant="secondary" onClick={() => setQrOpen(true)} disabled={!joinUrl}>QR</Button>
           <Button variant="primary" onClick={toggleReady} disabled={busy || (!meRow?.ready && !canReady)}>
             {meRow?.ready ? "Unready" : "Ready"}
@@ -199,99 +199,99 @@ export default function Lobby() {
         </div>
       }
     >
-      <div className="panel stack">
-        <div className="row between wrap">
-          <div className="stack tight">
-            <div className="title" style={{ fontSize: "var(--fs-3)" }}>Players</div>
-            <div className="subtitle">
-              {players.length} joined • {allRolled ? "All rolled" : "Waiting for rolls"} • {allReady ? "All ready" : "Not all ready"}
-            </div>
-          </div>
-
-          <div className="row end wrap">
-            <div style={{ width: 110 }}>
-              <D20Die
-                value={meRow?.tied ? "ROLL" : (meRow?.lobbyRoll ?? "?")}
-                rolling={rolling}
-                disabled={!canRoll || busy}
-                onClick={doLobbyRoll}
-              />
-            </div>
-            <div className="stack tight" style={{ alignItems: "flex-end" }}>
-              <div className="kicker">Your roll</div>
-              <div className="muted" style={{ fontSize: "var(--fs-1)" }}>
-                {state?.turnOrderLocked
-                  ? "Locked"
-                  : canRoll
-                    ? (meRow?.tied ? "Tie — roll again" : "Tap the D20")
-                    : (meRow?.lobbyRoll != null ? "Rolled" : "Waiting")}
+      <Card>
+        <CardContent className="space-y-s4">
+          <div className="flex flex-wrap items-start justify-between gap-s3">
+            <div>
+              <div className="text-fs3 font-extrabold">Players</div>
+              <div className="mt-s1 text-muted">
+                {players.length} joined • {allRolled ? "All rolled" : "Waiting for rolls"} • {allReady ? "All ready" : "Not all ready"}
               </div>
             </div>
-          </div>
-        </div>
 
-        {hasTies ? (
-          <div className="panel" style={{ borderColor: "rgba(251,191,36,0.35)" }}>
-            ⚠️ Tie — roll again: {tiedPlayers.map((p) => `${p.icon || "🙂"} ${p.name || "Player"}`).join(" • ")}
-          </div>
-        ) : null}
-
-        {err ? (
-          <div className="panel" style={{ borderColor: "rgba(251,113,133,0.35)" }}>
-            ⚠️ {err}
-          </div>
-        ) : null}
-
-        {eventMsg ? (
-          <div className="panel">
-            ℹ️ {eventMsg}
-          </div>
-        ) : null}
-
-        <div className="stack tight" style={{ maxHeight: "42vh", overflow: "auto", paddingRight: 2 }}>
-          {players.map((p, idx) => (
-            <div key={p.id} className="row between wrap" style={{ padding: "10px 12px", borderRadius: 16, border: "1px solid rgba(148,163,184,0.14)", background: "rgba(2,6,23,0.18)" }}>
-              <div className="row wrap" style={{ gap: 10 }}>
-                <div style={{ fontSize: 22 }}>{p.icon || "🙂"}</div>
-                <div className="stack tight" style={{ gap: 2 }}>
-                  <div style={{ fontWeight: 850, letterSpacing: "-0.01em" }} className="wrapAnywhere">{p.name || "Player"}</div>
-                  <div className="muted" style={{ fontSize: "var(--fs-0)" }}>
-                    #{p.turnOrder ?? (idx + 1)} • D20={p.lobbyRoll ?? "?"}
-                  </div>
+            <div className="flex flex-wrap items-center justify-end gap-s3">
+              <div className="w-[110px]">
+                <D20Die
+                  value={meRow?.tied ? "ROLL" : (meRow?.lobbyRoll ?? "?")}
+                  rolling={rolling}
+                  disabled={!canRoll || busy}
+                  onClick={doLobbyRoll}
+                />
+              </div>
+              <div className="text-right">
+                <div className="text-muted text-fs0 font-semibold">Your roll</div>
+                <div className="mt-s1 text-muted text-fs0">
+                  {state?.turnOrderLocked
+                    ? "Locked"
+                    : canRoll
+                      ? (meRow?.tied ? "Tie — roll again" : "Tap the D20")
+                      : (meRow?.lobbyRoll != null ? "Rolled" : "Waiting")}
                 </div>
               </div>
-
-              <div className="row wrap" style={{ justifyContent: "flex-end" }}>
-                {p.tied ? <Badge variant="secondary">Tie</Badge> : null}
-                <Badge variant={p.ready ? "secondary" : "default"}>{p.ready ? "Ready" : "Not ready"}</Badge>
-              </div>
             </div>
-          ))}
-        </div>
-
-        <div className="row between wrap">
-          <Button variant="ghost" onClick={() => setConfirmLeaveOpen(true)}>Leave lobby</Button>
-          <div className="muted" style={{ fontSize: "var(--fs-0)" }}>
-            Once everyone is ready, the game will start automatically.
           </div>
-        </div>
-      </div>
 
-      {qrOpen ? (
-        <div className="sheetOverlay open" onClick={() => setQrOpen(false)}>
-          <div className="sheet open" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
-            <div className="sheetHandle" />
-            <div className="sheetHeader">
-              <div style={{ fontWeight: 900 }}>Join via QR</div>
-              <Button variant="ghost" onClick={() => setQrOpen(false)}>Close</Button>
+          {hasTies ? (
+            <div className="rounded-lg border border-border bg-surface2 px-s4 py-s3">
+              ⚠️ Tie — roll again: {tiedPlayers.map((p) => `${p.icon || "🙂"} ${p.name || "Player"}`).join(" • ")}
             </div>
-            <div className="sheetBody stack">
-              <div className="panel" style={{ display: "grid", placeItems: "center" }}>
+          ) : null}
+
+          {/* errors are surfaced as toasts */}
+
+          <div className="max-h-[42vh] space-y-s2 overflow-auto pr-1">
+            {players.map((p, idx) => (
+              <div
+                key={p.id}
+                className="flex flex-wrap items-center justify-between gap-s3 rounded-lg border border-border bg-surface2/60 px-s4 py-s3"
+              >
+                <div className="flex min-w-0 items-center gap-s3">
+                  <div className="text-[22px]">{p.icon || "🙂"}</div>
+                  <div className="min-w-0">
+                    <div className="truncate font-extrabold">{p.name || "Player"}</div>
+                    <div className="text-muted text-fs0">
+                      #{p.turnOrder ?? (idx + 1)} • D20={p.lobbyRoll ?? "?"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-end gap-s2">
+                  {p.tied ? <Badge variant="secondary">Tie</Badge> : null}
+                  <Badge variant={p.ready ? "secondary" : "default"}>{p.ready ? "Ready" : "Not ready"}</Badge>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-s2">
+            <Button variant="ghost" onClick={() => setConfirmLeaveOpen(true)}>Leave lobby</Button>
+            <div className="text-muted text-fs0">
+              Once everyone is ready, the game will start automatically.
+            </div>
+          </div>
+	      </CardContent>
+	    </Card>
+
+	      {qrOpen ? (
+        <div
+          className="fixed inset-0 z-[240] flex items-end justify-center bg-black/70 p-s3 sm:items-center"
+          style={{ paddingBottom: "max(env(safe-area-inset-bottom), 12px)" }}
+          onClick={() => setQrOpen(false)}
+        >
+          <Card className="w-full max-w-[560px] sm:rounded-lg rounded-t-lg">
+            <CardContent className="space-y-s4" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between gap-s3">
+                <div className="text-fs2 font-extrabold">Join via QR</div>
+                <Button variant="ghost" onClick={() => setQrOpen(false)}>Close</Button>
+              </div>
+
+              <div className="grid place-items-center rounded-lg border border-border bg-surface2 p-s4">
                 <QRCode value={joinUrl} size={240} />
               </div>
-              <div className="muted" style={{ fontSize: "var(--fs-0)", overflowWrap: "anywhere" }}>{joinUrl}</div>
-            </div>
-          </div>
+
+              <div className="break-words text-muted text-fs0">{joinUrl}</div>
+            </CardContent>
+          </Card>
         </div>
       ) : null}
 

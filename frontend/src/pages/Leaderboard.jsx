@@ -4,18 +4,20 @@ import AppShell from "../components/AppShell";
 import EventFeed from "../components/EventFeed";
 import PullToRefresh from "../components/PullToRefresh";
 import { Badge } from "../components/ui/badge";
+import { Card, CardContent } from "../components/ui/card";
+import { useToast } from "../components/ui/use-toast";
+import { toastError } from "../lib/toast-helpers";
 import { getSession } from "../lib/session";
 import { API_BASE } from "../lib/api";
 
 export default function Leaderboard() {
   const session = useMemo(() => getSession(), []);
+  const { toast } = useToast();
   const [rows, setRows] = useState([]);
-  const [err, setErr] = useState(null);
   const [loading, setLoading] = useState(true);
 
   async function load() {
     setLoading(true);
-    setErr(null);
     try {
       const qs = new URLSearchParams();
       if (session?.sessionId) qs.set("sessionId", session.sessionId);
@@ -25,7 +27,7 @@ export default function Leaderboard() {
       if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
       setRows(Array.isArray(data) ? data : []);
     } catch (e) {
-      setErr(e?.message || "Failed to load leaderboard");
+      toastError(toast, e, "Failed to load leaderboard");
     } finally {
       setLoading(false);
     }
@@ -51,40 +53,42 @@ export default function Leaderboard() {
       }
     >
       <PullToRefresh onRefresh={load}>
-        <div className="panel stack" style={{ height: "100%", minHeight: 0 }}>
-          {/* Reserve space under the fixed (collapsed) EventFeed so it never overlaps content. */}
-          {session?.sessionId ? <div style={{ height: "calc(var(--cc-eventfeed-h, 72px) + 8px)" }} aria-hidden /> : null}
-        {loading ? <div className="muted">Loading…</div> : null}
-        {err ? <div style={{ opacity: 0.9 }}>⚠️ {err}</div> : null}
+        <Card className="min-h-0 flex-1">
+          <CardContent className="flex min-h-0 flex-col gap-s3">
+          {loading ? <div className="text-muted">Loading…</div> : null}
+          {/* Errors are shown via toast */}
 
-        {/* Fixed overlay (does not affect layout). */}
-        {session?.sessionId ? <EventFeed sessionId={session.sessionId} title="Game feed" limit={10} /> : null}
+          {session?.sessionId ? <EventFeed sessionId={session.sessionId} title="Game feed" limit={10} /> : null}
 
-        {!loading && !err && rows.length === 0 ? (
-          <div className="muted">No scores yet.</div>
-        ) : null}
+          {!loading && rows.length === 0 ? (
+            <div className="text-muted">No scores yet.</div>
+          ) : null}
 
-        {!loading && !err && rows.length > 0 ? (
-          <div style={{ flex: 1, minHeight: 0, overflow: "auto", paddingRight: 4 }}>
-            <div className="nativeList">
-              {rows.map((r, idx) => (
-                <div key={r.playerId || idx} className="nativeItem">
-                  <div className="nativeLeft">
-                    <div className="nativeAvatar">{r.icon || "🙂"}</div>
-                    <div className="nativeText">
-                      <div className="nativeTitle">#{idx + 1} {r.playerName || "Player"}</div>
-                      <div className="nativeSub">Total score</div>
+          {!loading && rows.length > 0 ? (
+            <div className="min-h-0 flex-1 overflow-auto pr-1">
+              <div className="space-y-s2">
+                {rows.map((r, idx) => (
+                  <div
+                    key={r.playerId || idx}
+                    className="flex items-center justify-between gap-s3 rounded-lg border border-border bg-surface2/60 px-s4 py-s3"
+                  >
+                    <div className="flex min-w-0 items-center gap-s3">
+                      <div className="grid h-10 w-10 place-items-center rounded-full border border-border bg-surface text-[20px]">
+                        {r.icon || "🙂"}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="truncate font-extrabold">#{idx + 1} {r.playerName || "Player"}</div>
+                        <div className="text-muted text-fs0">Total score</div>
+                      </div>
                     </div>
-                  </div>
-                  <div className="nativeTrail">
                     <Badge variant="secondary">{r.totalScore ?? 0}</Badge>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        ) : null}
-        </div>
+          ) : null}
+          </CardContent>
+        </Card>
       </PullToRefresh>
     </AppShell>
   );

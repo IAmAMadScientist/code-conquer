@@ -1,13 +1,16 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog";
+import { useToast } from "./ui/use-toast";
+
 import { computePoints, formatTime, normalizeDifficulty } from "../lib/scoring";
 import { getSession } from "../lib/session";
 import { getPlayer } from "../lib/player";
-import { useMinigameResultToast } from "./MinigameResultToastProvider";
-
 import { API_BASE } from "../lib/api";
+import { getHapticsEnabled, getSoundEnabled, playFailSfx, playWinSfx } from "../lib/diceSound";
 
 async function parseJsonOrThrow(res) {
   let data = null;
@@ -22,9 +25,8 @@ async function parseJsonOrThrow(res) {
 }
 
 /**
- * Auto-saves the score when the game ends (won === true/false),
- * then redirects back to /play. The backend immediately advances the turn
- * (your design: everyone uses their own phone).
+ * Result modal + score submit.
+ * Shows only when won is boolean. Submits once and blocks leaving until user confirms.
  */
 export default function ResultSubmitPanel({
   category,
@@ -35,11 +37,10 @@ export default function ResultSubmitPanel({
   challengeId,
   explanation,
 }) {
-  // Guard: only show/submit results once the game actually ended.
   if (typeof won !== "boolean") return null;
 
   const nav = useNavigate();
-  const toast = useMinigameResultToast();
+  const { toast } = useToast();
 
   const session = useMemo(() => getSession(), []);
   const player = useMemo(() => getPlayer(), []);
@@ -50,7 +51,6 @@ export default function ResultSubmitPanel({
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [err, setErr] = useState(null);
-
   const submittedRef = useRef(false);
 
   async function submitOnce() {
@@ -70,16 +70,21 @@ export default function ResultSubmitPanel({
       return;
     }
 
-    // Show a global toast that stays visible even after we navigate back.
+    // Feedback (global sound/haptics settings)
     try {
-      toast.show({
-        won: Boolean(won),
-        title: Boolean(won) ? "You won!" : "You lost",
-        subtitle: `${category} · +${points} pts`,
+      if (getHapticsEnabled() && navigator.vibrate) navigator.vibrate(won ? 28 : 22);
+    } catch {}
+    try {
+      if (getSoundEnabled()) (won ? playWinSfx : playFailSfx)();
+    } catch {}
+
+    // Toast (non-blocking)
+    try {
+      toast({
+        title: won ? "You won!" : "You lost",
+        description: `${category} · +${points} pts`,
       });
-    } catch {
-      // ignore
-    }
+    } catch {}
 
     setSaving(true);
     setErr(null);
@@ -103,72 +108,40 @@ export default function ResultSubmitPanel({
         body: JSON.stringify(payload),
       });
       await parseJsonOrThrow(res);
-
       setSaved(true);
-
-      // Stay on this result screen until the player confirms.
-      // Navigation happens only after pressing "Continue".
     } catch (e) {
-      // If save fails (e.g. not your turn, token mismatch), allow retry by leaving submittedRef true?
-      // We keep it true to avoid spamming; user should go back to /play.
       setErr(e?.message || "Failed to save score");
-      // Stay on this result screen to allow a retry and to show the reason.
     } finally {
       setSaving(false);
     }
   }
 
-  // Auto-submit when game ends (won becomes boolean)
   useEffect(() => {
-    if (typeof won === "boolean" && !saved && !saving) {
-      submitOnce();
-    }
+    if (!saved && !saving) submitOnce();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [won]);
 
-  const headline = Boolean(won) ? "You won!" : "You lost";
+  const headline = won ? "You won!" : "You lost";
   const why =
     explanation ||
-    (Boolean(won)
+    (won
       ? "You met the minigame objective."
       : `You did not meet the objective${typeof errors === "number" ? ` (errors: ${errors}).` : "."}`);
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 130,
-        background: "rgba(2,6,23,0.70)",
-        backdropFilter: "blur(10px)",
-        WebkitBackdropFilter: "blur(10px)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 16,
-      }}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Minigame result"
-    >
-      <div
-        className="panel stack"
-        style={{
-          width: "min(760px, calc(100vw - 32px))",
-          borderRadius: 22,
-          padding: 16,
-          paddingBottom: `calc(16px + env(safe-area-inset-bottom, 0px))`,
-          boxShadow: "0 20px 60px rgba(0,0,0,0.55)",
-        }}
+    <Dialog open={true}>
+      <DialogContent
+        // Prevent closing by clicking outside or pressing ESC
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        className="w-[min(92vw,760px)]"
       >
-        <div className="stack" style={{ gap: 6 }}>
-          <div style={{ fontWeight: 950, fontSize: 20, letterSpacing: -0.2 }}>
-            {headline}
-          </div>
-          <div className="muted" style={{ lineHeight: 1.5 }}>{why}</div>
-        </div>
+        <DialogHeader>
+          <DialogTitle>{headline}</DialogTitle>
+          <DialogDescription className="leading-relaxed">{why}</DialogDescription>
+        </DialogHeader>
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+        <div className="mt-s4 flex flex-wrap items-center gap-2">
           <Badge>{category}</Badge>
           <Badge variant="secondary">Diff: {diffNorm}</Badge>
           <Badge variant="secondary">Time: {formatTime(timeMs)}</Badge>
@@ -176,27 +149,30 @@ export default function ResultSubmitPanel({
           <Badge variant="secondary">Points: {points}</Badge>
           {session?.sessionCode ? <Badge variant="secondary">Match: {session.sessionCode}</Badge> : null}
           {player?.playerName ? (
-            <Badge variant="secondary">Player: {player.playerIcon || "🙂"} {player.playerName}</Badge>
+            <Badge variant="secondary">
+              Player: {player.playerIcon || "🙂"} {player.playerName}
+            </Badge>
           ) : null}
         </div>
 
-        <div className="panel" style={{ padding: 12 }}>
-          <div className="muted" style={{ fontSize: 13, lineHeight: 1.5 }}>
+        <div className="mt-s4 rounded-lg border border-border bg-surface2 p-s4">
+          <div className="text-sm text-muted">
             {saving ? "Saving score…" : saved ? "Score saved. You can continue." : "Finishing…"}
           </div>
-          {err ? (
-            <div style={{ marginTop: 10, opacity: 0.95, lineHeight: 1.4 }}>
-              ⚠️ {err}
-            </div>
-          ) : null}
+          {err ? <div className="mt-2 text-sm">⚠️ {err}</div> : null}
         </div>
 
-        <div style={{ display: "grid", gap: 10 }}>
+        <DialogFooter>
           <Button
             variant="primary"
-            onClick={() => nav("/play", { replace: true, state: { turnSummary: { saved: Boolean(saved), error: err || null } } })}
+            onClick={() =>
+              nav("/play", {
+                replace: true,
+                state: { turnSummary: { saved: Boolean(saved), error: err || null } },
+              })
+            }
             disabled={saving || !saved}
-            style={{ minHeight: 54, fontWeight: 950, fontSize: 16 }}
+            className="h-12 font-extrabold"
           >
             Continue
           </Button>
@@ -205,26 +181,25 @@ export default function ResultSubmitPanel({
             <Button
               variant="secondary"
               onClick={() => {
-                // Allow a retry: reset the guard and submit again.
                 submittedRef.current = false;
                 setSaved(false);
                 setErr(null);
                 submitOnce();
               }}
               disabled={saving}
-              style={{ minHeight: 54, fontWeight: 900 }}
+              className="h-12"
             >
               Retry saving
             </Button>
           ) : null}
-        </div>
+        </DialogFooter>
 
         {!saved ? (
-          <div className="muted" style={{ fontSize: 12, lineHeight: 1.4 }}>
+          <div className="mt-s3 text-xs text-muted">
             You must confirm this result screen to return to the board.
           </div>
         ) : null}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -1,245 +1,133 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { fetchEvents } from "../lib/player";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
+import { Card, CardContent } from "./ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
+import { useToast } from "./ui/use-toast";
+import { toastError } from "../lib/toast-helpers";
 
-// Mobile-friendly mini feed (collapsible) used in Play and Leaderboard.
-// NOTE: Expanding this panel must NEVER push/reflow the surrounding layout.
-// It should always behave like an overlay above other UI.
+const MAX_ITEMS = 100;
 
-export default function EventFeed({ sessionId, title = "Events", limit = 5, pollMs = 1500 }) {
-  const MAX_ITEMS = 15;
-  const isSmall = useMemo(() => {
-    try {
-      return window.matchMedia && window.matchMedia("(max-width: 520px)").matches;
-    } catch {
-      return false;
-    }
-  }, []);
-  const storageKey = useMemo(() => (sessionId ? `cc_evtfeed_open_${sessionId}` : "cc_evtfeed_open"), [sessionId]);
-  const panelRef = useRef(null);
-  const collapsedHRef = useRef(0);
-  const [open, setOpen] = useState(() => {
-    try {
-      const v = localStorage.getItem(storageKey);
-      if (v === null) return false; // default collapsed
-      return v === "1";
-    } catch {
-      return false;
-    }
-  });
+function formatEvent(e) {
+  // Backend uses {seq, ts, type, message, ...}
+  const message = e?.message || e?.text || "";
+  const ts = e?.ts || e?.createdAt || null;
+  const when = ts ? new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+  return { message, when, type: e?.type || "" };
+}
 
-  // On small screens, start compact/collapsed even if it was open before.
-  useEffect(() => {
-    if (!isSmall) return;
-    setOpen(false);
-  }, [isSmall]);
-
+export default function EventFeed({ sessionId, title = "Game feed", limit = 8, pollMs = 1500, className = "" }) {
+  const { toast } = useToast();
   const [events, setEvents] = useState([]);
-  const [lastSeq, setLastSeq] = useState(0);
-  const [err, setErr] = useState(null);
+  const [open, setOpen] = useState(false);
 
-  async function loadInitial() {
-    if (!sessionId) return;
-    try {
-      setErr(null);
-      const data = await fetchEvents(sessionId, null, Math.min(MAX_ITEMS, Math.max(limit, 10)));
-      setEvents(data);
-      const max = data.reduce((m, e) => Math.max(m, Number(e?.seq || 0)), 0);
-      setLastSeq(max);
-    } catch (e) {
-      setErr(e?.message || "Event feed failed");
-    }
-  }
-
-  async function poll() {
-    if (!sessionId) return;
-    try {
-      setErr(null);
-      const data = await fetchEvents(sessionId, lastSeq || 0, null);
-      if (!data || data.length === 0) return;
-      setEvents((prev) => {
-        const merged = [...(prev || []), ...data];
-        // De-dup by seq
-        const bySeq = new Map();
-        for (const e of merged) {
-          if (!e) continue;
-          bySeq.set(Number(e.seq), e);
-        }
-        const arr = Array.from(bySeq.values()).sort((a, b) => Number(a.seq) - Number(b.seq));
-        // Keep only the newest MAX_ITEMS
-        return arr.slice(-MAX_ITEMS);
-      });
-      const max = data.reduce((m, e) => Math.max(m, Number(e?.seq || 0)), lastSeq || 0);
-      setLastSeq(max);
-    } catch (e) {
-      // non-fatal
-      setErr(e?.message || "Event feed failed");
-    }
-  }
+  const lastSeq = useMemo(() => (events.length ? events[0]?.seq || 0 : 0), [events]);
 
   useEffect(() => {
     if (!sessionId) return;
+    let cancelled = false;
+
+    async function loadInitial() {
+      try {
+        const data = await fetchEvents(sessionId, null, Math.min(MAX_ITEMS, Math.max(limit, 10)));
+        if (cancelled) return;
+        // Ensure newest-first
+        const sorted = Array.isArray(data) ? data.slice().sort((a, b) => (b.seq || 0) - (a.seq || 0)) : [];
+        setEvents(sorted);
+      } catch (e) {
+        if (cancelled) return;
+        toastError(toast, e, "Event feed failed");
+      }
+    }
+
     loadInitial();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 
   useEffect(() => {
     if (!sessionId) return;
-    const t = setInterval(poll, pollMs);
-    return () => clearInterval(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, lastSeq, pollMs]);
+    let cancelled = false;
+    let timer = null;
 
-  function toggle() {
-    const next = !open;
-    setOpen(next);
-    try {
-      localStorage.setItem(storageKey, next ? "1" : "0");
-    } catch {}
-  }
-
-  // Keep items bounded for performance.
-  const bounded = events.slice(-MAX_ITEMS);
-  // Respect the caller's limit (no hidden mobile cap).
-  const effectiveLimit = Math.max(limit, 1);
-  const shown = open ? bounded.slice(-Math.max(effectiveLimit, 1)) : bounded.slice(-1);
-  const last = bounded.length ? bounded[bounded.length - 1] : null;
-
-  function extractLastNumber(str) {
-    const m = String(str || "").match(/(\d+)\s*$/);
-    return m ? m[1] : null;
-  }
-
-  function formatEvent(e) {
-    const type = String(e?.type || "");
-    const raw = String(e?.message || "");
-    // Remove leading emojis to save horizontal space.
-    const msg = raw.replace(/^\s*[\p{Emoji_Presentation}\p{Extended_Pictographic}]+\s*/u, "");
-
-    if (type === "D6_ROLL") {
-      // Server message: "🎲 <player> würfelt D6: <n>"
-      const n = (raw.match(/D6\s*:\s*(\d+)/i) || [])[1] || extractLastNumber(raw);
-      // Goal: keep the important info visible in one line: "<name> D6=4"
-      const compactMsg = msg
-        .replace(/würfelt\s*D6\s*:\s*\d+/i, (n ? `D6=${n}` : "D6"))
-        .replace(/\s{2,}/g, " ")
-        .trim();
-      return { badge: n ? `D6=${n}` : "D6", message: compactMsg };
-    }
-
-    if (type === "DICE_ADV") {
-      // Server message: "🎲✨ <player> würfelt zweimal: 2 & 5 → 7"
-      const total = extractLastNumber(raw);
-      const compactMsg = msg
-        .replace(/würfelt\s*zweimal\s*:\s*/i, "rolls 2x: ")
-        .replace(/\s*→\s*/g, " -> ");
-      return { badge: total ? `D6=${total}` : "D6", message: compactMsg };
-    }
-
-    return { badge: type || "evt", message: msg };
-  }
-  // Pages should reserve ONLY the *collapsed* height so expanding the feed never pushes/reflows layout.
-  // When collapsed, measure and store; when expanded, keep using the stored collapsed height.
-  useLayoutEffect(() => {
-    try {
-      const el = panelRef.current;
-      if (!el) return;
-
-      if (!open) {
-        const h = Math.ceil(el.getBoundingClientRect().height || 0);
-        collapsedHRef.current = h;
-        document.documentElement.style.setProperty("--cc-eventfeed-h", `${h}px`);
-      } else {
-        const h = collapsedHRef.current || Math.ceil(el.getBoundingClientRect().height || 0);
-        document.documentElement.style.setProperty("--cc-eventfeed-h", `${h}px`);
+    async function poll() {
+      try {
+        const data = await fetchEvents(sessionId, lastSeq || 0, null);
+        if (cancelled) return;
+        if (!Array.isArray(data) || data.length === 0) return;
+        setEvents((prev) => {
+          const bySeq = new Set(prev.map((p) => p.seq));
+          const merged = [...data.filter((d) => !bySeq.has(d.seq)), ...prev];
+          return merged.slice(0, MAX_ITEMS);
+        });
+      } catch (e) {
+        if (cancelled) return;
+        // don’t spam toasts every poll — only show if dialog is open
+        if (open) toastError(toast, e, "Event feed failed", { duration: 2600 });
       }
-    } catch {}
-  }, [open, shown.length, last?.seq]);
+    }
 
+    timer = window.setInterval(poll, Math.max(700, pollMs));
+    return () => {
+      cancelled = true;
+      if (timer) window.clearInterval(timer);
+    };
+  }, [sessionId, lastSeq, pollMs, toast, open]);
 
-  // Always overlay: fixed position so showing/hiding never reflows the page.
-  const wrapperStyle = {
-    position: "fixed",
-    top: "calc(var(--cc-topbar-h, 92px) + 10px)",
-    left: 12,
-    right: 12,
-    maxWidth: 720,
-    marginLeft: "auto",
-    marginRight: "auto",
-    zIndex: 60,
-    pointerEvents: "none",
-  };
-
-  const panelStyle = { display: "grid", gap: 10, pointerEvents: "auto" };
-  // (Legacy var) Keep in sync with the collapsed height var.
-  useLayoutEffect(() => {
-    try {
-      const h = Number(collapsedHRef.current || 0);
-      if (h > 0) document.documentElement.style.setProperty("--eventfeed-h", String(h));
-    } catch {}
-  }, [open]);
-
+  const last = events[0] ? formatEvent(events[0]) : null;
 
   return (
-    <div style={wrapperStyle}>
-      <div className="panel" style={panelStyle} ref={panelRef}>
-      <div style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <div style={{ fontWeight: 800 }}>{title}</div>
-          <Badge variant="outline" style={{ fontVariantNumeric: "tabular-nums" }}>
-            {events.length}
-          </Badge>
-        </div>
-        <Button variant="secondary" onClick={toggle} style={{ minHeight: 44, paddingInline: 14 }}>
-          {open ? "Hide" : "Show"}
-        </Button>
-      </div>
-
-      {err ? <div className="muted" style={{ fontSize: 13 }}>⚠️ {err}</div> : null}
-
-      {!open && last ? (
-        <div className="muted" style={{ fontSize: 12, lineHeight: 1.3 }}>
-          {formatEvent(last).message}
-        </div>
-      ) : null}
-
-      {open ? (
-        <div style={{ maxHeight: 200, overflow: "auto", paddingRight: 4 }}>
-          {shown.length === 0 ? <div className="muted">No events yet.</div> : null}
-          <div className="nativeList">
-            {shown.map((e) => (
-              (() => {
-                const fe = formatEvent(e);
-                return (
-              <div key={e.seq} className="nativeItem">
-                <div className="nativeLeft">
-                  <div className="nativeAvatar" style={{ fontSize: 12, fontVariantNumeric: "tabular-nums" }}>#{e.seq}</div>
-                  <div className="nativeText">
-                    <div
-                      className="nativeTitle"
-                      style={{ fontWeight: 750, fontSize: 13, lineHeight: 1.2, wordBreak: "break-word" }}
-                    >
-                      {fe.message}
-                    </div>
-                  </div>
-                </div>
-                <div className="nativeTrail">
-                  <Badge
-                    variant="outline"
-                    style={{ fontSize: 11, padding: "2px 8px", fontVariantNumeric: "tabular-nums" }}
-                  >
-                    {fe.badge}
-                  </Badge>
-                </div>
-              </div>
-                );
-              })()
-            ))}
+    <>
+      <Card className={className}>
+        <CardContent className="flex items-center justify-between gap-s3 py-s3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-s2">
+              <div className="text-fs0 font-semibold text-muted">{title}</div>
+              {last?.when ? <Badge variant="secondary">{last.when}</Badge> : null}
+            </div>
+            <div className="mt-1 truncate text-sm">
+              {last?.message ? last.message : <span className="text-muted">No events yet.</span>}
+            </div>
           </div>
-        </div>
-      ) : null}
-      </div>
-    </div>
+          <Button variant="ghost" onClick={() => setOpen(true)}>
+            Open
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-[720px]">
+          <DialogHeader>
+            <DialogTitle>{title}</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-auto pr-1">
+            <div className="space-y-s2">
+              {events.length === 0 ? (
+                <div className="text-muted">No events yet.</div>
+              ) : (
+                events.slice(0, Math.min(MAX_ITEMS, Math.max(limit, 10))).map((e) => {
+                  const fe = formatEvent(e);
+                  return (
+                    <div
+                      key={e.seq || `${fe.when}-${fe.message}`}
+                      className="rounded-lg border border-border bg-surface2/60 px-s4 py-s3"
+                    >
+                      <div className="flex items-center justify-between gap-s3">
+                        <div className="min-w-0 truncate font-semibold">{fe.message || "(no message)"}</div>
+                        {fe.when ? <Badge variant="secondary">{fe.when}</Badge> : null}
+                      </div>
+                      {fe.type ? <div className="mt-1 text-fs0 text-muted">{fe.type}</div> : null}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

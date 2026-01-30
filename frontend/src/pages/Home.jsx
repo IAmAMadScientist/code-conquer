@@ -3,6 +3,10 @@ import { useNavigate } from "react-router-dom";
 import AppShell from "../components/AppShell";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
+import { Card, CardContent } from "../components/ui/card";
+import { Input } from "../components/ui/input";
+import { useToast } from "../components/ui/use-toast";
+import { toastError, toastSuccess } from "../lib/toast-helpers";
 import { createSession, joinSessionByCode, getSession, clearSession } from "../lib/session";
 import { getPlayer, registerPlayer, clearPlayer } from "../lib/player";
 
@@ -10,6 +14,7 @@ const EMOJIS = ["🦊","🐱","🐶","🐸","🐼","🦁","🐙","🦄","🐝","
 
 export default function Home() {
   const nav = useNavigate();
+  const { toast } = useToast();
 
   const [session, setSession] = useState(() => getSession());
   const [player, setPlayer] = useState(() => getPlayer());
@@ -19,7 +24,6 @@ export default function Home() {
   const [icon, setIcon] = useState(player?.playerIcon || "🦊");
 
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState(null);
 
   useEffect(() => {
     // Keep local state in sync if storage changes (rare, but helps).
@@ -29,7 +33,6 @@ export default function Home() {
 
   async function onCreate() {
     setBusy(true);
-    setErr(null);
     try {
       // New match => clear previous player identity
       clearPlayer();
@@ -39,8 +42,9 @@ export default function Home() {
       setJoinCode("");
       setPlayerName("");
       setIcon("🦊");
+      toastSuccess(toast, "Match created", `Code: ${s?.sessionCode || ""}`.trim());
     } catch (e) {
-      setErr(e?.message || "Failed to create match");
+      toastError(toast, e, "Failed to create match");
     } finally {
       setBusy(false);
     }
@@ -49,14 +53,14 @@ export default function Home() {
   async function onJoinByCode() {
     if (!joinCode.trim()) return;
     setBusy(true);
-    setErr(null);
     try {
       clearPlayer();
       const s = await joinSessionByCode(joinCode.trim().toUpperCase());
       setSession(s);
       setPlayer(getPlayer());
+      toastSuccess(toast, "Joined match", `Code: ${s?.sessionCode || joinCode.trim().toUpperCase()}`);
     } catch (e) {
-      setErr(e?.message || "Failed to join match");
+      toastError(toast, e, "Failed to join match");
     } finally {
       setBusy(false);
     }
@@ -67,13 +71,13 @@ export default function Home() {
     if (!playerName.trim()) return;
 
     setBusy(true);
-    setErr(null);
     try {
       const p = await registerPlayer(session.sessionId, playerName.trim(), icon);
       setPlayer(p);
+      toastSuccess(toast, "Profile saved", `${icon} ${playerName.trim()}`);
       nav("/lobby");
     } catch (e) {
-      setErr(e?.message || "Failed to save profile");
+      toastError(toast, e, "Failed to save profile");
     } finally {
       setBusy(false);
     }
@@ -87,7 +91,6 @@ export default function Home() {
     setJoinCode("");
     setPlayerName("");
     setIcon("🦊");
-    setErr(null);
   }
 
   return (
@@ -101,47 +104,49 @@ export default function Home() {
         </>
       }
       rightPanel={
-        <div className="panel stack">
-          <div>
-            <div className="kicker">Quick start</div>
-            <div className="title" style={{ fontSize: "var(--fs-3)" }}>Get a match running in under a minute</div>
-          </div>
-          <div className="stack tight muted" style={{ lineHeight: 1.6 }}>
-            <div>1) Create a match (host) or join with a 6‑digit code</div>
-            <div>2) Pick a name + emoji</div>
-            <div>3) Head to the lobby and press Ready</div>
-          </div>
-        </div>
+        <Card>
+          <CardContent className="space-y-s3">
+            <div>
+              <div className="text-muted text-fs0 font-semibold">Quick start</div>
+              <div className="mt-s1 text-fs3 font-extrabold">Get a match running in under a minute</div>
+            </div>
+            <div className="space-y-s1 text-muted leading-relaxed">
+              <div>1) Create a match (host) or join with a 6‑digit code</div>
+              <div>2) Pick a name + emoji</div>
+              <div>3) Head to the lobby and press Ready</div>
+            </div>
+          </CardContent>
+        </Card>
       }
     >
-      <div className="panel stack mobileCenter">
-        {err ? <div style={{ opacity: 0.9 }}>⚠️ {err}</div> : null}
+      <Card>
+        <CardContent className="space-y-s4">
+        {/* Errors are shown via toast */}
 
         {!session?.sessionId ? (
           <>
             <div>
-              <div className="title" style={{ fontSize: "var(--fs-3)" }}>Start a new match</div>
-              <div className="subtitle">Host the game and share the code with your friends.</div>
+              <div className="text-fs3 font-extrabold">Start a new match</div>
+              <div className="mt-s1 text-muted">Host the game and share the code with your friends.</div>
             </div>
 
-            <div className="row wrap mobileRow">
+            <div className="flex flex-wrap gap-s2">
               <Button variant="primary" onClick={onCreate} disabled={busy}>
                 Create match
               </Button>
             </div>
 
-            <div className="divider" />
+            <div className="h-px w-full bg-border/60" />
 
-            <div className="stack tight">
-              <div className="kicker">Or join by code</div>
-              <div className="row wrap mobileRow">
-                <input
-                  className="ui-input"
+            <div className="space-y-s2">
+              <div className="text-muted text-fs0 font-semibold">Or join by code</div>
+              <div className="flex flex-wrap gap-s2">
+                <Input
+                  className="min-w-0 flex-1 uppercase"
                   value={joinCode}
                   onChange={(e) => setJoinCode(e.target.value)}
                   placeholder="6-digit code"
                   inputMode="numeric"
-                  style={{ textTransform: "uppercase" }}
                 />
                 <Button variant="secondary" onClick={onJoinByCode} disabled={busy || !joinCode.trim()}>
                   Join
@@ -151,23 +156,21 @@ export default function Home() {
           </>
         ) : (
           <>
-            <div className="row wrap mobileRow between">
+            <div className="flex flex-wrap items-center justify-between gap-s2">
               <Badge>Active match: {session.sessionCode}</Badge>
-              <Button variant="secondary" onClick={onLeave} disabled={busy}>
-                Leave
-              </Button>
+              <Button variant="secondary" onClick={onLeave} disabled={busy}>Leave</Button>
             </div>
 
             {!player?.playerId ? (
-              <div className="stack" style={{ maxWidth: 560, margin: "0 auto" }}>
+              <div className="mx-auto w-full max-w-[560px] space-y-s4">
                 <div>
-                  <div className="title" style={{ fontSize: "var(--fs-3)" }}>Create your player</div>
-                  <div className="subtitle">This name + emoji will show up in the lobby and on the board.</div>
+                  <div className="text-fs3 font-extrabold">Create your player</div>
+                  <div className="mt-s1 text-muted">This name + emoji will show up in the lobby and on the board.</div>
                 </div>
 
-                <div className="row wrap mobileRow">
-                  <input
-                    className="ui-input"
+                <div className="flex flex-wrap gap-s2">
+                  <Input
+                    className="min-w-0 flex-1"
                     value={playerName}
                     onChange={(e) => setPlayerName(e.target.value)}
                     placeholder="e.g. Alex"
@@ -177,14 +180,18 @@ export default function Home() {
                   </Button>
                 </div>
 
-                <div className="stack tight">
-                  <div className="kicker">Pick an emoji</div>
-                  <div className="chips" style={{ justifyContent: "center" }}>
+                <div className="space-y-s2">
+                  <div className="text-muted text-fs0 font-semibold">Pick an emoji</div>
+                  <div className="flex flex-wrap justify-center gap-s2">
                     {EMOJIS.map((e) => (
                       <button
                         key={e}
                         onClick={() => setIcon(e)}
-                        className={e === icon ? "emojiPick active" : "emojiPick"}
+                        className={
+                          e === icon
+                            ? "grid h-11 w-11 place-items-center rounded-full border border-border bg-surface2 text-[20px] shadow-panel"
+                            : "grid h-11 w-11 place-items-center rounded-full border border-border bg-surface text-[20px]"
+                        }
                         aria-label={`Pick ${e}`}
                         type="button"
                       >
@@ -192,11 +199,11 @@ export default function Home() {
                       </button>
                     ))}
                   </div>
-                  <div className="muted" style={{ fontSize: "var(--fs-0)" }}>Selected: {icon}</div>
+                  <div className="text-muted text-fs0">Selected: {icon}</div>
                 </div>
               </div>
             ) : (
-              <div className="row wrap mobileRow">
+              <div className="flex flex-wrap gap-s2">
                 <Button variant="primary" onClick={() => nav("/lobby")}>Lobby</Button>
                 <Button variant="secondary" onClick={() => nav("/play")}>Play</Button>
                 <Button variant="ghost" onClick={() => nav("/leaderboard")}>Scores</Button>
@@ -204,7 +211,8 @@ export default function Home() {
             )}
           </>
         )}
-      </div>
+        </CardContent>
+      </Card>
     </AppShell>
   );
 }
