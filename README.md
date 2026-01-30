@@ -76,7 +76,7 @@ Scores are session-scoped and shown live in the leaderboard.
 - React
 - Vite
 - React Router
-- Custom mobile-first UI
+- Tailwind CSS UI
 
 ### Backend
 - Java 19
