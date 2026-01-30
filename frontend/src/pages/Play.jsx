@@ -320,15 +320,37 @@ export default function Play() {
           {session?.sessionCode ? <Badge variant="secondary">Match: {session.sessionCode}</Badge> : null}
           {me?.playerName ? <Badge variant="secondary">You: {me.playerIcon || "🙂"} {me.playerName}</Badge> : null}
           <Badge variant={isMyTurn ? "secondary" : "outline"}>{turnLabel}</Badge>
-                    <Button
-                      variant="secondary"
-                      style={{ height: 34, padding: "0 12px", borderRadius: 999, fontWeight: 800 }}
-                      onClick={() => setMapOpen(true)}
-                    >
-                      Show map
-                    </Button>
-
         </>
+      }
+      rightPanel={
+        <div className="panel stack">
+          <div>
+            <div style={{ fontWeight: 850 }}>Quick actions</div>
+            <div className="muted" style={{ marginTop: 6, lineHeight: 1.5 }}>
+              Open the board map and keep an eye on the turn status.
+            </div>
+          </div>
+          <Button variant="secondary" onClick={() => setMapOpen(true)}>
+            Show map
+          </Button>
+        </div>
+      }
+      actions={
+        <div className="actionRow">
+          <Button
+            variant="primary"
+            onClick={doStartChallenge}
+            disabled={!canStartChallenge || !hasChallengeOnField}
+          >
+            Start challenge
+          </Button>
+          <Button variant="secondary" onClick={() => setMapOpen(true)} title="Show board map">
+            Map
+          </Button>
+          <Button variant="ghost" onClick={leaveGame}>
+            Leave
+          </Button>
+        </div>
       }
     >
       {specialOpen ? createPortal((
@@ -548,13 +570,6 @@ export default function Play() {
 ), document.body) : null}
 
       <style>{`
-        .playRoot{ height:100%; min-height:0; display:flex; flex-direction:column; gap:12px; overflow:hidden; }
-        .playTop{ flex:0 0 auto; }
-        .playMid{ flex:1 1 auto; min-height:0; overflow:auto; padding-right:4px; }
-        .playCard{ display:grid; gap:12px; }
-        .turnRow{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
-        .forkRow{ display:flex; gap:10px; flex-wrap:wrap; }
-
         /* Special card modal: mobile-first full-screen sheet */
         .specialOverlay{
           padding: max(env(safe-area-inset-top), 12px) 12px max(env(safe-area-inset-bottom), 12px);
@@ -576,22 +591,17 @@ export default function Play() {
           }
           .specialCardImg{ width: min(360px, 88vw) !important; }
         }
-        @media (min-width: 900px){
-          .playRoot{ max-width: 720px; margin: 0 auto; width:100%; }
-        }
       `}</style>
 
       <PullToRefresh onRefresh={load}>
-        <div className="playRoot">
-          <div className="playTop">
-            <EventFeed sessionId={session.sessionId} title="Game feed" limit={5} />
-          </div>
+        <div className="stack" style={{ height: "100%", minHeight: 0 }}>
+          {/* Fixed overlay (does not affect layout). */}
+          <EventFeed sessionId={session.sessionId} title="Game feed" limit={5} />
 
-          <div className="playMid" style={{ position: "relative" }}>
-            {/* Reserve space under the fixed (collapsed) EventFeed so it never overlaps content. */}
-            <div style={{ height: "calc(var(--cc-eventfeed-h, 72px) + 8px)" }} aria-hidden />
+          {/* Reserve space under the fixed (collapsed) EventFeed so it never overlaps content. */}
+          <div style={{ height: "calc(var(--cc-eventfeed-h, 72px) + 8px)" }} aria-hidden />
 
-            <div className="panel playCard">
+          <div className="panel stack" style={{ flex: 1, minHeight: 0, overflow: "auto", paddingRight: 4 }}>
               {err ? <div style={{ opacity: 0.9 }}>⚠️ {err}</div> : null}
 
               {!state?.started ? (
@@ -600,7 +610,7 @@ export default function Play() {
                 </div>
               ) : (
                 <>
-                  <div className="turnRow">
+                  <div className="row wrap">
                     {currentPlayer ? (
                       <Badge variant="secondary">Current: {currentPlayer.icon || "🙂"} {currentPlayer.name}</Badge>
                     ) : null}
@@ -614,16 +624,16 @@ export default function Play() {
 
                   {/* D6 roll */}
                   {isMyTurn && waitingForDice ? (
-                    <div style={{ display: "grid", gap: 10 }}>
+                    <div className="stack tight">
                       <D6Die value={state?.lastDiceRoll || null} onRoll={doRollD6} disabled={!isMyTurn} />
                     </div>
                   ) : null}
 
                   {/* Fork choice */}
                   {isMyTurn && waitingForPath ? (
-                    <div style={{ display: "grid", gap: 10 }}>
+                    <div className="stack tight">
                       <div className="muted">Fork! Choose your path:</div>
-                      <div className="forkRow">
+                      <div className="row wrap">
                         {(pendingChoices?.options || []).map((opt) => (
                           <Button key={opt?.to || opt} variant="secondary" onClick={() => doChoosePath(opt?.to || opt)}>
                             {opt?.label ? opt.label : "Choose"}
@@ -641,27 +651,6 @@ export default function Play() {
                   ) : null}
                 </>
               )}
-            </div>
-          </div>
-
-          {/* Bottom actions: as low as possible, directly above the tab bar */}
-          <div className="stickyActions hasTabs" style={{ marginTop: 0 }}>
-            <div className="stickyActionsRow">
-              <Button
-                className="fullWidthBtn"
-                variant="primary"
-                onClick={doStartChallenge}
-                disabled={!canStartChallenge || !hasChallengeOnField}
-              >
-                Start challenge
-              </Button>
-              {canStartChallenge && !hasChallengeOnField ? (
-                <div className="muted" style={{ fontSize: 12, textAlign: "center" }}>
-                  No challenge on this field.
-                </div>
-              ) : null}
-              <Button className="fullWidthBtn" variant="ghost" onClick={leaveGame}>Leave game</Button>
-            </div>
           </div>
         </div>
       </PullToRefresh>

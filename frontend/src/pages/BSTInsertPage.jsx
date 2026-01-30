@@ -1,6 +1,9 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import ResultSubmitPanel from "../components/ResultSubmitPanel";
+import TutorialModal from "../components/TutorialModal";
+import { getPlayer } from "../lib/player";
+import { getTutorial, tutorialKey } from "../lib/tutorials";
 import {
   getHapticsEnabled,
   getSoundEnabled,
@@ -193,6 +196,27 @@ export default function BSTInsertPage() {
   const challenge = loc.state?.challenge;
   const difficulty = (challenge?.difficulty || "EASY").toUpperCase();
 
+  // First-time tutorial gate (per minigame + per player on this device)
+  const player = useMemo(() => getPlayer(), []);
+  const tutorial = useMemo(() => getTutorial("BST_INSERT"), []);
+  const tutKey = useMemo(
+    () => tutorialKey({ playerId: player?.playerId, category: "BST_INSERT" }),
+    [player?.playerId]
+  );
+
+  // Determine tutorial visibility synchronously so the minigame truly doesn't start in the background.
+  const [tutorialOpen, setTutorialOpen] = useState(() => {
+    if (!challenge) return false; // if opened directly, don't block
+    try {
+      return localStorage.getItem(tutKey) !== "1";
+    } catch {
+      return false;
+    }
+  });
+
+  const [started, setStarted] = useState(() => !tutorialOpen);
+
+
   // Prevent vertical page scrolling on mobile during the minigame.
   useEffect(() => {
     const prev = document.body.style.overflowY;
@@ -206,7 +230,7 @@ export default function BSTInsertPage() {
   const puzzle = useMemo(() => makePuzzle(difficulty), [seed, difficulty]);
 
   const [dropped, setDropped] = useState(null); // { parent, side }
-  const [status, setStatus] = useState("playing"); // playing | won | lost
+  const [status, setStatus] = useState(() => (tutorialOpen ? "waiting" : "playing")); // waiting | playing | won | lost
   // Minimal mobile HUD feedback (short, non-intrusive).
   const [toast, setToast] = useState(null); // { text, kind }
 
@@ -230,7 +254,7 @@ export default function BSTInsertPage() {
 
   // Live timer + timeout
   useEffect(() => {
-    if (status !== "playing") return;
+    if (!started || status !== "playing") return;
     const id = setInterval(() => {
       const elapsed = Date.now() - startRef.current;
       setTimeMs(elapsed);
@@ -241,7 +265,7 @@ export default function BSTInsertPage() {
       }
     }, 100);
     return () => clearInterval(id);
-  }, [status, timeLimitMs]);
+  }, [started, status, timeLimitMs]);
 
   const rootRef = useRef(null);
   const hudRef = useRef(null);
@@ -563,10 +587,32 @@ export default function BSTInsertPage() {
             timeMs={timeMs}
             errors={errors}
             won={status === "won"}
+            explanation={
+              status === "won"
+                ? `Correct: insert ${puzzle.newValue} ${puzzle.answer.side === "L" ? "to the LEFT" : "to the RIGHT"} of ${puzzle.answer.parentValue}.`
+                : (timeLimitMs && timeMs >= timeLimitMs)
+                ? `Time ran out. Correct slot was ${puzzle.answer.side === "L" ? "left" : "right"} of ${puzzle.answer.parentValue}.`
+                : `Wrong slot. Correct slot was ${puzzle.answer.side === "L" ? "left" : "right"} of ${puzzle.answer.parentValue}.`
+            }
             challengeId={challenge?.challengeInstanceId}
           />
         </div>
       ) : null}
+
+      <TutorialModal
+        open={tutorialOpen}
+        tutorial={tutorial}
+        onConfirm={() => {
+          try {
+            localStorage.setItem(tutKey, "1");
+          } catch {}
+          setTutorialOpen(false);
+          setStarted(true);
+          startRef.current = Date.now();
+          setTimeMs(0);
+          setStatus("playing");
+        }}
+      />
     </div>
   );
 }

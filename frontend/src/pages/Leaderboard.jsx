@@ -51,12 +51,7 @@ export default function Leaderboard() {
       }
     >
       <PullToRefresh onRefresh={load}>
-        <style>{`
-          .lbWrap{ height:100%; min-height:0; display:flex; flex-direction:column; gap:12px; }
-          .lbList{ flex:1; min-height:0; overflow:auto; padding-right:4px; }
-        `}</style>
-
-        <div className="panel lbWrap" style={{ height: "100%", minHeight: 0 }}>
+        <div className="panel stack" style={{ height: "100%", minHeight: 0 }}>
           {/* Reserve space under the fixed (collapsed) EventFeed so it never overlaps content. */}
           {session?.sessionId ? <div style={{ height: "calc(var(--cc-eventfeed-h, 72px) + 8px)" }} aria-hidden /> : null}
         {loading ? <div className="muted">Loading…</div> : null}
@@ -70,7 +65,7 @@ export default function Leaderboard() {
         ) : null}
 
         {!loading && !err && rows.length > 0 ? (
-          <div className="lbList">
+          <div style={{ flex: 1, minHeight: 0, overflow: "auto", paddingRight: 4 }}>
             <div className="nativeList">
               {rows.map((r, idx) => (
                 <div key={r.playerId || idx} className="nativeItem">

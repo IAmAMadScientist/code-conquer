@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import ResultSubmitPanel from "../components/ResultSubmitPanel";
+import TutorialModal from "../components/TutorialModal";
+import { getPlayer } from "../lib/player";
+import { getTutorial, tutorialKey } from "../lib/tutorials";
 
 // Bit Jumper — arcade platformer.
 // Platforms are only for movement; bits are collectibles.
@@ -105,6 +108,27 @@ export default function BitJumperPage() {
   const difficulty = (challenge?.difficulty || "EASY").toUpperCase();
   const diff = DIFF_CFG[difficulty] ? difficulty : "EASY";
 
+  // First-time tutorial gate (per minigame + per player on this device)
+  const player = useMemo(() => getPlayer(), []);
+  const tutorial = useMemo(() => getTutorial("BIT_JUMPER"), []);
+  const tutKey = useMemo(
+    () => tutorialKey({ playerId: player?.playerId, category: "BIT_JUMPER" }),
+    [player?.playerId]
+  );
+
+  // Determine tutorial visibility synchronously so the minigame truly doesn't start in the background.
+  const [tutorialOpen, setTutorialOpen] = useState(() => {
+    if (!challenge) return false; // if opened directly, don't block
+    try {
+      return localStorage.getItem(tutKey) !== "1";
+    } catch {
+      return false;
+    }
+  });
+
+  const [started, setStarted] = useState(() => !tutorialOpen);
+
+
   const best0 = useMemo(() => loadBest(diff), [diff]);
 
   const canvasRef = useRef(null);
@@ -152,7 +176,7 @@ export default function BitJumperPage() {
       won: null,
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [diff]);
+  }, [diff, started]);
 
   function resetGame() {
     const canvas = canvasRef.current;
@@ -386,6 +410,7 @@ export default function BitJumperPage() {
   }
 
   useEffect(() => {
+    if (!started) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -413,9 +438,10 @@ export default function BitJumperPage() {
       window.removeEventListener("orientationchange", onResize);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [diff]);
+  }, [diff, started]);
 
   useEffect(() => {
+    if (!started) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -460,9 +486,10 @@ export default function BitJumperPage() {
       el.removeEventListener("pointercancel", onPointerUp);
       window.removeEventListener("mousemove", onMouseMove);
     };
-  }, []);
+  }, [started]);
 
   useEffect(() => {
+    if (!started) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d", { alpha: false, desynchronized: true });
@@ -965,6 +992,10 @@ export default function BitJumperPage() {
     function onRestartTap() {
       const s = stateRef.current;
       if (!s?.gameOver) return;
+      // Do NOT restart once the run has ended (ResultSubmitPanel must save + player must confirm).
+      if (typeof uiRef.current?.won === "boolean") return;
+      // Also ignore if tutorial is still open.
+      if (!started) return;
       resetGame();
     }
     canvas.addEventListener("click", onRestartTap, { passive: true });
@@ -976,13 +1007,14 @@ export default function BitJumperPage() {
       canvas.removeEventListener("touchend", onRestartTap);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [diff]);
+  }, [diff, started]);
 
   useEffect(() => {
     // initial start
+    if (!started) return;
     if (!stateRef.current) resetGame();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [diff]);
+  }, [diff, started]);
 
   const aStr = ui.puzzle ? bitsToStr(ui.puzzle.aBits) : "";
   const bStr = ui.puzzle ? bitsToStr(ui.puzzle.bBits) : "";
@@ -998,7 +1030,7 @@ export default function BitJumperPage() {
       document.body.style.overflow = prevOverflow;
       document.body.style.overscrollBehavior = prevOverscroll;
     };
-  }, []);
+  }, [started]);
 
   const Pill = ({ children }) => (
     <div
@@ -1179,10 +1211,29 @@ export default function BitJumperPage() {
             timeMs={ui.timeMs}
             errors={ui.errors}
             won={ui.won}
+            explanation={
+              ui.won
+                ? "You reached the finish."
+                : "You did not reach the finish (fell or hit hazards)."
+            }
             challengeId={challenge?.challengeInstanceId}
           />
         </div>
       ) : null}
+
+      <TutorialModal
+        open={tutorialOpen}
+        tutorial={tutorial}
+        onConfirm={() => {
+          try {
+            localStorage.setItem(tutKey, "1");
+          } catch {}
+          setTutorialOpen(false);
+          setStarted(true);
+          // Start the minigame only after tutorial confirmation.
+          try { resetGame(); } catch {}
+        }}
+      />
     </div>
   );
 }

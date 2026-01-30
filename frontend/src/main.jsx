@@ -1,5 +1,8 @@
 import { createRoot } from 'react-dom/client'
 import App from './App.jsx'
+import "./styles/globals.css";
+// Phase 1 Tailwind migration: keep legacy UI styles to avoid breaking.
+// We'll migrate these classes to Tailwind in later phases.
 import "./components/ui/ui.css";
 
 

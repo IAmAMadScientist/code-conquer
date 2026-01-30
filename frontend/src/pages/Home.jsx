@@ -101,34 +101,47 @@ export default function Home() {
         </>
       }
       rightPanel={
-        <div className="panel">
-          <div style={{ fontSize: 16, fontWeight: 650 }}>Start here</div>
-          <div className="muted" style={{ fontSize: 14, marginTop: 10, lineHeight: 1.5 }}>
-            1) Create or join a match<br />
-            2) Set your name + emoji<br />
-            3) Go to lobby and press Ready
+        <div className="panel stack">
+          <div>
+            <div className="kicker">Quick start</div>
+            <div className="title" style={{ fontSize: "var(--fs-3)" }}>Get a match running in under a minute</div>
+          </div>
+          <div className="stack tight muted" style={{ lineHeight: 1.6 }}>
+            <div>1) Create a match (host) or join with a 6‑digit code</div>
+            <div>2) Pick a name + emoji</div>
+            <div>3) Head to the lobby and press Ready</div>
           </div>
         </div>
       }
     >
-      <div className="panel mobileCenter" style={{ display: "grid", gap: 12 }}>
+      <div className="panel stack mobileCenter">
         {err ? <div style={{ opacity: 0.9 }}>⚠️ {err}</div> : null}
 
         {!session?.sessionId ? (
           <>
-            <div className="mobileRow" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <Button variant="primary" onClick={onCreate} disabled={busy}>Create match</Button>
+            <div>
+              <div className="title" style={{ fontSize: "var(--fs-3)" }}>Start a new match</div>
+              <div className="subtitle">Host the game and share the code with your friends.</div>
             </div>
 
-            <div style={{ display: "grid", gap: 8 }}>
-              <div className="muted">Or join by code:</div>
-              <div className="mobileRow" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            <div className="row wrap mobileRow">
+              <Button variant="primary" onClick={onCreate} disabled={busy}>
+                Create match
+              </Button>
+            </div>
+
+            <div className="divider" />
+
+            <div className="stack tight">
+              <div className="kicker">Or join by code</div>
+              <div className="row wrap mobileRow">
                 <input
                   className="ui-input"
                   value={joinCode}
                   onChange={(e) => setJoinCode(e.target.value)}
                   placeholder="6-digit code"
-                  style={{ minWidth: 220, textTransform: "uppercase" }}
+                  inputMode="numeric"
+                  style={{ textTransform: "uppercase" }}
                 />
                 <Button variant="secondary" onClick={onJoinByCode} disabled={busy || !joinCode.trim()}>
                   Join
@@ -138,43 +151,40 @@ export default function Home() {
           </>
         ) : (
           <>
-            <div className="mobileRow" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            <div className="row wrap mobileRow between">
               <Badge>Active match: {session.sessionCode}</Badge>
-              <Button variant="secondary" onClick={onLeave} disabled={busy}>Leave match</Button>
+              <Button variant="secondary" onClick={onLeave} disabled={busy}>
+                Leave
+              </Button>
             </div>
 
             {!player?.playerId ? (
-              <div style={{ display: "grid", gap: 10, maxWidth: 520, margin: "0 auto" }}>
-                <div className="muted">Set your player profile:</div>
-                <div className="mobileRow" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+              <div className="stack" style={{ maxWidth: 560, margin: "0 auto" }}>
+                <div>
+                  <div className="title" style={{ fontSize: "var(--fs-3)" }}>Create your player</div>
+                  <div className="subtitle">This name + emoji will show up in the lobby and on the board.</div>
+                </div>
+
+                <div className="row wrap mobileRow">
                   <input
                     className="ui-input"
                     value={playerName}
                     onChange={(e) => setPlayerName(e.target.value)}
                     placeholder="e.g. Alex"
-                    style={{ minWidth: 220 }}
                   />
                   <Button variant="primary" onClick={onSaveProfileAndGoLobby} disabled={busy || !playerName.trim()}>
-                    Save & go to Lobby
+                    Continue
                   </Button>
                 </div>
 
-                <div style={{ display: "grid", gap: 8 }}>
-                  <div className="muted" style={{ fontSize: 13 }}>Emoji:</div>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
+                <div className="stack tight">
+                  <div className="kicker">Pick an emoji</div>
+                  <div className="chips" style={{ justifyContent: "center" }}>
                     {EMOJIS.map((e) => (
                       <button
                         key={e}
                         onClick={() => setIcon(e)}
-                        style={{
-                          width: 40,
-                          height: 40,
-                          borderRadius: 12,
-                          border: e === icon ? "2px solid rgba(59,130,246,0.9)" : "1px solid rgba(148,163,184,0.25)",
-                          background: "rgba(15,23,42,0.25)",
-                          fontSize: 20,
-                          cursor: "pointer",
-                        }}
+                        className={e === icon ? "emojiPick active" : "emojiPick"}
                         aria-label={`Pick ${e}`}
                         type="button"
                       >
@@ -182,14 +192,14 @@ export default function Home() {
                       </button>
                     ))}
                   </div>
-                  <div className="muted" style={{ fontSize: 12 }}>Selected: {icon}</div>
+                  <div className="muted" style={{ fontSize: "var(--fs-0)" }}>Selected: {icon}</div>
                 </div>
               </div>
             ) : (
-              <div className="mobileRow" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <Button variant="primary" onClick={() => nav("/lobby")}>Go to Lobby</Button>
+              <div className="row wrap mobileRow">
+                <Button variant="primary" onClick={() => nav("/lobby")}>Lobby</Button>
                 <Button variant="secondary" onClick={() => nav("/play")}>Play</Button>
-                <Button variant="ghost" onClick={() => nav("/leaderboard")}>Leaderboard</Button>
+                <Button variant="ghost" onClick={() => nav("/leaderboard")}>Scores</Button>
               </div>
             )}
           </>

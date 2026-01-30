@@ -3,6 +3,9 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../components/ui/button";
 import { useLocation } from "react-router-dom";
 import ResultSubmitPanel from "../components/ResultSubmitPanel";
+import TutorialModal from "../components/TutorialModal";
+import { getPlayer } from "../lib/player";
+import { getTutorial, tutorialKey } from "../lib/tutorials";
 
 function clamp(n, a, b) {
   return Math.max(a, Math.min(b, n));
@@ -358,6 +361,27 @@ export default function GraphPathfinderPage() {
   const challenge = loc.state?.challenge;
   const difficulty = challenge?.difficulty || "EASY";
 
+  // First-time tutorial gate (per minigame + per player on this device)
+  const player = useMemo(() => getPlayer(), []);
+  const tutorial = useMemo(() => getTutorial("GRAPH_PATH"), []);
+  const tutKey = useMemo(
+    () => tutorialKey({ playerId: player?.playerId, category: "GRAPH_PATH" }),
+    [player?.playerId]
+  );
+
+  // Determine tutorial visibility synchronously so the minigame truly doesn't start in the background.
+  const [tutorialOpen, setTutorialOpen] = useState(() => {
+    if (!challenge) return false; // if opened directly, don't block
+    try {
+      return localStorage.getItem(tutKey) !== "1";
+    } catch {
+      return false;
+    }
+  });
+
+  const [started, setStarted] = useState(() => !tutorialOpen);
+
+
   const [seed, setSeed] = useState(0);
 
   const { nodes, edges, start, goal, W: layoutW, H: layoutH } = useMemo(() => makeGraph(difficulty), [seed, difficulty]);
@@ -375,7 +399,7 @@ export default function GraphPathfinderPage() {
   }, [optimalPath]);
 
   const [path, setPath] = useState([start]);
-  const [status, setStatus] = useState("playing"); // playing | won | lost
+  const [status, setStatus] = useState(() => (tutorialOpen ? "waiting" : "playing")); // waiting | playing | won | lost
   const [message, setMessage] = useState("");
 
   // Quick-session arcade layer: beat a budget + timer.
@@ -396,6 +420,7 @@ export default function GraphPathfinderPage() {
 
   // IMPORTANT: when graph changes, start changes -> reset path
   useEffect(() => {
+    if (!started) return;
     startRef.current = Date.now();
     setTimeMs(0);
     setErrors(0);
@@ -403,11 +428,11 @@ export default function GraphPathfinderPage() {
     setPath([start]);
     setStatus("playing");
     setMessage("");
-  }, [start, diffCfg.timeLimitSec]);
+  }, [started, start, diffCfg.timeLimitSec]);
 
   // Tick down timer while playing (mobile-friendly: low freq).
   useEffect(() => {
-    if (status !== "playing") return;
+    if (!started || status !== "playing") return;
     const t = setInterval(() => {
       const elapsed = Date.now() - startRef.current;
       const left = Math.max(0, diffCfg.timeLimitSec * 1000 - elapsed);
@@ -418,7 +443,7 @@ export default function GraphPathfinderPage() {
       }
     }, 120);
     return () => clearInterval(t);
-  }, [status, diffCfg.timeLimitSec]);
+  }, [started, status, diffCfg.timeLimitSec]);
 
   const edgeMap = useMemo(() => {
     const m = new Map();
@@ -841,17 +866,42 @@ export default function GraphPathfinderPage() {
         </div>
       </div>
 
-      {status !== "playing" && (
+      {(status === "won" || status === "lost") && (
         <ResultSubmitPanel
           category="GRAPH_PATH"
           difficulty={difficulty}
           timeMs={timeMs}
           errors={errors}
           won={status === "won"}
-          onPlayAgain={resetSameGraph}
+          explanation={
+            status === "won"
+              ? `Correct: your path cost ${currentWeight} which matches the shortest possible cost (${budget}).`
+              : message
+              ? message
+              : `Wrong: your path cost ${currentWeight}. Shortest possible cost is ${budget}.`
+          }
           challengeId={challenge?.challengeInstanceId}
         />
       )}
+
+      <TutorialModal
+        open={tutorialOpen}
+        tutorial={tutorial}
+        onConfirm={() => {
+          try {
+            localStorage.setItem(tutKey, "1");
+          } catch {}
+          setTutorialOpen(false);
+          setStarted(true);
+          startRef.current = Date.now();
+          setTimeMs(0);
+          setErrors(0);
+          setTimeLeftMs(diffCfg.timeLimitSec * 1000);
+          setPath([start]);
+          setStatus("playing");
+          setMessage("");
+        }}
+      />
     </div>
   );
 }

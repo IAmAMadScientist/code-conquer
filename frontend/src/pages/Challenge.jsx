@@ -80,6 +80,17 @@ export default function Challenge() {
     <AppShell
       title="Challenge"
       subtitle="Selecting a random minigame…"
+      rightPanel={
+        <div className="panel stack">
+          <div>
+            <div style={{ fontWeight: 850 }}>How it works</div>
+            <div className="muted" style={{ marginTop: 6, lineHeight: 1.5 }}>
+              The backend selects a random minigame based on difficulty (and category, if provided).
+              You will be redirected automatically.
+            </div>
+          </div>
+        </div>
+      }
       headerBadges={
         <>
           <Badge variant="secondary">Diff: {difficulty}</Badge>
@@ -89,34 +100,32 @@ export default function Challenge() {
       }
     >
       {!canPlay ? (
-        <div className="panel">
-          <div style={{ fontWeight: 750, marginBottom: 8 }}>Not ready</div>
-          <div className="muted" style={{ marginBottom: 12 }}>
-            You need to be in a match and have a player profile.
+        <div className="panel stack">
+          <div>
+            <div style={{ fontWeight: 850 }}>Not ready</div>
+            <div className="muted" style={{ marginTop: 6, lineHeight: 1.5 }}>
+              You need to be in a match and have a player profile.
+            </div>
           </div>
-          <Link to="/leaderboard">
-            <Button variant="ghost">Leaderboard</Button>
-          </Link>
+          <div className="row wrap">
+            <Button variant="ghost" onClick={() => nav("/leaderboard")}>Leaderboard</Button>
+          </div>
         </div>
       ) : (
         <>
           {loading && (
-            <div className="panel">
+            <div className="panel stack">
               <div className="muted">Requesting random minigame from backend…</div>
             </div>
           )}
 
           {err && (
-            <div className="panel">
-              <div style={{ fontWeight: 750, marginBottom: 8 }}>Info</div>
-              <div className="muted" style={{ marginBottom: 12 }}>{err}</div>
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <Link to="/play">
-                  <Button variant="primary">Back to game</Button>
-                </Link>
-                <Link to="/leaderboard">
-                  <Button variant="ghost">Leaderboard</Button>
-                </Link>
+            <div className="panel stack">
+              <div style={{ fontWeight: 850 }}>Info</div>
+              <div className="muted" style={{ lineHeight: 1.5 }}>{err}</div>
+              <div className="row wrap">
+                <Button variant="primary" onClick={() => nav("/play")}>Back to game</Button>
+                <Button variant="ghost" onClick={() => nav("/leaderboard")}>Leaderboard</Button>
               </div>
             </div>
           )}

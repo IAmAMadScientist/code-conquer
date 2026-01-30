@@ -3,6 +3,9 @@ import { useLocation } from "react-router-dom";
 
 import { Button } from "../components/ui/button";
 import ResultSubmitPanel from "../components/ResultSubmitPanel";
+import TutorialModal from "../components/TutorialModal";
+import { getPlayer } from "../lib/player";
+import { getTutorial, tutorialKey } from "../lib/tutorials";
 
 // QueueCommanderPage (file name + route kept)
 // New minigame: "Queue Puzzle" (turn-based FIFO thinking)
@@ -83,6 +86,27 @@ export default function QueueCommanderPage() {
   const loc = useLocation();
   const challenge = loc.state?.challenge;
   const difficulty = challenge?.difficulty || "EASY";
+
+  // First-time tutorial gate (per minigame + per player on this device)
+  const player = useMemo(() => getPlayer(), []);
+  const tutorial = useMemo(() => getTutorial("QUEUE_COMMANDER"), []);
+  const tutKey = useMemo(
+    () => tutorialKey({ playerId: player?.playerId, category: "QUEUE_COMMANDER" }),
+    [player?.playerId]
+  );
+
+  // Determine tutorial visibility synchronously so the minigame truly doesn't start in the background.
+  const [tutorialOpen, setTutorialOpen] = useState(() => {
+    if (!challenge) return false; // if opened directly, don't block
+    try {
+      return localStorage.getItem(tutKey) !== "1";
+    } catch {
+      return false;
+    }
+  });
+
+  const [started, setStarted] = useState(() => !tutorialOpen);
+
   const cfg = useMemo(() => cfgFor(difficulty), [difficulty]);
 
   const startTsRef = useRef(performance.now());
@@ -94,7 +118,7 @@ export default function QueueCommanderPage() {
   const [queue, setQueue] = useState([]);
   const [outIdx, setOutIdx] = useState(0); // target index
 
-  const [status, setStatus] = useState("playing"); // playing | won | lost
+  const [status, setStatus] = useState(() => (tutorialOpen ? "waiting" : "playing")); // waiting | playing | won | lost
   const [timeMs, setTimeMs] = useState(0);
   const [remainingMs, setRemainingMs] = useState(cfg.timeLimitSec * 1000);
   const [errors, setErrors] = useState(0);
@@ -122,7 +146,7 @@ export default function QueueCommanderPage() {
 
   // Countdown timer
   useEffect(() => {
-    if (status !== "playing") return;
+    if (!started || status !== "playing") return;
     const id = window.setInterval(() => {
       const left = Math.max(0, Math.round(endAtRef.current - performance.now()));
       setRemainingMs(left);
@@ -133,7 +157,7 @@ export default function QueueCommanderPage() {
     }, 150);
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
+  }, [started, status]);
 
   // Mobile fullscreen: prevent page scrolling while this minigame is mounted.
   useEffect(() => {
@@ -246,7 +270,7 @@ export default function QueueCommanderPage() {
   // Keyboard support (desktop)
   useEffect(() => {
     const onKeyDown = (e) => {
-      if (status !== "playing") return;
+      if (!started || status !== "playing") return;
       const k = (e.key || "").toLowerCase();
       if (k === "a" || k === "arrowleft" || k === "1") {
         e.preventDefault();
@@ -264,7 +288,7 @@ export default function QueueCommanderPage() {
     window.addEventListener("keydown", onKeyDown, { passive: false });
     return () => window.removeEventListener("keydown", onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, canEnqueue, canDiscard, canDequeue, incoming, nextTarget, idx, outIdx, queue.length]);
+  }, [started, status, canEnqueue, canDiscard, canDequeue, incoming, nextTarget, idx, outIdx, queue.length]);
 
   const targetWindow = target.slice(outIdx, outIdx + 6);
 
@@ -468,17 +492,39 @@ export default function QueueCommanderPage() {
           </Button>
         </div>
 
-        {status !== "playing" ? (
+        {status === "won" || status === "lost" ? (
           <ResultSubmitPanel
             category="QUEUE_COMMANDER"
             difficulty={difficulty}
             timeMs={timeMs}
             errors={errors}
             won={status === "won"}
+            explanation={
+              status === "won"
+                ? "Correct: you matched the target output sequence by simulating the queue operations."
+                : hint
+                ? hint
+                : "Wrong: the final output/state did not match the expected queue simulation."
+            }
             // Turn token provided by /play
             challengeId={challenge?.challengeInstanceId}
           />
         ) : null}
+
+        <TutorialModal
+          open={tutorialOpen}
+          tutorial={tutorial}
+          onConfirm={() => {
+            try {
+              localStorage.setItem(tutKey, "1");
+            } catch {}
+            setTutorialOpen(false);
+            setStarted(true);
+            startRef.current = Date.now();
+            setTimeMs(0);
+            setStatus("playing");
+          }}
+        />
       </div>
     </div>
   );

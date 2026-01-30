@@ -1,8 +1,11 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../components/ui/button";
 import { cn } from "../lib/utils";
 import { useLocation } from "react-router-dom";
 import ResultSubmitPanel from "../components/ResultSubmitPanel";
+import TutorialModal from "../components/TutorialModal";
+import { getPlayer } from "../lib/player";
+import { getTutorial, tutorialKey } from "../lib/tutorials";
 import {
   getHapticsEnabled,
   getSoundEnabled,
@@ -198,6 +201,27 @@ export default function StackMazePage() {
   const challenge = loc.state?.challenge;
   const difficulty = challenge?.difficulty || "EASY";
 
+  // First-time tutorial gate (per minigame + per player on this device)
+  const player = useMemo(() => getPlayer(), []);
+  const tutorial = useMemo(() => getTutorial("STACK_MAZE"), []);
+  const tutKey = useMemo(
+    () => tutorialKey({ playerId: player?.playerId, category: "STACK_MAZE" }),
+    [player?.playerId]
+  );
+
+  // Determine tutorial visibility synchronously so the minigame truly doesn't start in the background.
+  const [tutorialOpen, setTutorialOpen] = useState(() => {
+    if (!challenge) return false; // if opened directly, don't block
+    try {
+      return localStorage.getItem(tutKey) !== "1";
+    } catch {
+      return false;
+    }
+  });
+
+  const [started, setStarted] = useState(() => !tutorialOpen);
+
+
   const config = getConfig(difficulty);
   const size = config.size;
 
@@ -205,7 +229,7 @@ export default function StackMazePage() {
   const [pos, setPos] = useState({ r: 0, c: 0 });
   const [stack, setStack] = useState([]);
   const [running, setRunning] = useState(false);
-  const [status, setStatus] = useState("playing"); // "playing" | "won" | "lost"
+  const [status, setStatus] = useState(() => (tutorialOpen ? "waiting" : "playing")); // "waiting" | "playing" | "won" | "lost"
   const [lostReason, setLostReason] = useState(""); // "" | "energy" | "out_of_moves" | "time"
   const [energy, setEnergy] = useState(config.maxEnergy);
   const [crashes, setCrashes] = useState(0);
@@ -270,7 +294,7 @@ export default function StackMazePage() {
 
   // Update timer during play + enforce difficulty time limit.
   useEffect(() => {
-    if (status !== "playing") return;
+    if (!started || status !== "playing") return;
     const t = setInterval(() => {
       const elapsed = Date.now() - startRef.current;
       setTimeMs(elapsed);
@@ -282,7 +306,7 @@ export default function StackMazePage() {
     }, 120);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, config.timeLimitMs]);
+  }, [started, status, config.timeLimitMs]);
 
   const goal = { r: size - 1, c: size - 1 };
   const statusRef = useRef(status);
@@ -292,7 +316,7 @@ export default function StackMazePage() {
 
   // Live timer + timeout. (Quick sessions for hybrid boardgame.)
   useEffect(() => {
-    if (status !== "playing") return;
+    if (!started || status !== "playing") return;
     const id = setInterval(() => {
       const elapsed = Date.now() - startRef.current;
       setTimeMs(elapsed);
@@ -304,7 +328,7 @@ export default function StackMazePage() {
     }, 100);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, config.timeLimitMs]);
+  }, [started, status, config.timeLimitMs]);
 
   // Refs for interval-safe reads
   const posRef = useRef(pos);
@@ -677,17 +701,42 @@ export default function StackMazePage() {
         </div>
       </div>
 
-      {status !== "playing" && (
+      {(status === "won" || status === "lost") && (
         <ResultSubmitPanel
           category="STACK_MAZE"
           difficulty={difficulty}
           timeMs={timeMs}
           errors={crashes}
           won={status === "won"}
-          onPlayAgain={reset}
+          explanation={
+            status === "won"
+              ? "You reached the goal tile."
+              : lostReason === "time"
+              ? "You ran out of time before reaching the goal."
+              : lostReason === "energy"
+              ? "You ran out of energy (too many steps/crashes)."
+              : lostReason === "out_of_moves"
+              ? "Your stack finished without reaching the goal."
+              : "You did not reach the goal."
+          }
           challengeId={challenge?.challengeInstanceId}
         />
       )}
+
+      <TutorialModal
+        open={tutorialOpen}
+        tutorial={tutorial}
+        onConfirm={() => {
+          try {
+            localStorage.setItem(tutKey, "1");
+          } catch {}
+          setTutorialOpen(false);
+          setStarted(true);
+          startRef.current = Date.now();
+          setTimeMs(0);
+          setStatus("playing");
+        }}
+      />
     </div>
   );
 }

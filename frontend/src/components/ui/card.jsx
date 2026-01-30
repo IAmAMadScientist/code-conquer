@@ -1,9 +1,15 @@
 import React from "react";
-import "../ui/ui.css";
+import { cn } from "../../lib/utils";
 
 export function Card({ className = "", children, ...props }) {
   return (
-    <div className={`ui-card ${className}`} {...props}>
+    <div
+      className={cn(
+        "rounded-lg border border-border bg-surface shadow-panel",
+        className
+      )}
+      {...props}
+    >
       {children}
     </div>
   );
@@ -11,7 +17,7 @@ export function Card({ className = "", children, ...props }) {
 
 export function CardContent({ className = "", children, ...props }) {
   return (
-    <div className={`ui-cardContent ${className}`} {...props}>
+    <div className={cn("p-s5", className)} {...props}>
       {children}
     </div>
   );

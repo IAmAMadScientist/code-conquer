@@ -1,9 +1,15 @@
 import React from "react";
-import "../ui/ui.css";
+import { cn } from "../../lib/utils";
 
 export function Badge({ className = "", children, ...props }) {
   return (
-    <span className={`ui-badge ${className}`} {...props}>
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full border border-border bg-surface2 px-s3 py-[2px] text-fs0 text-muted",
+        className
+      )}
+      {...props}
+    >
       {children}
     </span>
   );

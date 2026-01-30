@@ -99,6 +99,13 @@ export default function TurnSummary() {
       showTabs
       activeTab="play"
       backTo="/play"
+      actions={
+        <div className="actionRow">
+          <Button variant="primary" onClick={confirm} disabled={busy}>
+            {busy ? "Confirming…" : "OK, pass to next player"}
+          </Button>
+        </div>
+      }
       headerBadges={
         <>
           {session?.sessionCode ? <Badge variant="secondary">Match: {session.sessionCode}</Badge> : null}
@@ -106,26 +113,22 @@ export default function TurnSummary() {
         </>
       }
     >
-      <div className="panel" style={{ display: "grid", gap: 12 }}>
+      <div className="panel stack">
         {err ? <div style={{ opacity: 0.9 }}>⚠️ {err}</div> : null}
 
-        <div style={{ fontWeight: 800, fontSize: 18 }}>✅ Score saved</div>
+        <div className="title">✅ Score saved</div>
 
-        <div className="muted" style={{ lineHeight: 1.5 }}>
-          Next turn:
-          {nextPlayer ? (
-            <span style={{ marginLeft: 6, fontWeight: 750 }}>
-              {nextPlayer.icon || "🙂"} {nextPlayer.name}
-            </span>
-          ) : (
-            <span style={{ marginLeft: 6 }}>—</span>
-          )}
-        </div>
-
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <Button variant="primary" onClick={confirm} disabled={busy}>
-            {busy ? "Confirming…" : "OK, pass to next player"}
-          </Button>
+        <div className="panel">
+          <div className="kicker">Next turn</div>
+          <div style={{ fontWeight: 850, fontSize: 18, marginTop: 6 }}>
+            {nextPlayer ? (
+              <>
+                {nextPlayer.icon || "🙂"} {nextPlayer.name}
+              </>
+            ) : (
+              <>—</>
+            )}
+          </div>
         </div>
 
         <div className="muted" style={{ fontSize: 13, lineHeight: 1.5 }}>
