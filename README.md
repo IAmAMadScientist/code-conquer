@@ -21,7 +21,7 @@ The goal is to make **algorithmic thinking and data-structure concepts** accessi
 1. One player creates a **Match**
 2. Other players join via **6-digit code** or **QR**
 3. Each player rolls a **D20** to determine turn order  
-   - Ties are clearly communicated
+   - Ties are communicated
    - Tied players re-roll until resolved
 4. Players take turns:
    - Roll a **D6**

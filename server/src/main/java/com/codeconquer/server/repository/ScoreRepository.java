@@ -9,6 +9,8 @@ import java.util.List;
 
 public interface ScoreRepository extends JpaRepository<Score, Long> {
 
+    java.util.Optional<Score> findFirstBySessionIdAndPlayerIdAndChallengeId(String sessionId, String playerId, String challengeId);
+
     List<Score> findTop10ByOrderByPointsDesc();
 
     List<Score> findTop10BySessionIdOrderByPointsDesc(String sessionId);

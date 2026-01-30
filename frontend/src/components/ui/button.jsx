@@ -7,7 +7,7 @@ export function Button({
   ...props
 }) {
   const base =
-    "inline-flex items-center justify-center gap-2 rounded-md px-s4 py-s3 text-fs1 font-medium " +
+    "inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-s4 py-s3 text-fs1 font-medium " +
     "transition active:scale-[0.99] disabled:opacity-50 disabled:pointer-events-none " +
     "focus:outline-none focus-visible:ring-2 focus-visible:ring-border";
 

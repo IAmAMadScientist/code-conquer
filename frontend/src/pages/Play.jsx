@@ -28,6 +28,7 @@ export default function Play() {
   const [state, setState] = useState(null);
   
   const [pendingChoices, setPendingChoices] = useState(null);
+  const [pathDialogOpen, setPathDialogOpen] = useState(false);
 
   // Standardize errors as toasts
   // Special deck modal (when landing on SPECIAL)
@@ -64,6 +65,8 @@ export default function Play() {
       const s = await fetchLobby(session.sessionId);
       setState(s);
 
+      const amCurrent = !!(s?.currentPlayerId && me?.playerId && s.currentPlayerId === me.playerId);
+
       // Keep a lightweight shared flag so the bottom tab can switch between Lobby/Play.
       setSessionStarted(!!s?.started);
 
@@ -79,7 +82,7 @@ export default function Play() {
       }
 
       // Sync pending fork choices on refresh/polling.
-      if (s?.turnStatus === "AWAITING_PATH_CHOICE" && s?.pendingForkNodeId) {
+      if (amCurrent && s?.turnStatus === "AWAITING_PATH_CHOICE" && s?.pendingForkNodeId) {
         const opts = Array.isArray(s?.pendingForkOptions) ? s.pendingForkOptions : null;
         setPendingChoices((prev) => {
           // Keep existing options if we already have them, otherwise take from lobby payload.
@@ -100,6 +103,11 @@ export default function Play() {
     } catch (e) {
       toastError(toast, e, "Failed to load game state");
     }
+  }
+
+  async function resync() {
+    await load();
+    toastInfo(toast, "Synced", "Game state refreshed.");
   }
 
   useEffect(() => {
@@ -136,6 +144,10 @@ export default function Play() {
 
   async function doStartChallenge() {
     if (!session?.sessionId || !me?.playerId) return;
+    if (!state?.started || state?.currentPlayerId !== me.playerId || state?.turnStatus !== "IDLE") {
+      toastInfo(toast, "Not now", "You can only start a challenge on your turn after moving.");
+      return;
+    }
     try {
       const ch = await startTurnChallenge(session.sessionId, me.playerId);
       nav(ch.route, { state: { challenge: ch } });
@@ -146,6 +158,10 @@ export default function Play() {
 
   async function doRollD6() {
     if (!session?.sessionId || !me?.playerId) return;
+    if (!state?.started || state?.currentPlayerId !== me.playerId || state?.turnStatus !== "AWAITING_D6_ROLL") {
+      toastInfo(toast, "Not now", "You can only roll when it's your turn and the game is waiting for the D6.");
+      return;
+    }
     try {
       const r = await rollTurnD6(session.sessionId, me.playerId);
       if (r?.turnStatus === "AWAITING_PATH_CHOICE") {
@@ -169,6 +185,10 @@ export default function Play() {
 
   async function doChoosePath(toNodeId) {
     if (!session?.sessionId || !me?.playerId) return;
+    if (!state?.started || state?.currentPlayerId !== me.playerId || state?.turnStatus !== "AWAITING_PATH_CHOICE") {
+      toastInfo(toast, "Not now", "You can only choose a path when it's your turn and a fork is active.");
+      return;
+    }
     try {
       const r = await chooseTurnPath(session.sessionId, me.playerId, toNodeId);
       if (r?.turnStatus === "AWAITING_PATH_CHOICE") {
@@ -289,11 +309,39 @@ export default function Play() {
   const isMyTurn = !!(state?.started && state?.currentPlayerId && state.currentPlayerId === me.playerId);
   const waitingForDice = state?.turnStatus === "AWAITING_D6_ROLL";
   const waitingForPath = state?.turnStatus === "AWAITING_PATH_CHOICE";
+  const awaitingSpecial = state?.turnStatus === "AWAITING_SPECIAL_CARD";
   const canStartChallenge = isMyTurn && state?.turnStatus === "IDLE";
   const myFieldType = meState?.positionType || null;
   // Fork nodes stay FORK fields, but if you END your move on a fork (turnStatus === IDLE)
   // they should behave like a MEDIUM challenge field.
   const hasChallengeOnField = myFieldType === "EASY" || myFieldType === "MEDIUM" || myFieldType === "HARD" || myFieldType === "FORK";
+  const statusLabel = useMemo(() => {
+    const ts = String(state?.turnStatus || "");
+    if (!state?.started) return "WAITING";
+    if (ts === "AWAITING_D6_ROLL") return "ROLL";
+    if (ts === "AWAITING_PATH_CHOICE") return "CHOOSE PATH";
+    if (ts === "AWAITING_SPECIAL_CARD") return "SPECIAL";
+    if (ts === "IN_CHALLENGE") return "IN CHALLENGE";
+    if (ts === "IDLE") return "ACTION";
+    return ts || "";
+  }, [state?.turnStatus, state?.started]);
+
+  const primaryAction = useMemo(() => {
+    if (!isMyTurn) return null;
+    if (awaitingSpecial) {
+      return { label: "Pick card", onClick: () => setSpecialOpen(true), disabled: false };
+    }
+    if (waitingForDice) {
+      return { label: "Roll", onClick: doRollD6, disabled: false };
+    }
+    if (waitingForPath) {
+      return { label: "Choose path", onClick: () => setPathDialogOpen(true), disabled: false };
+    }
+    if (canStartChallenge && hasChallengeOnField) {
+      return { label: "Start challenge", onClick: doStartChallenge, disabled: false };
+    }
+    return null;
+  }, [isMyTurn, awaitingSpecial, waitingForDice, waitingForPath, canStartChallenge, hasChallengeOnField]);
 
   // Player-facing turn indicator (no internal node ids).
   const turnLabel = useMemo(() => {
@@ -342,15 +390,20 @@ export default function Play() {
       }
       actions={
         <div className="flex w-full items-center gap-s3">
-          <Button
-            variant="primary"
-            onClick={doStartChallenge}
-            disabled={!canStartChallenge || !hasChallengeOnField}
-          >
-            Start challenge
-          </Button>
+          {primaryAction ? (
+            <Button variant="primary" onClick={primaryAction.onClick} disabled={primaryAction.disabled}>
+              {primaryAction.label}
+            </Button>
+          ) : (
+            <Button variant="primary" disabled>
+              {isMyTurn ? "Waiting…" : "Not your turn"}
+            </Button>
+          )}
           <Button variant="secondary" onClick={() => setMapOpen(true)} title="Show board map">
             Map
+          </Button>
+          <Button variant="ghost" onClick={resync} title="Resync game state">
+            Resync
           </Button>
           <Button variant="ghost" onClick={leaveGame} className="ml-auto">
             Leave
@@ -358,6 +411,33 @@ export default function Play() {
         </div>
       }
     >
+
+      <Dialog open={pathDialogOpen} onOpenChange={setPathDialogOpen}>
+        <DialogContent className="w-[min(92vw,520px)]">
+          <DialogHeader>
+            <DialogTitle>Choose your path</DialogTitle>
+            <DialogDescription>Fork detected — pick the next tile.</DialogDescription>
+          </DialogHeader>
+          <div className="mt-s3 flex flex-wrap gap-s2">
+            {(pendingChoices?.options || []).map((opt) => (
+              <Button
+                key={opt?.to || opt}
+                variant="secondary"
+                onClick={() => {
+                  setPathDialogOpen(false);
+                  doChoosePath(opt?.to || opt);
+                }}
+              >
+                {opt?.label ? opt.label : "Choose"}
+              </Button>
+            ))}
+            {!pendingChoices?.options?.length ? <div className="text-muted">Loading options…</div> : null}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setPathDialogOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog open={specialOpen} onOpenChange={(o) => setSpecialOpen(o)}>
         <DialogContent
           onPointerDownOutside={(e) => e.preventDefault()}
@@ -507,8 +587,8 @@ export default function Play() {
 ), document.body) : null}
 
       <PullToRefresh onRefresh={load}>
-        <div className="h-full flex min-h-0 flex-col gap-s4">          <EventFeed sessionId={session.sessionId} title="Game feed" limit={5} />
-
+        <div className="h-full flex min-h-0 flex-col gap-s4">
+          <EventFeed sessionId={session.sessionId} title="Game feed" limit={5} />
 
           <Card className="flex-1 min-h-0 overflow-hidden">
             <CardContent className="h-full space-y-s4 overflow-auto">
@@ -524,6 +604,12 @@ export default function Play() {
                     {currentPlayer ? (
                       <Badge variant="secondary">Current: {currentPlayer.icon || "🙂"} {currentPlayer.name}</Badge>
                     ) : null}
+                    {statusLabel ? (
+                      <Badge variant={isMyTurn ? "secondary" : "outline"}>Status: {statusLabel}</Badge>
+                    ) : null}
+                    {isMyTurn && typeof pendingChoices?.remainingSteps === "number" ? (
+                      <Badge variant="outline">Steps left: {pendingChoices.remainingSteps}</Badge>
+                    ) : null}
                     {typeof state?.lastDiceRoll === "number" ? (
                       <Badge variant="outline">Last D6: {state.lastDiceRoll}</Badge>
                     ) : null}
@@ -535,7 +621,7 @@ export default function Play() {
                   {/* D6 roll */}
                   {isMyTurn && waitingForDice ? (
                     <div className="space-y-s2">
-                      <D6Die value={state?.lastDiceRoll || null} onRoll={doRollD6} disabled={!isMyTurn} />
+                      <D6Die value={state?.lastDiceRoll || null} onRoll={doRollD6} disabled={!isMyTurn || !waitingForDice} />
                     </div>
                   ) : null}
 

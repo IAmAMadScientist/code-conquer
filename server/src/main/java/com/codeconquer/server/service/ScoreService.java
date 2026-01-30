@@ -28,6 +28,20 @@ public class ScoreService {
         if (score == null) throw new IllegalArgumentException("Score required");
         if (score.getSessionId() == null || score.getSessionId().isBlank()) throw new IllegalArgumentException("SessionId required");
         if (score.getPlayerId() == null || score.getPlayerId().isBlank()) throw new IllegalArgumentException("PlayerId required");
+        if (score.getChallengeId() == null || score.getChallengeId().isBlank()) {
+            throw new IllegalArgumentException("challengeId required");
+        }
+
+        // Idempotency: if the same client retries (double-tap, reconnect, etc.),
+        // return the already stored score instead of throwing and/or advancing the turn twice.
+        var existing = scoreRepository.findFirstBySessionIdAndPlayerIdAndChallengeId(
+                score.getSessionId(),
+                score.getPlayerId(),
+                score.getChallengeId()
+        );
+        if (existing.isPresent()) {
+            return existing.get();
+        }
 
         GameSession s = sessionService.findById(score.getSessionId())
                 .orElseThrow(() -> new IllegalArgumentException("Session not found"));
@@ -50,9 +64,6 @@ public class ScoreService {
         // Phase enforcement: must match the active challenge instance
         if (!GameSessionService.TURN_IN_CHALLENGE.equals(s.getTurnStatus())) {
             throw new IllegalArgumentException("No active challenge");
-        }
-        if (score.getChallengeId() == null || score.getChallengeId().isBlank()) {
-            throw new IllegalArgumentException("challengeId required");
         }
         if (s.getActiveChallengeId() == null || !s.getActiveChallengeId().equals(score.getChallengeId())) {
             throw new IllegalArgumentException("challengeId mismatch");

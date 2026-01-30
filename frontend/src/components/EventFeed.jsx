@@ -21,6 +21,7 @@ export default function EventFeed({ sessionId, title = "Game feed", limit = 8, p
   const { toast } = useToast();
   const [events, setEvents] = useState([]);
   const [open, setOpen] = useState(false);
+  const [lastSeenSeq, setLastSeenSeq] = useState(0);
 
   const lastSeq = useMemo(() => (events.length ? events[0]?.seq || 0 : 0), [events]);
 
@@ -35,6 +36,7 @@ export default function EventFeed({ sessionId, title = "Game feed", limit = 8, p
         // Ensure newest-first
         const sorted = Array.isArray(data) ? data.slice().sort((a, b) => (b.seq || 0) - (a.seq || 0)) : [];
         setEvents(sorted);
+        setLastSeenSeq(sorted.length ? (sorted[0]?.seq || 0) : 0);
       } catch (e) {
         if (cancelled) return;
         toastError(toast, e, "Event feed failed");
@@ -77,7 +79,26 @@ export default function EventFeed({ sessionId, title = "Game feed", limit = 8, p
     };
   }, [sessionId, lastSeq, pollMs, toast, open]);
 
+  // Mark newest event as seen when opening the dialog.
+  useEffect(() => {
+    if (!open) return;
+    setLastSeenSeq((prev) => Math.max(prev, lastSeq || 0));
+  }, [open, lastSeq]);
+
   const last = events[0] ? formatEvent(events[0]) : null;
+  const unread = useMemo(() => {
+    if (open) return 0;
+    if (!events.length) return 0;
+    if (!lastSeenSeq) return 0;
+    // events are newest-first
+    let n = 0;
+    for (const e of events) {
+      const s = e?.seq || 0;
+      if (s <= lastSeenSeq) break;
+      n++;
+    }
+    return n;
+  }, [events, lastSeenSeq, open]);
 
   return (
     <>
@@ -94,6 +115,7 @@ export default function EventFeed({ sessionId, title = "Game feed", limit = 8, p
           </div>
           <Button variant="ghost" onClick={() => setOpen(true)}>
             Open
+            {unread > 0 ? <Badge variant="secondary" className="ml-s2">{unread}</Badge> : null}
           </Button>
         </CardContent>
       </Card>
