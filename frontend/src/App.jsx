@@ -2,12 +2,10 @@ import React, { useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 
 import Home from "./pages/Home";
-import Challenge from "./pages/Challenge";
 import Leaderboard from "./pages/Leaderboard";
 import Join from "./pages/Join";
 import Play from "./pages/Play";
 import Lobby from "./pages/Lobby";
-import TurnSummary from "./pages/TurnSummary";
 import EndScreen from "./pages/EndScreen";
 import StackMazePage from "./pages/StackMazePage";
 import GraphPathfinderPage from "./pages/GraphPathfinderPage";
@@ -63,11 +61,9 @@ export default function App() {
         <Router>
           <Routes>
         <Route path="/" element={<Home />} />
-        <Route path="/challenge" element={<Challenge />} />
         <Route path="/join/:code" element={<Join />} />
         <Route path="/play" element={<Play />} />
         <Route path="/lobby" element={<Lobby />} />
-        <Route path="/turn-summary" element={<TurnSummary />} />
         <Route path="/end" element={<EndScreen />} />
         <Route path="/leaderboard" element={<Leaderboard />} />
         <Route path="/stackmaze" element={<StackMazePage />} />
