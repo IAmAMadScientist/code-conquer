@@ -14,7 +14,6 @@ import { getSession, clearSession, setSessionStarted } from "../lib/session";
 import { getPlayer, fetchLobby, leaveSession, clearPlayer, rollTurnD6, chooseTurnPath, startTurnChallenge, applySpecialCard } from "../lib/player";
 import D6Die from "../components/D6Die";
 import EventFeed from "../components/EventFeed";
-import PullToRefresh from "../components/PullToRefresh";
 import ConfirmModal from "../components/ConfirmModal";
 import mapImg from "../assets/map.png";
 import nodeMapPositions from "../assets/nodeMapPositions.json";
@@ -366,9 +365,8 @@ export default function Play() {
       showBrand
       headerBadges={
         <>
-          {session?.sessionCode ? <Badge variant="secondary">Match: {session.sessionCode}</Badge> : null}
-          {me?.playerName ? <Badge variant="secondary">You: {me.playerIcon || "🙂"} {me.playerName}</Badge> : null}
-          <Badge variant={isMyTurn ? "secondary" : "outline"}>{turnLabel}</Badge>
+          {session?.sessionCode ? <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">#{session.sessionCode}</Badge> : null}
+          <Badge variant={isMyTurn ? "secondary" : "outline"} className="px-1.5 py-0 text-[10px] truncate max-w-[80px]">{turnLabel}</Badge>
         </>
       }
       rightPanel={
@@ -387,20 +385,20 @@ export default function Play() {
         </Card>
       }
       actions={
-        <div className="flex w-full items-center gap-s3">
+        <div className="grid grid-cols-3 gap-s3 w-full">
           {primaryAction ? (
             <Button variant="primary" onClick={primaryAction.onClick} disabled={primaryAction.disabled}>
               {primaryAction.label}
             </Button>
           ) : (
             <Button variant="primary" disabled>
-              {isMyTurn ? "Waiting…" : "Not your turn"}
+              {isMyTurn ? "Wait…" : "Turn"}
             </Button>
           )}
           <Button variant="secondary" onClick={() => setMapOpen(true)} title="Show board map">
             Map
           </Button>
-          <Button variant="ghost" onClick={leaveGame} className="ml-auto">
+          <Button variant="ghost" onClick={leaveGame}>
             Leave
           </Button>
         </div>
@@ -581,8 +579,7 @@ export default function Play() {
   </div>
 ), document.body) : null}
 
-      <PullToRefresh onRefresh={load}>
-        <div className="h-full flex min-h-0 flex-col gap-s4">
+      <div className="grid gap-s4 sm:grid-cols-[1fr_300px] lg:grid-cols-[1fr_360px]">
           <EventFeed sessionId={session.sessionId} title="Game feed" limit={5} />
 
           <Card className="flex-1 min-h-0 overflow-hidden">
@@ -595,49 +592,51 @@ export default function Play() {
                 </div>
               ) : (
                 <>
-                  <div className="flex flex-wrap gap-s2">
+                  <div className="flex flex-wrap gap-s2 justify-center">
                     {currentPlayer ? (
-                      <Badge variant="secondary">Current: {currentPlayer.icon || "🙂"} {currentPlayer.name}</Badge>
+                      <Badge variant="secondary" className="px-2 py-0.5 text-[11px]">
+                        {currentPlayer.icon || "🙂"} {currentPlayer.name}
+                      </Badge>
                     ) : null}
                     {statusLabel ? (
-                      <Badge variant={isMyTurn ? "secondary" : "outline"}>Status: {statusLabel}</Badge>
+                      <Badge variant={isMyTurn ? "secondary" : "outline"} className="px-2 py-0.5 text-[11px]">
+                        {statusLabel}
+                      </Badge>
                     ) : null}
                     {isMyTurn && typeof pendingChoices?.remainingSteps === "number" ? (
-                      <Badge variant="outline">Steps left: {pendingChoices.remainingSteps}</Badge>
+                      <Badge variant="outline" className="px-2 py-0.5 text-[11px]">
+                        {pendingChoices.remainingSteps} steps
+                      </Badge>
                     ) : null}
                     {typeof state?.lastDiceRoll === "number" ? (
-                      <Badge variant="outline">Last D6: {state.lastDiceRoll}</Badge>
-                    ) : null}
-                    {myFieldType ? (
-                      <Badge variant="outline">Field: {myFieldType}</Badge>
+                      <Badge variant="outline" className="px-2 py-0.5 text-[11px]">
+                        D6: {state.lastDiceRoll}
+                      </Badge>
                     ) : null}
                   </div>
 
                   {/* D6 roll */}
-                  {isMyTurn && waitingForDice ? (
-                    <div className="space-y-s2">
-                      <D6Die value={state?.lastDiceRoll || null} onRoll={doRollD6} disabled={!isMyTurn || !waitingForDice} />
-                    </div>
-                  ) : null}
+              {waitingForDice && isMyTurn ? (
+                <div className="rounded-lg border border-indigo-500/30 bg-indigo-500/10 p-s3 text-center flex flex-col items-center justify-center gap-s2">
+                  <div className="text-fs1 font-bold text-indigo-200 uppercase tracking-wide">Roll the Dice</div>
+                  <div className="flex justify-center py-1">
+                    <D6Die onRoll={doRollD6} />
+                  </div>
+                </div>
+              ) : null}
 
                   {/* Fork choice */}
                   {isMyTurn && waitingForPath ? (
-                    <div className="space-y-s2">
-                      <div className="text-muted">Fork! Choose your path:</div>
-                      <div className="flex flex-wrap gap-s2">
+                    <div className="space-y-s2 text-center">
+                      <div className="text-muted text-xs uppercase font-bold tracking-wider">Choose Path</div>
+                      <div className="flex flex-wrap gap-s2 justify-center">
                         {(pendingChoices?.options || []).map((opt) => (
-                          <Button key={opt?.to || opt} variant="secondary" onClick={() => doChoosePath(opt?.to || opt)}>
+                          <Button key={opt?.to || opt} variant="secondary" onClick={() => doChoosePath(opt?.to || opt)} className="py-1 px-3 min-h-0 text-xs">
                             {opt?.label ? opt.label : "Choose"}
                           </Button>
                         ))}
-                        {!pendingChoices?.options?.length ? <div className="text-muted">(Loading options…)</div> : null}
+                        {!pendingChoices?.options?.length ? <div className="text-muted text-xs">(Loading…)</div> : null}
                       </div>
-                    </div>
-                  ) : null}
-
-                  {!canStartChallenge ? (
-                    <div className="text-muted text-fs0">
-                      {waitingForDice ? "Roll the D6." : waitingForPath ? "Choose a fork path." : ""}
                     </div>
                   ) : null}
                 </>
@@ -645,7 +644,6 @@ export default function Play() {
             </CardContent>
           </Card>
         </div>
-      </PullToRefresh>
 
       <ConfirmModal
         open={confirmLeaveOpen}

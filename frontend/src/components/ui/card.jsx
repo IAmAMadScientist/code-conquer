@@ -4,10 +4,7 @@ import { cn } from "../../lib/utils";
 export function Card({ className = "", children, ...props }) {
   return (
     <div
-      className={cn(
-        "rounded-lg border border-border bg-surface shadow-panel",
-        className
-      )}
+      className={cn("ui-card", className)}
       {...props}
     >
       {children}
@@ -17,7 +14,7 @@ export function Card({ className = "", children, ...props }) {
 
 export function CardContent({ className = "", children, ...props }) {
   return (
-    <div className={cn("p-s5", className)} {...props}>
+    <div className={cn("ui-cardContent", className)} {...props}>
       {children}
     </div>
   );

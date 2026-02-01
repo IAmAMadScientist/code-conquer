@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from "react";
 // Navigation is handled by the bottom tab bar.
 import AppShell from "../components/AppShell";
 import EventFeed from "../components/EventFeed";
-import PullToRefresh from "../components/PullToRefresh";
 import { Badge } from "../components/ui/badge";
 import { Card, CardContent } from "../components/ui/card";
 import { useToast } from "../components/ui/use-toast";
@@ -52,8 +51,8 @@ export default function Leaderboard() {
         </>
       }
     >
-      <PullToRefresh onRefresh={load}>
-        <Card className="min-h-0 flex-1">
+      <div className="grid gap-s4">
+        <Card className="flex flex-col min-h-0">
           <CardContent className="flex min-h-0 flex-col gap-s3">
           {loading ? <div className="text-muted">Loading…</div> : null}
           {/* Errors are shown via toast */}
@@ -87,9 +86,9 @@ export default function Leaderboard() {
               </div>
             </div>
           ) : null}
-          </CardContent>
-        </Card>
-      </PullToRefresh>
+        </CardContent>
+      </Card>
+      </div>
     </AppShell>
   );
 }

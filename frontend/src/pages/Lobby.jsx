@@ -160,9 +160,7 @@ export default function Lobby() {
       backTo={false}
       headerBadges={
         <>
-          <Badge>Lobby</Badge>
-          {session?.sessionCode ? <Badge variant="secondary">Match: {session.sessionCode}</Badge> : null}
-          {me?.playerName ? <Badge variant="secondary">You: {me.playerIcon || "🙂"} {me.playerName}</Badge> : null}
+          {session?.sessionCode ? <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">#{session.sessionCode}</Badge> : null}
         </>
       }
       rightPanel={
@@ -194,7 +192,7 @@ export default function Lobby() {
         </Card>
       }
       actions={
-        <div className="flex w-full items-center gap-s3">
+        <div className="grid grid-cols-2 gap-s3 w-full max-w-sm mx-auto">
           <Button variant="secondary" onClick={() => setQrOpen(true)} disabled={!joinUrl}>QR</Button>
           <Button variant="primary" onClick={toggleReady} disabled={busy || (!meRow?.ready && !canReady)}>
             {meRow?.ready ? "Unready" : "Ready"}
@@ -277,22 +275,28 @@ export default function Lobby() {
 
 	      {qrOpen ? (
         <div
-          className="fixed inset-0 z-[240] flex items-end justify-center bg-black/70 p-s3 sm:items-center"
-          style={{ paddingBottom: "max(env(safe-area-inset-bottom), 12px)" }}
+          className="fixed inset-0 z-[240] flex items-center justify-center bg-black/80 backdrop-blur-sm p-s4"
           onClick={() => setQrOpen(false)}
         >
-          <Card className="w-full max-w-[560px] sm:rounded-lg rounded-t-lg">
-            <CardContent className="space-y-s4" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between gap-s3">
-                <div className="text-fs2 font-extrabold">Join via QR</div>
-                <Button variant="ghost" onClick={() => setQrOpen(false)}>Close</Button>
+          <Card className="w-full max-w-sm rounded-2xl shadow-2xl animate-in fade-in zoom-in duration-200">
+            <CardContent className="space-y-s4 flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between w-full">
+                <div className="text-fs2 font-extrabold">Join Match</div>
+                <Button variant="ghost" size="sm" onClick={() => setQrOpen(false)} className="h-8 w-8 p-0">✕</Button>
               </div>
 
-              <div className="grid place-items-center rounded-lg border border-border bg-surface2 p-s4">
-                <QRCode value={joinUrl} size={240} />
+              <div className="w-full aspect-square flex items-center justify-center rounded-xl bg-white p-s4">
+                <QRCode value={joinUrl} size={256} style={{ height: "auto", maxWidth: "100%", width: "100%" }} />
               </div>
 
-              <div className="break-words text-muted text-fs0">{joinUrl}</div>
+              <div className="text-center">
+                <div className="text-fs1 font-bold text-indigo-300 mb-1">{session.sessionCode}</div>
+                <div className="break-all text-muted text-fs0 opacity-70 leading-tight">{joinUrl}</div>
+              </div>
+
+              <Button variant="primary" onClick={() => setQrOpen(false)} className="w-full">
+                Done
+              </Button>
             </CardContent>
           </Card>
         </div>

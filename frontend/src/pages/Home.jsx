@@ -100,8 +100,7 @@ export default function Home() {
       backTo={false}
       headerBadges={
         <>
-          {session?.sessionCode ? <Badge variant="secondary">Match: {session.sessionCode}</Badge> : <Badge>Not in match</Badge>}
-          {player?.playerId ? <Badge variant="secondary">You: {player.playerIcon || "🙂"} {player.playerName}</Badge> : null}
+          {session?.sessionCode ? <Badge variant="secondary">#{session.sessionCode}</Badge> : null}
         </>
       }
       rightPanel={
@@ -121,7 +120,7 @@ export default function Home() {
       }
     >
       <Card>
-        <CardContent className="space-y-s4">
+        <CardContent className="space-y-s4 text-center">
         {/* Errors are shown via toast */}
 
         {!session?.sessionId ? (
@@ -131,8 +130,8 @@ export default function Home() {
               <div className="mt-s1 text-muted">Host the game and share the code with your friends.</div>
             </div>
 
-            <div className="flex flex-wrap gap-s2">
-              <Button variant="primary" onClick={onCreate} disabled={busy}>
+            <div className="flex justify-center">
+              <Button variant="primary" onClick={onCreate} disabled={busy} className="w-full max-w-xs">
                 Create match
               </Button>
             </div>
@@ -141,9 +140,9 @@ export default function Home() {
 
             <div className="space-y-s2">
               <div className="text-muted text-fs0 font-semibold">{UI_STRINGS.OR_JOIN_BY_CODE}</div>
-              <div className="flex flex-wrap gap-s2">
+              <div className="flex flex-wrap gap-s2 justify-center">
                 <Input
-                  className="min-w-0 flex-1 uppercase"
+                  className="min-w-[140px] flex-1 uppercase text-center max-w-xs"
                   value={joinCode}
                   onChange={(e) => setJoinCode(e.target.value)}
                   placeholder="6-digit code"
@@ -158,7 +157,7 @@ export default function Home() {
         ) : (
           <>
             <div className="flex flex-wrap items-center justify-between gap-s2">
-              <Badge>Active match: {session.sessionCode}</Badge>
+              <Badge>Active: {session.sessionCode}</Badge>
               <Button variant="secondary" onClick={onLeave} disabled={busy}>Leave</Button>
             </div>
 
@@ -169,9 +168,9 @@ export default function Home() {
                   <div className="mt-s1 text-muted">This name + emoji will show up in the lobby and on the board.</div>
                 </div>
 
-                <div className="flex flex-wrap gap-s2">
+                <div className="flex flex-wrap gap-s2 justify-center">
                   <Input
-                    className="min-w-0 flex-1"
+                    className="min-w-0 flex-1 text-center"
                     value={playerName}
                     onChange={(e) => setPlayerName(e.target.value)}
                     placeholder="e.g. Alex"

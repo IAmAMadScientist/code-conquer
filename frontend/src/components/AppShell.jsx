@@ -1,18 +1,18 @@
 import React, { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "./ui/button";
-import { Separator } from "./ui/separator";
 import { useHapticsSetting, useSoundSetting } from "../lib/diceSound";
 import InfoCenter from "./InfoCenter";
 import { getSession, isSessionStarted } from "../lib/session";
 
 /**
- * Mobile-first app shell.
+ * Viewport App Shell.
  *
- * Goals:
- * - Full-screen "native app" look (no centered web card)
- * - Safe-area padding + sticky bottom tab bar
- * - Info tab opens a bottom sheet help menu
+ * Structure:
+ * - Root: Fixed 100dvh flex-column (no window scroll).
+ * - Header: Fixed height, never scrolls.
+ * - Main: Flex-1, scrollable internally.
+ * - Footer: Fixed height, always visible at bottom.
  */
 export default function AppShell({
   title = "Code & Conquer",
@@ -30,30 +30,16 @@ export default function AppShell({
 }) {
   const nav = useNavigate();
   const loc = useLocation();
-  const headerRef = useRef(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [soundEnabled, setSoundEnabled] = useSoundSetting();
   const [hapticsEnabled, setHapticsEnabled] = useHapticsSetting();
 
   const showBack = backTo !== false && (loc?.pathname || "/") !== "/";
 
-  // Expose current top bar height for fixed overlays (e.g., EventFeed) so they never overlap the header.
-  useLayoutEffect(() => {
-    try {
-      const el = headerRef.current;
-      if (!el) return;
-      const h = Math.ceil(el.getBoundingClientRect().height || 0);
-      document.documentElement.style.setProperty("--cc-topbar-h", `${h}px`);
-    } catch {}
-  }, [title, subtitle, headerBadges, showBack]);
-
   const hasSession = !!getSession()?.sessionId;
   const startedFlag = hasSession && isSessionStarted();
 
   const tabs = useMemo(() => {
-    // Bottom tab behavior:
-    // - Before the match starts, the left tab should bring you back to the Lobby.
-    // - Once started, it becomes Play.
     const playLabel = startedFlag ? "Play" : "Lobby";
     const playTo = startedFlag ? "/play" : "/lobby";
 
@@ -76,175 +62,202 @@ export default function AppShell({
     else nav(-1);
   }
 
-  // Expose topbar height so fixed overlays (e.g., EventFeed) can position below it.
-  useLayoutEffect(() => {
-    try {
-      const el = headerRef.current;
-      if (!el) return;
-      const h = Math.ceil(el.getBoundingClientRect().height || 0);
-      document.documentElement.style.setProperty("--cc-topbar-h", `${h}px`);
-    } catch {}
-  }, [title, subtitle, headerBadges, showBack]);
-
   return (
-    <div className="min-h-[100dvh] bg-bg0 text-text flex flex-col pt-[env(safe-area-inset-top)]">
-      {/* Top Bar */}
-      <header
-        ref={headerRef}
-        className="sticky top-0 z-40 bg-bg0 backdrop-blur border-b border-border"
-      >
-        <div className="px-s4 pt-s3 pb-s2 flex items-start justify-between gap-s3">
-          <div className="flex items-start gap-s3 min-w-0">
+    // ROOT: Locked to viewport height, Flex Column.
+    <div className="h-[100dvh] w-full flex flex-col bg-bg0 text-text overflow-hidden pt-[env(safe-area-inset-top)]">
+      
+      {/* HEADER: Rigid, non-scrolling */}
+      <header className="flex-none z-30 bg-bg0 backdrop-blur border-b border-border">
+        <div className="px-s3 py-s2 flex items-center justify-between gap-s2">
+          <div className="flex items-center gap-s2 min-w-0">
             {showBack ? (
               <button
                 type="button"
                 aria-label="Back"
                 onClick={goBack}
-                className="h-9 w-9 rounded-lg bg-bg1 border border-border shadow-panel flex items-center justify-center text-fs3 leading-none"
+                className="h-8 w-8 rounded-lg bg-surface border border-border flex items-center justify-center text-fs2 active:scale-95 transition-transform"
               >
                 ‹
               </button>
             ) : null}
 
-            <div className="min-w-0">
-              <div className="text-fs3 font-extrabold leading-tight truncate">{title}</div>
-              {subtitle ? <div className="text-fs1 text-muted leading-snug truncate">{subtitle}</div> : null}
-            </div>
+            <div className="text-fs1 font-bold truncate shrink-0">{title}</div>
+            
+            {headerBadges ? (
+              <div className="flex items-center gap-s1 min-w-0 overflow-hidden">
+                {headerBadges}
+              </div>
+            ) : null}
           </div>
 
-          <div className="flex items-center gap-s2 shrink-0">
-            <button
-              type="button"
-              className={
-                "h-9 px-s3 rounded-lg border shadow-panel flex items-center gap-2 " +
-                (hapticsEnabled ? "bg-bg1 border-border" : "bg-transparent border-border")
-              }
-              aria-label={hapticsEnabled ? "Haptics on" : "Haptics off"}
-              title={hapticsEnabled ? "Haptics: On" : "Haptics: Off"}
-              onClick={() => setHapticsEnabled((v) => !v)}
-            >
-              <span aria-hidden="true">{hapticsEnabled ? "📳" : "🚫"}</span>
-              <span className="hidden sm:inline text-fs1 text-muted">Haptics</span>
-            </button>
-
-            <button
-              type="button"
-              className={
-                "h-9 px-s3 rounded-lg border shadow-panel flex items-center gap-2 " +
-                (soundEnabled ? "bg-bg1 border-border" : "bg-transparent border-border")
-              }
-              aria-label={soundEnabled ? "Sound on" : "Sound off"}
-              title={soundEnabled ? "Sound: On" : "Sound: Off"}
-              onClick={() => setSoundEnabled((v) => !v)}
-            >
-              <span aria-hidden="true">{soundEnabled ? "🔊" : "🔇"}</span>
-              <span className="hidden sm:inline text-fs1 text-muted">Sound</span>
-            </button>
-          </div>
+          <OptionsDropdown
+            soundEnabled={soundEnabled}
+            setSoundEnabled={setSoundEnabled}
+            hapticsEnabled={hapticsEnabled}
+            setHapticsEnabled={setHapticsEnabled}
+          />
         </div>
-
-        {headerBadges ? <div className="px-s4 pb-s3 flex flex-wrap gap-s2">{headerBadges}</div> : null}
       </header>
 
-      {/* Main */}
-      <main className={"flex-1 min-h-0 px-s4 pb-s4 " + (showTabs ? "pb-[calc(env(safe-area-inset-bottom)+88px)]" : "pb-[calc(env(safe-area-inset-bottom)+16px)]")}
-      >
-        <div className="h-full bg-bg0">
-          <Separator />
+      {/* MAIN: Consumes all available space, handles own scroll */}
+      <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden relative scroll-smooth">
+        <div className="min-h-full flex flex-col">
+          {/* Main Layout Grid */}
+          <div className={"flex-1 p-s4 grid gap-s4 " + (rightPanel ? "lg:grid-cols-[minmax(0,1fr)_340px]" : "grid-cols-1")}>
+            
+            {/* Primary Content */}
+            <section className="min-w-0 flex flex-col gap-s4">
+              {children}
+            </section>
 
-          <div className={"pt-s4 grid gap-s4 h-[calc(100%-1px)] " + (rightPanel ? "lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]" : "grid-cols-1")}
-          >
-            <section className="min-w-0">{children}</section>
+            {/* Desktop Side Panel */}
             {rightPanel ? (
-              <aside className="hidden lg:block min-w-0">
-                <div className="sticky top-[calc(var(--cc-topbar-h,64px)+16px)]">{rightPanel}</div>
+              <aside className="hidden lg:flex flex-col gap-s4 min-w-0">
+                <div className="sticky top-s4">
+                  {rightPanel}
+                </div>
               </aside>
             ) : null}
           </div>
         </div>
       </main>
 
-      {/* Bottom Action Bar (Mobile-first) */}
-      {actions ? (
-        <div
-          className={
-            "fixed left-0 right-0 z-30 px-s4 pt-s3 bg-bg0 backdrop-blur border-t border-border " +
-            (showTabs ? "bottom-[calc(env(safe-area-inset-bottom)+64px)]" : "bottom-0")
-          }
-          style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 12px)" }}
-        >
-          <div className="max-w-[980px] mx-auto flex items-center justify-between gap-s3">{actions}</div>
+      {/* FOOTER: Rigid, always visible */}
+      {(actions || showTabs) && (
+        <div className="flex-none z-40 bg-bg0/90 backdrop-blur border-t border-border pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_20px_rgba(0,0,0,0.2)]">
+          
+          {/* Action Bar (Buttons) */}
+          {actions && (
+            <div className="px-s4 py-s3 flex items-center gap-s3">
+              {actions}
+            </div>
+          )}
+
+          {/* Tab Bar (Navigation) */}
+          {showTabs && (
+            <nav className="grid grid-cols-3 max-w-md mx-auto w-full">
+              {tabs.map((t) => {
+                const active = resolvedActiveTab === t.key;
+                return (
+                  <button
+                    key={t.key}
+                    className="group relative h-14 flex flex-col items-center justify-center gap-1"
+                    onClick={() => {
+                      if (t.key === "info") {
+                        setSheetOpen(true);
+                        return;
+                      }
+                      if (t.to) nav(t.to);
+                    }}
+                  >
+                    {/* Active Indicator */}
+                    {active && (
+                      <div className="absolute top-0 w-8 h-1 bg-indigo-500 rounded-b-full shadow-[0_0_10px_rgba(99,102,241,0.6)]" />
+                    )}
+                    
+                    <div className={"text-2xl transition-transform duration-200 " + (active ? "scale-110 -translate-y-0.5" : "group-hover:scale-105 opacity-60")}>
+                      {t.icon}
+                    </div>
+                    <div className={"text-[10px] font-bold uppercase tracking-wider transition-colors " + (active ? "text-indigo-300" : "text-muted")}>
+                      {t.label}
+                    </div>
+                  </button>
+                );
+              })}
+            </nav>
+          )}
         </div>
-      ) : null}
+      )}
 
-      {/* Bottom Tabs */}
-      {showTabs ? (
-        <nav
-          aria-label="Primary"
-          className="fixed bottom-0 left-0 right-0 z-40 bg-bg0 backdrop-blur border-t border-border"
-          style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-        >
-          <div className="grid grid-cols-3 max-w-[980px] mx-auto">
-            {tabs.map((t) => {
-              const active = resolvedActiveTab === t.key;
-              return (
-                <button
-                  key={t.key}
-                  className={
-                    "py-s3 flex flex-col items-center justify-center gap-1 text-fs1 " +
-                    (active ? "text-text" : "text-muted")
-                  }
-                  onClick={() => {
-                    if (t.key === "info") {
-                      setSheetOpen(true);
-                      return;
-                    }
-                    if (t.to) nav(t.to);
-                  }}
-                >
-                  <div className={"text-fs3 " + (active ? "" : "opacity-80")}>{t.icon}</div>
-                  <div className={active ? "font-semibold" : ""}>{t.label}</div>
-                </button>
-              );
-            })}
-          </div>
-        </nav>
-      ) : null}
-
-      {/* Info Sheet */}
+      {/* Info Sheet Overlay */}
       <div
         className={
-          "fixed inset-0 z-50 transition " +
-          (sheetOpen ? "pointer-events-auto" : "pointer-events-none")
+          "fixed inset-0 z-50 flex items-end sm:items-center sm:justify-center p-4 transition-all duration-300 " +
+          (sheetOpen ? "pointer-events-auto visible" : "pointer-events-none invisible")
         }
-        onClick={() => setSheetOpen(false)}
       >
+        {/* Backdrop */}
         <div
-          className={
-            "absolute inset-0 bg-black/40 transition-opacity " +
-            (sheetOpen ? "opacity-100" : "opacity-0")
-          }
+          className={"absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300 " + (sheetOpen ? "opacity-100" : "opacity-0")}
+          onClick={() => setSheetOpen(false)}
         />
+        
+        {/* Sheet Content */}
         <div
           className={
-            "absolute left-0 right-0 bottom-0 bg-bg1 border-t border-border rounded-t-lg shadow-panel transition-transform " +
-            (sheetOpen ? "translate-y-0" : "translate-y-full")
+            "relative w-full max-w-md bg-bg1 border border-border rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[85dvh] transition-transform duration-300 " +
+            (sheetOpen ? "translate-y-0 scale-100" : "translate-y-full sm:translate-y-10 sm:scale-95")
           }
-          style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-          onClick={(e) => e.stopPropagation()}
         >
-          <div className="mx-auto w-12 h-1.5 rounded-full bg-border mt-s2" />
-          <div className="px-s4 py-s3 flex items-center justify-between gap-s3">
-            <div className="font-extrabold">Info</div>
-            <Button variant="ghost" onClick={() => setSheetOpen(false)}>
-              Close
-            </Button>
+          {/* Handle for mobile feel */}
+          <div className="w-12 h-1.5 bg-border rounded-full mx-auto mt-3 mb-1 sm:hidden" />
+          
+          <div className="px-5 py-3 flex items-center justify-between border-b border-border/50">
+            <div className="font-extrabold text-lg">Information</div>
+            <Button variant="ghost" size="sm" onClick={() => setSheetOpen(false)}>Close</Button>
           </div>
-          <div className="px-s4 pb-s4 max-h-[70dvh] overflow-auto">
+          
+          <div className="p-0 overflow-y-auto overscroll-contain">
             <InfoCenter onRequestClose={() => setSheetOpen(false)} />
           </div>
         </div>
       </div>
+
+    </div>
+  );
+}
+
+function OptionsDropdown({ soundEnabled, setSoundEnabled, hapticsEnabled, setHapticsEnabled }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  // Close on click outside
+  React.useEffect(() => {
+    if (!open) return;
+    function clickOut(e) {
+      if (ref.current && !ref.current.contains(e.target)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", clickOut);
+    return () => document.removeEventListener("mousedown", clickOut);
+  }, [open]);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(!open)}
+        className={
+          "h-9 w-9 rounded-lg border flex items-center justify-center transition-colors " +
+          (open ? "bg-surface border-indigo-500/50 text-indigo-200" : "bg-transparent border-transparent text-muted hover:bg-white/5")
+        }
+        aria-label="Options"
+        title="Options"
+      >
+        <span className="text-xl">⚙️</span>
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-border bg-[#0b1026] shadow-2xl p-1.5 z-50 flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-100 origin-top-right">
+          <div className="px-2 py-1.5 text-xs font-bold text-muted uppercase tracking-wider">Settings</div>
+          
+          <button
+            onClick={() => setSoundEnabled(!soundEnabled)}
+            className="flex items-center justify-between w-full px-3 py-2.5 rounded-lg hover:bg-white/5 transition-colors text-left"
+          >
+            <span className="text-fs1 font-medium">Sound</span>
+            <span className="text-lg">{soundEnabled ? "🔊" : "🔇"}</span>
+          </button>
+
+          <button
+            onClick={() => setHapticsEnabled(!hapticsEnabled)}
+            className="flex items-center justify-between w-full px-3 py-2.5 rounded-lg hover:bg-white/5 transition-colors text-left"
+          >
+            <span className="text-fs1 font-medium">Haptics</span>
+            <span className="text-lg">{hapticsEnabled ? "📳" : "🚫"}</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

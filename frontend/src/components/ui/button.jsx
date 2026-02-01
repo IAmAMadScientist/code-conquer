@@ -6,17 +6,18 @@ export function Button({
   className = "",
   ...props
 }) {
-  const base =
-    "inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-s4 py-s3 text-fs1 font-medium " +
-    "transition active:scale-[0.99] disabled:opacity-50 disabled:pointer-events-none " +
-    "focus:outline-none focus-visible:ring-2 focus-visible:ring-border";
+  // We now rely on the robust classes defined in ui.css for the visual theme
+  const base = "ui-btn";
 
   const variants = {
-    primary: "bg-text text-bg0 hover:opacity-90",
-    secondary: "bg-surface2 text-text border border-border hover:bg-surface",
-    ghost: "bg-transparent text-text hover:bg-surface2",
-    success: "bg-emerald-600 text-white hover:bg-emerald-500",
-    danger: "bg-red-600 text-white hover:bg-red-500",
+    primary: "ui-btnPrimary",
+    secondary: "ui-btnSecondary",
+    ghost: "ui-btnGhost",
+    // Fallback for success/danger if not explicitly defined in ui.css yet, 
+    // but we can map them to primary/secondary with override classes if needed.
+    // For now, let's keep them as Tailwind overrides on top of the base.
+    success: "bg-emerald-600 border-emerald-500/30 text-white hover:bg-emerald-500 shadow-[0_4px_14px_rgba(16,185,129,0.4)]",
+    danger: "bg-red-600 border-red-500/30 text-white hover:bg-red-500 shadow-[0_4px_14px_rgba(220,38,38,0.4)]",
   };
 
   return (
