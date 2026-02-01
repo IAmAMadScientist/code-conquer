@@ -1,4 +1,4 @@
-import { TURN_STATUS, SESSION_STATUS, SPECIAL_CARD, FIELD_TYPE } from "../lib/constants";
+import { TURN_STATUS, SESSION_STATUS, SPECIAL_CARD, FIELD_TYPE, UI_STRINGS } from "../lib/constants";
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
@@ -143,7 +143,7 @@ export default function Play() {
   async function doStartChallenge() {
     if (!session?.sessionId || !me?.playerId) return;
     if (!state?.started || state?.currentPlayerId !== me.playerId || state?.turnStatus !== TURN_STATUS.IDLE) {
-      toastInfo(toast, "Not now", "You can only start a challenge on your turn after moving.");
+      toastInfo(toast, UI_STRINGS.ACTION_REQUIRED, UI_STRINGS.START_CHALLENGE_RESTRICTION);
       return;
     }
     try {
@@ -157,7 +157,7 @@ export default function Play() {
   async function doRollD6() {
     if (!session?.sessionId || !me?.playerId) return;
     if (!state?.started || state?.currentPlayerId !== me.playerId || state?.turnStatus !== TURN_STATUS.AWAITING_D6_ROLL) {
-      toastInfo(toast, "Not now", "You can only roll when it's your turn and the game is waiting for the D6.");
+      toastInfo(toast, UI_STRINGS.ACTION_REQUIRED, UI_STRINGS.ROLL_RESTRICTION);
       return;
     }
     try {
@@ -184,7 +184,7 @@ export default function Play() {
   async function doChoosePath(toNodeId) {
     if (!session?.sessionId || !me?.playerId) return;
     if (!state?.started || state?.currentPlayerId !== me.playerId || state?.turnStatus !== TURN_STATUS.AWAITING_PATH_CHOICE) {
-      toastInfo(toast, "Not now", "You can only choose a path when it's your turn and a fork is active.");
+      toastInfo(toast, UI_STRINGS.ACTION_REQUIRED, UI_STRINGS.PATH_RESTRICTION);
       return;
     }
     try {
@@ -223,13 +223,13 @@ export default function Play() {
     try {
       const cardDef = SPECIAL_CARDS.find((c) => c.id === specialCard);
       if (cardDef?.needsTarget && !specialTarget) {
-        toastInfo(toast, "Action required", "Please choose a target player for this card.");
+        toastInfo(toast, UI_STRINGS.ACTION_REQUIRED, UI_STRINGS.CHOOSE_TARGET);
         setSpecialSubmitting(false);
         return;
       }
       // BOOST: if backend detected a fork, it will respond with needChoice + options.
       if (specialCard === SPECIAL_CARD.BOOST && boostOptions.length > 0 && !boostTo) {
-        toastInfo(toast, "Action required", "Please choose a path for Boost.");
+        toastInfo(toast, UI_STRINGS.ACTION_REQUIRED, UI_STRINGS.CHOOSE_PATH_BOOST);
         setSpecialSubmitting(false);
         return;
       }
@@ -245,7 +245,7 @@ export default function Play() {
       if (r?.needChoice) {
         setBoostOptions(r.options || []);
         setBoostTo("");
-        toastInfo(toast, "Choose a path", "Boost hit a fork — please choose the path.");
+        toastInfo(toast, "Choose a path", UI_STRINGS.BOOST_FORK);
         setSpecialSubmitting(false);
         return;
       }
@@ -293,7 +293,7 @@ export default function Play() {
       <AppShell title="Play" subtitle="Join a match and set your profile first." showTabs activeTab="play" backTo={false} showBrand>
         <Card>
           <CardContent className="space-y-s2">
-            <div className="text-fs3 font-extrabold">Not ready</div>
+            <div className="text-fs3 font-extrabold">{UI_STRINGS.NOT_READY}</div>
             <div className="text-muted">You need to be in a match and have a player profile.</div>
           </CardContent>
         </Card>

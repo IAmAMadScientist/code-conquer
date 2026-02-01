@@ -3,7 +3,7 @@ import { useLocation } from "react-router-dom";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import ResultSubmitPanel from "../components/ResultSubmitPanel";
-import { DIFFICULTY } from "../lib/constants";
+import { DIFFICULTY, UI_STRINGS } from "../lib/constants";
 import {
   getHapticsEnabled,
   getSoundEnabled,
@@ -474,17 +474,17 @@ export default function StackDropPage() {
     >
       {/* HUD */}
       <div style={{ display: "flex", gap: 10, padding: "10px 12px", alignItems: "center", flexWrap: "wrap" }}>
-        <Badge variant="secondary">⏱️ {Math.max(0, Math.ceil((cfg.durationMs - timeMs) / 1000))}s</Badge>
+        <Badge variant="secondary">{UI_STRINGS.TIME_LEFT} {Math.max(0, Math.ceil((cfg.durationMs - timeMs) / 1000))}s</Badge>
         <Badge variant="secondary">
-          🪙 {coins}
+          {UI_STRINGS.COINS} {coins}
           {cfg.targetCoins ? `/${cfg.targetCoins}` : ""}
         </Badge>
-        <Badge variant="secondary">💥 {errors}</Badge>
-        <Badge variant="secondary">📦 {stack.length}/{cfg.maxStack}</Badge>
+        <Badge variant="secondary">{UI_STRINGS.CRASHES} {errors}</Badge>
+        <Badge variant="secondary">{UI_STRINGS.CMD_STACK} {stack.length}/{cfg.maxStack}</Badge>
         <div style={{ flex: 1 }} />
         {isDesktop ? (
           <div style={{ opacity: 0.7, fontSize: 12, whiteSpace: "nowrap" }}>
-            ←/→ move · A/D/S push · SPACE execute · ESC clear
+            {UI_STRINGS.DROP_DESKTOP_HELP}
           </div>
         ) : null}
       </div>
@@ -567,7 +567,7 @@ export default function StackDropPage() {
                 aria-label="push command"
               >
                 {cmdLabel(c.type)}
-                {c.isFake ? <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.9 }}>TRAP</span> : null}
+                {c.isFake ? <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.9 }}>{UI_STRINGS.DROP_TRAP}</span> : null}
               </button>
             ))}
 
@@ -660,7 +660,7 @@ export default function StackDropPage() {
 
         <div style={{ display: "flex", gap: 10 }}>
           <Button variant="ghost" onClick={clearStack} disabled={status !== "playing" || executing} style={{ flex: 1, minHeight: 48 }}>
-            Clear
+            {UI_STRINGS.CLEAR}
           </Button>
           <Button
             variant={executing ? "ghost" : "primary"}
@@ -668,14 +668,14 @@ export default function StackDropPage() {
             onClick={executeStack}
             style={{ flex: 2, minHeight: 48 }}
           >
-            {executing ? "Executing…" : "EXECUTE"}
+            {executing ? UI_STRINGS.EXECUTING : UI_STRINGS.EXECUTE}
           </Button>
         </div>
 
         {typeof won === "boolean" ? (
           <div style={{ display: "grid", gap: 10 }}>
             <Button variant="primary" onClick={resetAll} style={{ minHeight: 48 }}>
-              Play again
+              {UI_STRINGS.PLAY_AGAIN}
             </Button>
             <ResultSubmitPanel
               category="STACK_DROP"

@@ -1,3 +1,4 @@
+import { UI_STRINGS } from "../lib/constants";
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AppShell from "../components/AppShell";
@@ -42,9 +43,9 @@ export default function Home() {
       setJoinCode("");
       setPlayerName("");
       setIcon("🦊");
-      toastSuccess(toast, "Match created", `Code: ${s?.sessionCode || ""}`.trim());
+      toastSuccess(toast, UI_STRINGS.MATCH_CREATED, `Code: ${s?.sessionCode || ""}`.trim());
     } catch (e) {
-      toastError(toast, e, "Failed to create match");
+      toastError(toast, e, UI_STRINGS.CREATE_MATCH_FAILED);
     } finally {
       setBusy(false);
     }
@@ -58,9 +59,9 @@ export default function Home() {
       const s = await joinSessionByCode(joinCode.trim().toUpperCase());
       setSession(s);
       setPlayer(getPlayer());
-      toastSuccess(toast, "Joined match", `Code: ${s?.sessionCode || joinCode.trim().toUpperCase()}`);
+      toastSuccess(toast, UI_STRINGS.MATCH_JOINED, `Code: ${s?.sessionCode || joinCode.trim().toUpperCase()}`);
     } catch (e) {
-      toastError(toast, e, "Failed to join match");
+      toastError(toast, e, UI_STRINGS.JOIN_MATCH_FAILED);
     } finally {
       setBusy(false);
     }
@@ -74,10 +75,10 @@ export default function Home() {
     try {
       const p = await registerPlayer(session.sessionId, playerName.trim(), icon);
       setPlayer(p);
-      toastSuccess(toast, "Profile saved", `${icon} ${playerName.trim()}`);
+      toastSuccess(toast, UI_STRINGS.PROFILE_SAVED, `${icon} ${playerName.trim()}`);
       nav("/lobby");
     } catch (e) {
-      toastError(toast, e, "Failed to save profile");
+      toastError(toast, e, UI_STRINGS.SAVE_PROFILE_FAILED);
     } finally {
       setBusy(false);
     }
@@ -107,7 +108,7 @@ export default function Home() {
         <Card>
           <CardContent className="space-y-s3">
             <div>
-              <div className="text-muted text-fs0 font-semibold">Quick start</div>
+              <div className="text-muted text-fs0 font-semibold">{UI_STRINGS.QUICK_START}</div>
               <div className="mt-s1 text-fs3 font-extrabold">Get a match running in under a minute</div>
             </div>
             <div className="space-y-s1 text-muted leading-relaxed">
@@ -126,7 +127,7 @@ export default function Home() {
         {!session?.sessionId ? (
           <>
             <div>
-              <div className="text-fs3 font-extrabold">Start a new match</div>
+              <div className="text-fs3 font-extrabold">{UI_STRINGS.START_NEW_MATCH}</div>
               <div className="mt-s1 text-muted">Host the game and share the code with your friends.</div>
             </div>
 
@@ -139,7 +140,7 @@ export default function Home() {
             <div className="h-px w-full bg-border/60" />
 
             <div className="space-y-s2">
-              <div className="text-muted text-fs0 font-semibold">Or join by code</div>
+              <div className="text-muted text-fs0 font-semibold">{UI_STRINGS.OR_JOIN_BY_CODE}</div>
               <div className="flex flex-wrap gap-s2">
                 <Input
                   className="min-w-0 flex-1 uppercase"
@@ -164,7 +165,7 @@ export default function Home() {
             {!player?.playerId ? (
               <div className="mx-auto w-full max-w-[560px] space-y-s4">
                 <div>
-                  <div className="text-fs3 font-extrabold">Create your player</div>
+                  <div className="text-fs3 font-extrabold">{UI_STRINGS.CREATE_PLAYER}</div>
                   <div className="mt-s1 text-muted">This name + emoji will show up in the lobby and on the board.</div>
                 </div>
 
@@ -181,7 +182,7 @@ export default function Home() {
                 </div>
 
                 <div className="space-y-s2">
-                  <div className="text-muted text-fs0 font-semibold">Pick an emoji</div>
+                  <div className="text-muted text-fs0 font-semibold">{UI_STRINGS.PICK_EMOJI}</div>
                   <div className="flex flex-wrap justify-center gap-s2">
                     {EMOJIS.map((e) => (
                       <button

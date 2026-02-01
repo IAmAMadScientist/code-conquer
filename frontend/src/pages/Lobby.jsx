@@ -1,4 +1,4 @@
-import { SESSION_STATUS } from "../lib/constants";
+import { SESSION_STATUS, UI_STRINGS } from "../lib/constants";
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AppShell from "../components/AppShell";
@@ -54,7 +54,7 @@ export default function Lobby() {
 
       if (s?.started) nav("/play");
     } catch (e) {
-      toastError(toast, e, "Failed to load lobby");
+      toastError(toast, e, UI_STRINGS.LOBBY_LOAD_FAILED);
     }
   }, [session?.sessionId, nav, toast]);
 
@@ -76,7 +76,7 @@ export default function Lobby() {
       await setReady(session.sessionId, me.playerId, !currentlyReady);
       await load();
     } catch (e) {
-      toastError(toast, e, "Failed to set ready");
+      toastError(toast, e, UI_STRINGS.SET_READY_FAILED);
     } finally {
       setBusy(false);
     }
@@ -90,7 +90,7 @@ export default function Lobby() {
       await diceOverlay.rollD20(() => rollLobbyD20(session.sessionId, me.playerId));
       await load();
     } catch (e) {
-      toastError(toast, e, "Failed to roll");
+      toastError(toast, e, UI_STRINGS.ROLL_FAILED);
       await load();
     } finally {
       setTimeout(() => setRolling(false), 980);
@@ -154,7 +154,7 @@ export default function Lobby() {
   return (
     <AppShell
       title="Lobby"
-      subtitle={state?.turnOrderLocked ? "Turn order locked" : "Roll for turn order, then ready up"}
+      subtitle={state?.turnOrderLocked ? UI_STRINGS.TURN_ORDER_LOCKED : UI_STRINGS.ROLL_FOR_ORDER}
       showTabs
       activeTab="play"
       backTo={false}
@@ -300,11 +300,8 @@ export default function Lobby() {
 
       <ConfirmModal
         open={confirmLeaveOpen}
-        title="Leave lobby?"
-        message={
-          "Do you really want to leave?\n\n" +
-          "You will leave this match and will have to pick your name and icon again when you join next time."
-        }
+        title={UI_STRINGS.LEAVE_LOBBY_TITLE}
+        message={UI_STRINGS.LEAVE_LOBBY_MESSAGE}
         confirmText="Leave"
         cancelText="Stay"
         danger

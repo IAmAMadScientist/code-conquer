@@ -1,4 +1,4 @@
-import { DIFFICULTY } from "../lib/constants";
+import { DIFFICULTY, UI_STRINGS } from "../lib/constants";
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../components/ui/button";
 import { cn } from "../lib/utils";
@@ -598,12 +598,12 @@ export default function StackMazePage() {
 
       <div ref={hudRef} className="smx-top" aria-label="HUD">
         <div className="smx-pills">
-          <div className="smx-pill" aria-label="Time left">⏱️ {timeLeftS}</div>
-          <div className="smx-pill" aria-label="Stars">⭐ {starGot}/{starTotal}</div>
+          <div className="smx-pill" aria-label="Time left">{UI_STRINGS.TIME_LEFT} {timeLeftS}</div>
+          <div className="smx-pill" aria-label="Stars">{UI_STRINGS.STARS} {starGot}/{starTotal}</div>
         </div>
         <div className="smx-pills">
-          <div className="smx-pill smx-pillDim" aria-label="Energy">⚡ {energy}</div>
-          <div className="smx-pill smx-pillDim" aria-label="Crashes">💥 {crashes}</div>
+          <div className="smx-pill smx-pillDim" aria-label="Energy">{UI_STRINGS.ENERGY} {energy}</div>
+          <div className="smx-pill smx-pillDim" aria-label="Crashes">{UI_STRINGS.CRASHES} {crashes}</div>
         </div>
       </div>
 
@@ -711,14 +711,14 @@ export default function StackMazePage() {
           won={status === "won"}
           explanation={
             status === "won"
-              ? "You reached the goal tile."
+              ? UI_STRINGS.MAZE_GOAL_REACHED
               : lostReason === "time"
-              ? "You ran out of time before reaching the goal."
+              ? UI_STRINGS.MAZE_TIME_OUT
               : lostReason === "energy"
-              ? "You ran out of energy (too many steps/crashes)."
+              ? UI_STRINGS.MAZE_ENERGY_OUT
               : lostReason === "out_of_moves"
-              ? "Your stack finished without reaching the goal."
-              : "You did not reach the goal."
+              ? UI_STRINGS.MAZE_OUT_OF_MOVES
+              : UI_STRINGS.MAZE_GENERIC_LOSS
           }
           challengeId={challenge?.challengeInstanceId}
         />

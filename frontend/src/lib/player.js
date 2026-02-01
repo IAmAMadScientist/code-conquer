@@ -52,7 +52,15 @@ export async function leaveSession(sessionId, playerId) {
 export function leaveSessionBeacon(sessionId, playerId) {
   try {
     const url = `${API_BASE}/sessions/${encodeURIComponent(sessionId)}/players/${encodeURIComponent(playerId)}`;
-    // "keepalive" allows the request to be sent while the page is unloading.
+    
+    // navigator.sendBeacon is more reliable for end-of-session cleanup
+    // than fetch(..., {keepalive: true}) in many browsers.
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon(url);
+      return true;
+    }
+    
+    // Fallback if sendBeacon is missing
     fetch(url, { method: "DELETE", keepalive: true });
     return true;
   } catch {
