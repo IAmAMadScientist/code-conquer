@@ -43,7 +43,9 @@ public class PlayerService {
             if (p.getPositionNodeId() == null || p.getPositionNodeId().isBlank()) {
                 p.setPositionNodeId(boardGraphService.getStartNodeId());
             }
-            return playerRepository.save(p);
+            Player saved = playerRepository.save(p);
+            sessionService.notifyUpdate(sessionId);
+            return saved;
         }
 
         Player p = new Player();
@@ -62,7 +64,9 @@ public class PlayerService {
         p.setTurnOrder(nextOrder);
 
         p.setCreatedAt(Instant.now());
-        return playerRepository.save(p);
+        Player saved = playerRepository.save(p);
+        sessionService.notifyUpdate(sessionId);
+        return saved;
     }
 
     public List<Player> listPlayers(String sessionId) {
@@ -100,6 +104,7 @@ public class PlayerService {
         p.setReady(ready);
         Player saved = playerRepository.save(p);
         sessionService.tryStartIfAllReady(sessionId);
+        sessionService.notifyUpdate(sessionId);
         return saved;
     }
 
@@ -172,7 +177,9 @@ public class PlayerService {
         }
         int next = p.getTotalScore() + Math.max(0, deltaPoints);
         p.setTotalScore(next);
-        return playerRepository.save(p);
+        Player saved = playerRepository.save(p);
+        sessionService.notifyUpdate(sessionId);
+        return saved;
     }
 
     public void removePlayer(String sessionId, String playerId) {

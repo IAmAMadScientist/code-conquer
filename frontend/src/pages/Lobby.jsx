@@ -13,6 +13,7 @@ import { useDiceOverlay } from "../components/dice/DiceOverlayProvider";
 import D20Die from "../components/D20Die";
 import { getSession, clearSession, setSessionStarted } from "../lib/session";
 import { getPlayer, fetchLobby, setReady, leaveSession, clearPlayer, rollLobbyD20 } from "../lib/player";
+import { useGameSocket } from "../lib/useGameSocket";
 
 export default function Lobby() {
   const nav = useNavigate();
@@ -30,7 +31,7 @@ export default function Lobby() {
   const canView = !!(session?.sessionId && me?.playerId);
   const joinUrl = session?.sessionCode ? `${window.location.origin}/join/${session.sessionCode}` : "";
 
-  async function load() {
+  const load = React.useCallback(async () => {
     if (!session?.sessionId) return;
     try {
       const s = await fetchLobby(session.sessionId);
@@ -55,15 +56,16 @@ export default function Lobby() {
     } catch (e) {
       toastError(toast, e, "Failed to load lobby");
     }
-  }
+  }, [session?.sessionId, nav, toast]);
 
+  // Initial load
   useEffect(() => {
-    if (!canView) return;
-    load();
-    const t = setInterval(load, 1500);
-    return () => clearInterval(t);
+    if (canView) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [canView]);
+
+  // Real-time updates
+  useGameSocket(session?.sessionId, load);
 
   async function toggleReady() {
     if (!session?.sessionId || !me?.playerId) return;

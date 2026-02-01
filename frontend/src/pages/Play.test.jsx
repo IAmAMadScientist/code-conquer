@@ -14,6 +14,10 @@ vi.mock('react-router-dom', () => ({
 }));
 
 // Mock components that might cause issues or aren't relevant to the test
+vi.mock('../lib/useGameSocket', () => ({
+  useGameSocket: vi.fn(),
+}));
+
 vi.mock('../components/AppShell', () => ({
   default: ({ children, title, actions }) => (
     <div>

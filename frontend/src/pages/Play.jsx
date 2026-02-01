@@ -18,6 +18,7 @@ import PullToRefresh from "../components/PullToRefresh";
 import ConfirmModal from "../components/ConfirmModal";
 import mapImg from "../assets/map.png";
 import nodeMapPositions from "../assets/nodeMapPositions.json";
+import { useGameSocket } from "../lib/useGameSocket";
 // Sound toggle is global (AppShell header) and dice SFX timing is handled by the dice overlay.
 
 export default function Play() {
@@ -60,7 +61,7 @@ export default function Play() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [mapOpen]);
 
-  async function load() {
+  const load = React.useCallback(async () => {
     if (!session?.sessionId) return;
     try {
       const s = await fetchLobby(session.sessionId);
@@ -104,20 +105,16 @@ export default function Play() {
     } catch (e) {
       toastError(toast, e, "Failed to load game state");
     }
-  }
+  }, [session?.sessionId, me?.playerId, nav, toast]);
 
-  async function resync() {
-    await load();
-    toastInfo(toast, "Synced", "Game state refreshed.");
-  }
-
+  // Initial load
   useEffect(() => {
-    if (!canView) return;
-    load();
-    const t = setInterval(load, 1500);
-    return () => clearInterval(t);
+    if (canView) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [canView]);
+
+  // Real-time updates
+  useGameSocket(session?.sessionId, load);
 
 
 
@@ -402,9 +399,6 @@ export default function Play() {
           )}
           <Button variant="secondary" onClick={() => setMapOpen(true)} title="Show board map">
             Map
-          </Button>
-          <Button variant="ghost" onClick={resync} title="Resync game state">
-            Resync
           </Button>
           <Button variant="ghost" onClick={leaveGame} className="ml-auto">
             Leave

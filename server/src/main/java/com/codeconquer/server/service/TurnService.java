@@ -95,6 +95,7 @@ public class TurnService {
         MoveResult mr = moveSteps(s, p, roll);
         sessionRepository.save(s);
         playerRepository.save(p);
+        sessionService.notifyUpdate(sessionId);
 
         // If we reached a terminal end-of-turn effect (JAIL), advance immediately.
         if (mr.turnEnded) {
@@ -127,6 +128,7 @@ public class TurnService {
         // Movement finished normally -> allow challenge selection.
         s.setTurnStatus(GameSessionService.TURN_IDLE);
         sessionRepository.save(s);
+        sessionService.notifyUpdate(sessionId);
         return responseFor(sessionId, playerId, roll, p, s, mr, "Moved");
     }
 
@@ -213,6 +215,7 @@ public class TurnService {
         MoveResult mr = moveSteps(s, p, remaining - 1);
         sessionRepository.save(s);
         playerRepository.save(p);
+        sessionService.notifyUpdate(sessionId);
 
         Integer roll = s.getLastDiceRoll();
 
@@ -242,6 +245,7 @@ public class TurnService {
 
         s.setTurnStatus(GameSessionService.TURN_IDLE);
         sessionRepository.save(s);
+        sessionService.notifyUpdate(sessionId);
         return responseFor(sessionId, playerId, roll, p, s, mr, "Moved");
     }
 

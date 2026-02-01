@@ -6,6 +6,7 @@ import com.codeconquer.server.model.Player;
 import com.codeconquer.server.repository.GameSessionRepository;
 import com.codeconquer.server.repository.GameEventRepository;
 import com.codeconquer.server.repository.PlayerRepository;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -37,14 +38,26 @@ public class GameSessionService {
     private final GameSessionRepository sessionRepository;
     private final PlayerRepository playerRepository;
     private final GameEventRepository gameEventRepository;
+    private final SimpMessagingTemplate messagingTemplate;
     private final Random random = new Random();
 
     public GameSessionService(GameSessionRepository sessionRepository,
                               PlayerRepository playerRepository,
-                              GameEventRepository gameEventRepository) {
+                              GameEventRepository gameEventRepository,
+                              SimpMessagingTemplate messagingTemplate) {
         this.sessionRepository = sessionRepository;
         this.playerRepository = playerRepository;
         this.gameEventRepository = gameEventRepository;
+        this.messagingTemplate = messagingTemplate;
+    }
+
+    public void notifyUpdate(String sessionId) {
+        if (sessionId == null) return;
+        try {
+            // "ping" payload
+            messagingTemplate.convertAndSend("/topic/match/" + sessionId, (Object) Map.of("type", "UPDATE", "ts", System.currentTimeMillis()));
+        } catch (Exception ignored) {
+        }
     }
 
     public GameSession createNew() {
@@ -143,6 +156,8 @@ public class GameSessionService {
         advanceTurnConsideringSkips(sessionId);
         // Announce whose turn it is (after auto-skips).
         announceCurrentTurn(sessionId);
+        
+        notifyUpdate(sessionId);
     }
 
     private boolean allHaveLobbyRoll(List<Player> players) {
@@ -233,6 +248,7 @@ public class GameSessionService {
 
         advanceTurnConsideringSkips(sessionId);
         announceCurrentTurn(sessionId);
+        notifyUpdate(sessionId);
     }
 
     /**
@@ -392,6 +408,8 @@ public class GameSessionService {
         } catch (Exception ignored) {
             // Event feed is non-critical; never break core game flow if logging fails.
         }
+        
+        notifyUpdate(s.getId());
     }
 
     private String formatLeftMessage(String name, String icon) {
