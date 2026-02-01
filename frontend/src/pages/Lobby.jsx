@@ -1,3 +1,4 @@
+import { SESSION_STATUS } from "../lib/constants";
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AppShell from "../components/AppShell";
@@ -36,7 +37,7 @@ export default function Lobby() {
       setState(s);
       setSessionStarted(!!s?.started);
 
-      if (s?.sessionStatus === "FINISHED") {
+      if (s?.sessionStatus === SESSION_STATUS.FINISHED) {
         nav("/end", { replace: true });
         return;
       }

@@ -8,6 +8,7 @@ import { useToast } from "../components/ui/use-toast";
 import { getSession, clearSession } from "../lib/session";
 import { clearPlayer, fetchLobby } from "../lib/player";
 import { API_BASE } from "../lib/api";
+import { SESSION_STATUS } from "../lib/constants";
 
 export default function Endscreen() {
   const nav = useNavigate();
@@ -68,7 +69,7 @@ export default function Endscreen() {
       headerBadges={
         <>
           {session?.sessionCode ? <Badge variant="secondary">{session.sessionCode}</Badge> : null}
-          <Badge variant="secondary">FINISHED</Badge>
+          <Badge variant="secondary">{SESSION_STATUS.FINISHED}</Badge>
         </>
       }
       rightPanel={

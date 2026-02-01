@@ -1,3 +1,4 @@
+import { TURN_STATUS, SESSION_STATUS, SPECIAL_CARD, FIELD_TYPE } from "../lib/constants";
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
@@ -33,7 +34,7 @@ export default function Play() {
   // Standardize errors as toasts
   // Special deck modal (when landing on SPECIAL)
   const [specialOpen, setSpecialOpen] = useState(false);
-  const [specialCard, setSpecialCard] = useState("BOOST");
+  const [specialCard, setSpecialCard] = useState(SPECIAL_CARD.BOOST);
   const [specialTarget, setSpecialTarget] = useState("");
   const [boostOptions, setBoostOptions] = useState([]);
   const [boostTo, setBoostTo] = useState("");
@@ -71,18 +72,18 @@ export default function Play() {
       setSessionStarted(!!s?.started);
 
       // If the match is finished, go to endscreen.
-      if (s?.sessionStatus === "FINISHED") {
+      if (s?.sessionStatus === SESSION_STATUS.FINISHED) {
         nav("/end", { replace: true });
         return;
       }
 
       // If the session is no longer waiting for a path choice, clear any stale local UI.
-      if (s?.turnStatus !== "AWAITING_PATH_CHOICE") {
+      if (s?.turnStatus !== TURN_STATUS.AWAITING_PATH_CHOICE) {
         setPendingChoices(null);
       }
 
       // Sync pending fork choices on refresh/polling.
-      if (amCurrent && s?.turnStatus === "AWAITING_PATH_CHOICE" && s?.pendingForkNodeId) {
+      if (amCurrent && s?.turnStatus === TURN_STATUS.AWAITING_PATH_CHOICE && s?.pendingForkNodeId) {
         const opts = Array.isArray(s?.pendingForkOptions) ? s.pendingForkOptions : null;
         setPendingChoices((prev) => {
           // Keep existing options if we already have them, otherwise take from lobby payload.
@@ -123,7 +124,7 @@ export default function Play() {
   // Auto-open the Special deck modal when the backend requests it.
   useEffect(() => {
     const ts = String(state?.turnStatus || "");
-    const awaiting = ts === "AWAITING_SPECIAL_CARD";
+    const awaiting = ts === TURN_STATUS.AWAITING_SPECIAL_CARD;
     const amCurrent = !!(state?.currentPlayerId && me?.playerId && state.currentPlayerId === me.playerId);
 
     // Only open when the backend is explicitly waiting for a Special card.
@@ -144,7 +145,7 @@ export default function Play() {
 
   async function doStartChallenge() {
     if (!session?.sessionId || !me?.playerId) return;
-    if (!state?.started || state?.currentPlayerId !== me.playerId || state?.turnStatus !== "IDLE") {
+    if (!state?.started || state?.currentPlayerId !== me.playerId || state?.turnStatus !== TURN_STATUS.IDLE) {
       toastInfo(toast, "Not now", "You can only start a challenge on your turn after moving.");
       return;
     }
@@ -158,13 +159,13 @@ export default function Play() {
 
   async function doRollD6() {
     if (!session?.sessionId || !me?.playerId) return;
-    if (!state?.started || state?.currentPlayerId !== me.playerId || state?.turnStatus !== "AWAITING_D6_ROLL") {
+    if (!state?.started || state?.currentPlayerId !== me.playerId || state?.turnStatus !== TURN_STATUS.AWAITING_D6_ROLL) {
       toastInfo(toast, "Not now", "You can only roll when it's your turn and the game is waiting for the D6.");
       return;
     }
     try {
       const r = await rollTurnD6(session.sessionId, me.playerId);
-      if (r?.turnStatus === "AWAITING_PATH_CHOICE") {
+      if (r?.turnStatus === TURN_STATUS.AWAITING_PATH_CHOICE) {
         setPendingChoices({
           forkNodeId: r.forkNodeId,
           remainingSteps: r.remainingSteps,
@@ -185,13 +186,13 @@ export default function Play() {
 
   async function doChoosePath(toNodeId) {
     if (!session?.sessionId || !me?.playerId) return;
-    if (!state?.started || state?.currentPlayerId !== me.playerId || state?.turnStatus !== "AWAITING_PATH_CHOICE") {
+    if (!state?.started || state?.currentPlayerId !== me.playerId || state?.turnStatus !== TURN_STATUS.AWAITING_PATH_CHOICE) {
       toastInfo(toast, "Not now", "You can only choose a path when it's your turn and a fork is active.");
       return;
     }
     try {
       const r = await chooseTurnPath(session.sessionId, me.playerId, toNodeId);
-      if (r?.turnStatus === "AWAITING_PATH_CHOICE") {
+      if (r?.turnStatus === TURN_STATUS.AWAITING_PATH_CHOICE) {
         setPendingChoices({
           forkNodeId: r.forkNodeId,
           remainingSteps: r.remainingSteps,
@@ -208,14 +209,14 @@ export default function Play() {
   }
 
   const SPECIAL_CARDS = [
-    { id: "PERMISSION_DENIED", label: "Permission denied", img: "/specialcards/permission_denied.png", needsTarget: true },
-    { id: "RAGE_BAIT", label: "Rage Bait", img: "/specialcards/rage_bait.png", needsTarget: true },
-    { id: "REFACTOR", label: "Refactor", img: "/specialcards/refactor.png", needsTarget: false },
-    { id: "SECOND_CHANCE", label: "Second Chance", img: "/specialcards/second_chance.png", needsTarget: false },
-    { id: "SHORTCUT_FOUND", label: "Shortcut found", img: "/specialcards/shortcut_found.png", needsTarget: false },
-    { id: "ROLLBACK", label: "Rollback", img: "/specialcards/rollback.png", needsTarget: true },
-    { id: "BOOST", label: "Boost", img: "/specialcards/boost.png", needsTarget: false },
-    { id: "JAIL", label: "JAIL", img: "/specialcards/jail.png", needsTarget: false },
+    { id: SPECIAL_CARD.PERMISSION_DENIED, label: "Permission denied", img: "/specialcards/permission_denied.png", needsTarget: true },
+    { id: SPECIAL_CARD.RAGE_BAIT, label: "Rage Bait", img: "/specialcards/rage_bait.png", needsTarget: true },
+    { id: SPECIAL_CARD.REFACTOR, label: "Refactor", img: "/specialcards/refactor.png", needsTarget: false },
+    { id: SPECIAL_CARD.SECOND_CHANCE, label: "Second Chance", img: "/specialcards/second_chance.png", needsTarget: false },
+    { id: SPECIAL_CARD.SHORTCUT_FOUND, label: "Shortcut found", img: "/specialcards/shortcut_found.png", needsTarget: false },
+    { id: SPECIAL_CARD.ROLLBACK, label: "Rollback", img: "/specialcards/rollback.png", needsTarget: true },
+    { id: SPECIAL_CARD.BOOST, label: "Boost", img: "/specialcards/boost.png", needsTarget: false },
+    { id: SPECIAL_CARD.JAIL, label: "JAIL", img: "/specialcards/jail.png", needsTarget: false },
   ];
 
   async function doApplySpecial() {
@@ -230,7 +231,7 @@ export default function Play() {
         return;
       }
       // BOOST: if backend detected a fork, it will respond with needChoice + options.
-      if (specialCard === "BOOST" && boostOptions.length > 0 && !boostTo) {
+      if (specialCard === SPECIAL_CARD.BOOST && boostOptions.length > 0 && !boostTo) {
         toastInfo(toast, "Action required", "Please choose a path for Boost.");
         setSpecialSubmitting(false);
         return;
@@ -241,7 +242,7 @@ export default function Play() {
         me.playerId,
         specialCard,
         specialTarget || undefined,
-        specialCard === "BOOST" ? (boostTo || undefined) : undefined
+        specialCard === SPECIAL_CARD.BOOST ? (boostTo || undefined) : undefined
       );
 
       if (r?.needChoice) {
@@ -307,22 +308,22 @@ export default function Play() {
   const currentPlayer = players.find((p) => p.id === state?.currentPlayerId);
   const meState = players.find((p) => p.id === me?.playerId);
   const isMyTurn = !!(state?.started && state?.currentPlayerId && state.currentPlayerId === me.playerId);
-  const waitingForDice = state?.turnStatus === "AWAITING_D6_ROLL";
-  const waitingForPath = state?.turnStatus === "AWAITING_PATH_CHOICE";
-  const awaitingSpecial = state?.turnStatus === "AWAITING_SPECIAL_CARD";
-  const canStartChallenge = isMyTurn && state?.turnStatus === "IDLE";
+  const waitingForDice = state?.turnStatus === TURN_STATUS.AWAITING_D6_ROLL;
+  const waitingForPath = state?.turnStatus === TURN_STATUS.AWAITING_PATH_CHOICE;
+  const awaitingSpecial = state?.turnStatus === TURN_STATUS.AWAITING_SPECIAL_CARD;
+  const canStartChallenge = isMyTurn && state?.turnStatus === TURN_STATUS.IDLE;
   const myFieldType = meState?.positionType || null;
   // Fork nodes stay FORK fields, but if you END your move on a fork (turnStatus === IDLE)
   // they should behave like a MEDIUM challenge field.
-  const hasChallengeOnField = myFieldType === "EASY" || myFieldType === "MEDIUM" || myFieldType === "HARD" || myFieldType === "FORK";
+  const hasChallengeOnField = myFieldType === FIELD_TYPE.EASY || myFieldType === FIELD_TYPE.MEDIUM || myFieldType === FIELD_TYPE.HARD || myFieldType === FIELD_TYPE.FORK;
   const statusLabel = useMemo(() => {
     const ts = String(state?.turnStatus || "");
     if (!state?.started) return "WAITING";
-    if (ts === "AWAITING_D6_ROLL") return "ROLL";
-    if (ts === "AWAITING_PATH_CHOICE") return "CHOOSE PATH";
-    if (ts === "AWAITING_SPECIAL_CARD") return "SPECIAL";
-    if (ts === "IN_CHALLENGE") return "IN CHALLENGE";
-    if (ts === "IDLE") return "ACTION";
+    if (ts === TURN_STATUS.AWAITING_D6_ROLL) return "ROLL";
+    if (ts === TURN_STATUS.AWAITING_PATH_CHOICE) return "CHOOSE PATH";
+    if (ts === TURN_STATUS.AWAITING_SPECIAL_CARD) return "SPECIAL";
+    if (ts === TURN_STATUS.IN_CHALLENGE) return "IN CHALLENGE";
+    if (ts === TURN_STATUS.IDLE) return "ACTION";
     return ts || "";
   }, [state?.turnStatus, state?.started]);
 

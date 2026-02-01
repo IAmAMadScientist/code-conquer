@@ -6,6 +6,7 @@ import ResultSubmitPanel from "../components/ResultSubmitPanel";
 import TutorialModal from "../components/TutorialModal";
 import { getPlayer } from "../lib/player";
 import { getTutorial, tutorialKey } from "../lib/tutorials";
+import { DIFFICULTY } from "../lib/constants";
 
 // QueueCommanderPage (file name + route kept)
 // New minigame: "Queue Puzzle" (turn-based FIFO thinking)
@@ -30,10 +31,10 @@ function vibrate(pattern) {
 }
 
 function cfgFor(difficulty) {
-  if (difficulty === "HARD") {
+  if (difficulty === DIFFICULTY.HARD) {
     return { targetLen: 10, maxDigit: 15, queueCap: 6, removeCharges: 2, timeLimitSec: 45 };
   }
-  if (difficulty === "MEDIUM") {
+  if (difficulty === DIFFICULTY.MEDIUM) {
     return { targetLen: 8, maxDigit: 12, queueCap: 5, removeCharges: 2, timeLimitSec: 60 };
   }
   return { targetLen: 6, maxDigit: 9, queueCap: 4, removeCharges: 1, timeLimitSec: 75 };
@@ -85,7 +86,7 @@ function incomingValue({ seed, maxDigit, target, idx, outIdx, queueLen, queueCap
 export default function QueueCommanderPage() {
   const loc = useLocation();
   const challenge = loc.state?.challenge;
-  const difficulty = challenge?.difficulty || "EASY";
+  const difficulty = challenge?.difficulty || DIFFICULTY.EASY;
 
   // First-time tutorial gate (per minigame + per player on this device)
   const player = useMemo(() => getPlayer(), []);

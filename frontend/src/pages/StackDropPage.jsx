@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import ResultSubmitPanel from "../components/ResultSubmitPanel";
+import { DIFFICULTY } from "../lib/constants";
 import {
   getHapticsEnabled,
   getSoundEnabled,
@@ -37,8 +38,8 @@ function sfx(fn) {
 }
 
 function configFor(difficulty) {
-  const d = (difficulty || "EASY").toUpperCase();
-  if (d === "HARD") {
+  const d = (difficulty || DIFFICULTY.EASY).toUpperCase();
+  if (d === DIFFICULTY.HARD) {
     return {
       lanes: 5,
       maxStack: 5,
@@ -53,7 +54,7 @@ function configFor(difficulty) {
       executeStepMs: 150,
     };
   }
-  if (d === "MEDIUM") {
+  if (d === DIFFICULTY.MEDIUM) {
     return {
       lanes: 5,
       maxStack: 4,
@@ -93,7 +94,7 @@ function cmdLabel(type) {
 export default function StackDropPage() {
   const loc = useLocation();
   const challenge = loc.state?.challenge;
-  const difficulty = (challenge?.difficulty || "EASY").toUpperCase();
+  const difficulty = (challenge?.difficulty || DIFFICULTY.EASY).toUpperCase();
   const cfg = useMemo(() => configFor(difficulty), [difficulty]);
 
   // Fullscreen mobile game: prevent page scroll / overscroll while playing.
@@ -211,9 +212,9 @@ export default function StackDropPage() {
   }, [difficulty, challenge?.challengeInstanceId]);
 
   function spawnCmd() {
-    const pool = difficulty === "EASY" ? ["LEFT", "RIGHT"] : difficulty === "MEDIUM" ? ["LEFT", "RIGHT", "WAIT"] : ["LEFT", "RIGHT", "WAIT"];
+    const pool = difficulty === DIFFICULTY.EASY ? ["LEFT", "RIGHT"] : difficulty === DIFFICULTY.MEDIUM ? ["LEFT", "RIGHT", "WAIT"] : ["LEFT", "RIGHT", "WAIT"];
     const type = pool[randInt(0, pool.length - 1)];
-    const isFake = difficulty === "HARD" && Math.random() < cfg.fakeChance;
+    const isFake = difficulty === DIFFICULTY.HARD && Math.random() < cfg.fakeChance;
     const id = idRef.current++;
     setCmds((a) => [...a, { id, type, y: -40, isFake }]);
   }
@@ -370,7 +371,7 @@ export default function StackDropPage() {
       setTimeMs(elapsed);
       if (elapsed >= cfg.durationMs) {
         // EASY wins purely by survival; Medium/Hard usually by coins but also allow survival.
-        if (difficulty === "EASY" || coins >= cfg.targetCoins) endWon();
+        if (difficulty === DIFFICULTY.EASY || coins >= cfg.targetCoins) endWon();
         else endWon();
         return;
       }

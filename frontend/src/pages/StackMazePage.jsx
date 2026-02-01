@@ -1,3 +1,4 @@
+import { DIFFICULTY } from "../lib/constants";
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../components/ui/button";
 import { cn } from "../lib/utils";
@@ -151,8 +152,8 @@ function makeMaze(size, wallDensity) {
 }
 
 function getConfig(difficulty) {
-  const d = (difficulty || "EASY").toUpperCase();
-  if (d === "HARD") {
+  const d = (difficulty || DIFFICULTY.EASY).toUpperCase();
+  if (d === DIFFICULTY.HARD) {
     // HARD should be noticeably harder.
     return {
       size: 9,
@@ -168,7 +169,7 @@ function getConfig(difficulty) {
       timeLimitMs: 45_000,
     };
   }
-  if (d === "MEDIUM") {
+  if (d === DIFFICULTY.MEDIUM) {
     return {
       size: 7,
       wallDensity: 0.22,
@@ -199,7 +200,7 @@ function getConfig(difficulty) {
 export default function StackMazePage() {
   const loc = useLocation();
   const challenge = loc.state?.challenge;
-  const difficulty = challenge?.difficulty || "EASY";
+  const difficulty = challenge?.difficulty || DIFFICULTY.EASY;
 
   // First-time tutorial gate (per minigame + per player on this device)
   const player = useMemo(() => getPlayer(), []);
@@ -233,7 +234,7 @@ export default function StackMazePage() {
   const [lostReason, setLostReason] = useState(""); // "" | "energy" | "out_of_moves" | "time"
   const [energy, setEnergy] = useState(config.maxEnergy);
   const [crashes, setCrashes] = useState(0);
-  const [stars, setStars] = useState(() => placeStars(grid, difficulty === "HARD" ? 4 : difficulty === "MEDIUM" ? 3 : 2));
+  const [stars, setStars] = useState(() => placeStars(grid, difficulty === DIFFICULTY.HARD ? 4 : difficulty === DIFFICULTY.MEDIUM ? 3 : 2));
   const [collected, setCollected] = useState(() => new Set());
   // Mobile-first UI: keep the screen clean (no preview/info panels).
   // Fog-of-war is implemented as a single soft vision mask overlay, so we don't
@@ -375,7 +376,7 @@ export default function StackMazePage() {
     setEnergy(config.maxEnergy);
     setCrashes(0);
     setCollected(new Set());
-    setStars(placeStars(g, difficulty === "HARD" ? 4 : difficulty === "MEDIUM" ? 3 : 2));
+    setStars(placeStars(g, difficulty === DIFFICULTY.HARD ? 4 : difficulty === DIFFICULTY.MEDIUM ? 3 : 2));
   }
 
   function pushMove(d) {

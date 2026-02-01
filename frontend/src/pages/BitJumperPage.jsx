@@ -4,6 +4,7 @@ import ResultSubmitPanel from "../components/ResultSubmitPanel";
 import TutorialModal from "../components/TutorialModal";
 import { getPlayer } from "../lib/player";
 import { getTutorial, tutorialKey } from "../lib/tutorials";
+import { DIFFICULTY } from "../lib/constants";
 
 // Bit Jumper — arcade platformer.
 // Platforms are only for movement; bits are collectibles.
@@ -13,9 +14,9 @@ const DIFF_CFG = {
   // fewer platforms on screen, bigger vertical gaps, but still consistently reachable.
   // Bit collectibles are intentionally rare and always avoidable.
   // Coins are optional and give +1 score each.
-  EASY: { bitsLen: 3, gap: 148, moveW: 0.14, breakW: 0.12, bouncyW: 0.12, bitEvery: 8, coinP: 0.16, collectibleMatchP: 0.72 },
-  MEDIUM: { bitsLen: 4, gap: 158, moveW: 0.18, breakW: 0.14, bouncyW: 0.14, bitEvery: 7, coinP: 0.15, collectibleMatchP: 0.68 },
-  HARD: { bitsLen: 6, gap: 168, moveW: 0.22, breakW: 0.16, bouncyW: 0.16, bitEvery: 6, coinP: 0.14, collectibleMatchP: 0.64 },
+  [DIFFICULTY.EASY]: { bitsLen: 3, gap: 148, moveW: 0.14, breakW: 0.12, bouncyW: 0.12, bitEvery: 8, coinP: 0.16, collectibleMatchP: 0.72 },
+  [DIFFICULTY.MEDIUM]: { bitsLen: 4, gap: 158, moveW: 0.18, breakW: 0.14, bouncyW: 0.14, bitEvery: 7, coinP: 0.15, collectibleMatchP: 0.68 },
+  [DIFFICULTY.HARD]: { bitsLen: 6, gap: 168, moveW: 0.22, breakW: 0.16, bouncyW: 0.16, bitEvery: 6, coinP: 0.14, collectibleMatchP: 0.64 },
 };
 
 function clamp(n, a, b) {
@@ -93,7 +94,7 @@ function bitwiseOp(aBits, bBits, op) {
 }
 
 function makePuzzle(diff) {
-  const cfg = DIFF_CFG[diff] || DIFF_CFG.EASY;
+  const cfg = DIFF_CFG[diff] || DIFF_CFG[DIFFICULTY.EASY];
   const L = cfg.bitsLen;
   const a = Array.from({ length: L }, () => (Math.random() < 0.5 ? 0 : 1));
   const b = Array.from({ length: L }, () => (Math.random() < 0.5 ? 0 : 1));
@@ -105,8 +106,8 @@ function makePuzzle(diff) {
 export default function BitJumperPage() {
   const loc = useLocation();
   const challenge = loc.state?.challenge || null;
-  const difficulty = (challenge?.difficulty || "EASY").toUpperCase();
-  const diff = DIFF_CFG[difficulty] ? difficulty : "EASY";
+  const difficulty = (challenge?.difficulty || DIFFICULTY.EASY).toUpperCase();
+  const diff = DIFF_CFG[difficulty] ? difficulty : DIFFICULTY.EASY;
 
   // First-time tutorial gate (per minigame + per player on this device)
   const player = useMemo(() => getPlayer(), []);
@@ -184,7 +185,7 @@ export default function BitJumperPage() {
     const W = canvas.width;
     const H = canvas.height;
 
-    const cfg = DIFF_CFG[diff] || DIFF_CFG.EASY;
+    const cfg = DIFF_CFG[diff] || DIFF_CFG[DIFFICULTY.EASY];
     const now = performance.now();
 
     // Physics + feel (tunable)
@@ -1095,7 +1096,7 @@ export default function BitJumperPage() {
           </div>
 
           <Pill>
-            {diff === "HARD" ? "H" : diff === "MEDIUM" ? "M" : "E"}
+            {diff === DIFFICULTY.HARD ? "H" : diff === DIFFICULTY.MEDIUM ? "M" : "E"}
           </Pill>
         </div>
 

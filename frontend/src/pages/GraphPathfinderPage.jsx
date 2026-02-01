@@ -6,6 +6,7 @@ import ResultSubmitPanel from "../components/ResultSubmitPanel";
 import TutorialModal from "../components/TutorialModal";
 import { getPlayer } from "../lib/player";
 import { getTutorial, tutorialKey } from "../lib/tutorials";
+import { DIFFICULTY } from "../lib/constants";
 
 function clamp(n, a, b) {
   return Math.max(a, Math.min(b, n));
@@ -97,17 +98,17 @@ function pickStartGoalFar(nodes, minSep) {
 }
 
 // Build a small connected weighted graph with readable node spacing
-function makeGraph(difficulty = "EASY") {
+function makeGraph(difficulty = DIFFICULTY.EASY) {
   // Larger logical canvas; SVG scales responsively to the container.
   const W = 900;
   const H = 560;
 
   const cfgByDiff = {
-    EASY:   { nodeCount: 8,  kNearest: 2, extraEdges: 1, weightMax: 9,  minStartGoal: 520 },
-    MEDIUM: { nodeCount: 10, kNearest: 2, extraEdges: 3, weightMax: 11, minStartGoal: 560 },
-    HARD:   { nodeCount: 12, kNearest: 3, extraEdges: 6, weightMax: 14, minStartGoal: 600 },
+    [DIFFICULTY.EASY]:   { nodeCount: 8,  kNearest: 2, extraEdges: 1, weightMax: 9,  minStartGoal: 520 },
+    [DIFFICULTY.MEDIUM]: { nodeCount: 10, kNearest: 2, extraEdges: 3, weightMax: 11, minStartGoal: 560 },
+    [DIFFICULTY.HARD]:   { nodeCount: 12, kNearest: 3, extraEdges: 6, weightMax: 14, minStartGoal: 600 },
   };
-  const cfg = cfgByDiff[difficulty] || cfgByDiff.EASY;
+  const cfg = cfgByDiff[difficulty] || cfgByDiff[DIFFICULTY.EASY];
 
   // Keep nodes well spaced, especially for mobile readability.
   const MIN_DIST = 78;
@@ -359,7 +360,7 @@ function reconstructPath(prev, start, goal) {
 export default function GraphPathfinderPage() {
   const loc = useLocation();
   const challenge = loc.state?.challenge;
-  const difficulty = challenge?.difficulty || "EASY";
+  const difficulty = challenge?.difficulty || DIFFICULTY.EASY;
 
   // First-time tutorial gate (per minigame + per player on this device)
   const player = useMemo(() => getPlayer(), []);
@@ -404,11 +405,11 @@ export default function GraphPathfinderPage() {
 
   // Quick-session arcade layer: beat a budget + timer.
   const diffCfg = useMemo(() => {
-    const d = (difficulty || "EASY").toUpperCase();
+    const d = (difficulty || DIFFICULTY.EASY).toUpperCase();
     // Only the true shortest path (Dijkstra optimal) counts as a win.
     // Difficulty only adjusts the time pressure.
-    if (d === "HARD") return { timeLimitSec: 35 };
-    if (d === "MEDIUM") return { timeLimitSec: 40 };
+    if (d === DIFFICULTY.HARD) return { timeLimitSec: 35 };
+    if (d === DIFFICULTY.MEDIUM) return { timeLimitSec: 40 };
     return { timeLimitSec: 45 };
   }, [difficulty]);
 

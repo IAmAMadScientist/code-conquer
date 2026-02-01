@@ -4,6 +4,7 @@ import ResultSubmitPanel from "../components/ResultSubmitPanel";
 import TutorialModal from "../components/TutorialModal";
 import { getPlayer } from "../lib/player";
 import { getTutorial, tutorialKey } from "../lib/tutorials";
+import { DIFFICULTY } from "../lib/constants";
 import {
   getHapticsEnabled,
   getSoundEnabled,
@@ -137,14 +138,14 @@ function buildLayout(root) {
 function makePuzzle(difficulty) {
   // Difficulty impacts tree size + shape (balanced vs random vs skewed).
   const cfg = {
-    EASY: { n: 7, maxH: 4, shape: "balanced" },
-    MEDIUM: { n: 11, maxH: 6, shape: "random" },
-    HARD: { n: 15, maxH: 9, shape: "skew" },
+    [DIFFICULTY.EASY]: { n: 7, maxH: 4, shape: "balanced" },
+    [DIFFICULTY.MEDIUM]: { n: 11, maxH: 6, shape: "random" },
+    [DIFFICULTY.HARD]: { n: 15, maxH: 9, shape: "skew" },
   }[difficulty] || { n: 11, maxH: 6, shape: "random" };
 
   const poolMax = 60;
-  const eqGoesLeft = (difficulty || "EASY").toUpperCase() === "HARD";
-  const duplicateChance = (difficulty || "EASY").toUpperCase() === "MEDIUM" ? 0.25 : ((difficulty || "EASY").toUpperCase() === "HARD" ? 0.45 : 0);
+  const eqGoesLeft = (difficulty || DIFFICULTY.EASY).toUpperCase() === DIFFICULTY.HARD;
+  const duplicateChance = (difficulty || DIFFICULTY.EASY).toUpperCase() === DIFFICULTY.MEDIUM ? 0.25 : ((difficulty || DIFFICULTY.EASY).toUpperCase() === DIFFICULTY.HARD ? 0.45 : 0);
   let attempt = 0;
   while (attempt++ < 80) {
     const values = shuffle(Array.from({ length: poolMax }, (_, i) => i + 1));
@@ -183,7 +184,7 @@ function makePuzzle(difficulty) {
   const newValue = values[11];
   let root = null;
   for (const v of base) root = bstInsert(root, v);
-  const eqGoesLeftFallback = (difficulty || "EASY").toUpperCase() === "HARD";
+  const eqGoesLeftFallback = (difficulty || DIFFICULTY.EASY).toUpperCase() === DIFFICULTY.HARD;
   const answer = findInsertionSlot(root, newValue, eqGoesLeftFallback);
   return { root, base, newValue, answer, cfg: { n: 11, maxH: 6, shape: "random" }, eqGoesLeft: eqGoesLeftFallback };
 }
@@ -194,7 +195,7 @@ function makePuzzle(difficulty) {
 export default function BSTInsertPage() {
   const loc = useLocation();
   const challenge = loc.state?.challenge;
-  const difficulty = (challenge?.difficulty || "EASY").toUpperCase();
+  const difficulty = (challenge?.difficulty || DIFFICULTY.EASY).toUpperCase();
 
   // First-time tutorial gate (per minigame + per player on this device)
   const player = useMemo(() => getPlayer(), []);
@@ -235,8 +236,8 @@ export default function BSTInsertPage() {
   const [toast, setToast] = useState(null); // { text, kind }
 
   const maxStrikes = useMemo(() => {
-    if (difficulty === "EASY") return Number.POSITIVE_INFINITY;
-    if (difficulty === "HARD") return 2;
+    if (difficulty === DIFFICULTY.EASY) return Number.POSITIVE_INFINITY;
+    if (difficulty === DIFFICULTY.HARD) return 2;
     return 3; // MEDIUM
   }, [difficulty]);
 
@@ -247,8 +248,8 @@ export default function BSTInsertPage() {
   const [errors, setErrors] = useState(0);
 
   const timeLimitMs = useMemo(() => {
-    if (difficulty === "HARD") return 30_000;
-    if (difficulty === "MEDIUM") return 40_000;
+    if (difficulty === DIFFICULTY.HARD) return 30_000;
+    if (difficulty === DIFFICULTY.MEDIUM) return 40_000;
     return 55_000; // EASY
   }, [difficulty]);
 
