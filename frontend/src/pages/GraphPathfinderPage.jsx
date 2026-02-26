@@ -1,12 +1,13 @@
-// src/pages/GraphPathfinderPage.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../components/ui/button";
+import { Badge } from "../components/ui/badge";
+import { cn } from "../lib/utils";
 import { useLocation } from "react-router-dom";
 import ResultSubmitPanel from "../components/ResultSubmitPanel";
 import TutorialModal from "../components/TutorialModal";
 import { getPlayer } from "../lib/player";
 import { getTutorial, tutorialKey } from "../lib/tutorials";
-import { DIFFICULTY } from "../lib/constants";
+import { DIFFICULTY, UI_STRINGS } from "../lib/constants";
 
 function clamp(n, a, b) {
   return Math.max(a, Math.min(b, n));
@@ -605,302 +606,149 @@ export default function GraphPathfinderPage() {
   const timePct = clamp(Math.round((timeLeftMs / (diffCfg.timeLimitSec * 1000)) * 100), 0, 100);
 
   return (
-    <div className="gpfFS" aria-label="Graph Pathfinder">
-      <style>{`
-        /* True fullscreen: feels like a mobile game */
-        .gpfFS{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;min-height:0;
-          padding:calc(env(safe-area-inset-top) + 8px) 10px calc(env(safe-area-inset-bottom) + 10px);
-          background:radial-gradient(1200px 600px at 50% -200px, rgba(99,102,241,0.20), transparent 60%),
-                     linear-gradient(180deg, rgba(2,6,23,0.96), rgba(2,6,23,0.92));
-          overscroll-behavior:none;
-          touch-action:manipulation;
-        }
-        .gpfHud{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 2px;}
-        .gpfPills{display:flex;gap:8px;align-items:center;}
-        .gpfPill{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border-radius:999px;
-          border:1px solid rgba(148,163,184,0.18);background:rgba(2,6,23,0.40);backdrop-filter:blur(10px);
-          font-weight:850;font-size:13px;line-height:1;box-shadow:0 10px 28px rgba(0,0,0,0.35);
-        }
-        .gpfDim{opacity:0.85}
-
-        .gpfTime{height:6px;border-radius:999px;overflow:hidden;margin:2px 2px 8px;
-          background:rgba(148,163,184,0.14);border:1px solid rgba(148,163,184,0.12);
-        }
-        .gpfTime > div{height:100%;border-radius:999px;background:rgba(129,140,248,0.65);}
-
-        .gpfBoardWrap{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:4px 0 10px;}
-        .gpfBoard{width:100%;height:100%;max-width:980px;max-height:78vh;
-          border-radius:22px;border:1px solid rgba(148,163,184,0.14);
-          background:rgba(2,6,23,0.26);backdrop-filter:blur(8px);
-          box-shadow:0 16px 40px rgba(0,0,0,0.35);
-          padding:8px;
-        }
-        .gpfSvg{width:100%;height:100%;display:block;}
-
-        .gpfBottom{padding-top:10px;}
-        .gpfPanel{padding:10px 10px 12px;border-radius:22px;border:1px solid rgba(148,163,184,0.18);
-          background:rgba(2,6,23,0.60);backdrop-filter:blur(10px);
-        }
-        .gpfPath{display:flex;gap:8px;overflow:auto;padding:2px 2px 6px;margin-bottom:8px;}
-        .gpfChip{flex:0 0 auto;min-width:34px;height:32px;border-radius:999px;
-          border:1px solid rgba(148,163,184,0.18);background:rgba(15,23,42,0.28);
-          display:flex;align-items:center;justify-content:center;font-weight:900;font-size:13px;
-          box-shadow:inset 0 0 0 1px rgba(255,255,255,0.02);
-        }
-        .gpfMsg{margin:8px 2px 10px;padding:10px 12px;border-radius:18px;
-          border:1px solid rgba(148,163,184,0.18);background:rgba(2,6,23,0.40);
-          font-weight:800;
-        }
-        .gpfMsgWin{border-color:rgba(52,211,153,0.35)}
-        .gpfMsgLose{border-color:rgba(251,113,133,0.35)}
-
-        .gpfControls{display:flex;gap:10px;align-items:center;justify-content:space-between;}
-        .gpfBtn{height:54px;border-radius:18px;font-weight:900;font-size:18px;flex:1;}
-        .gpfBtnConfirm{width:100%;font-size:22px;}
-
-        @media (max-width:440px){
-          .gpfBoard{max-height:72vh;}
-        }
-      `}</style>
-
-      <div className="gpfHud" aria-label="HUD">
-        <div className="gpfPills">
-          <div className="gpfPill" aria-label="Time left">⏱️ {timeLeftS}</div>
-          <div className="gpfPill gpfDim" aria-label="Budget">🎯 {budget ?? "—"}</div>
+    <div className="h-full flex flex-col bg-bg0 text-text overflow-hidden p-s3 sm:p-s4" aria-label="Graph Pathfinder">
+      {/* HUD */}
+      <div className="flex justify-between items-center mb-s3 animate-in fade-in slide-in-from-top-2 duration-300">
+        <div className="flex gap-2">
+          <Badge variant="secondary" className="px-3 py-1 font-bold text-xs">⏱️ {timeLeftS}s</Badge>
+          <Badge variant="outline" className="px-3 py-1 font-bold text-xs bg-indigo-500/10 border-indigo-500/30 text-indigo-300">
+            🎯 {budget ?? "—"}
+          </Badge>
         </div>
-        <div className="gpfPills">
-          <div className="gpfPill" aria-label="Cost">⚡ {Number.isFinite(currentWeight) ? currentWeight : 0}</div>
-          <div className="gpfPill gpfDim" aria-label="Errors">💥 {errors}</div>
+        <div className="flex gap-2">
+          <Badge 
+            variant="secondary" 
+            className={cn(
+              "px-3 py-1 font-bold text-xs transition-colors",
+              budget != null && currentWeight > budget ? "bg-rose-500/20 text-rose-300 border-rose-500/40" : ""
+            )}
+          >
+            ⚡ {Number.isFinite(currentWeight) ? currentWeight : 0}
+          </Badge>
+          <Badge variant="outline" className="px-3 py-1 font-bold text-xs text-muted/60 border-border/40">
+            💥 {errors}
+          </Badge>
         </div>
       </div>
 
-      <div className="gpfTime" aria-hidden="true">
-        <div style={{ width: `${timePct}%` }} />
+      {/* Time Bar */}
+      <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden mb-s4">
+        <div 
+          className="h-full bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)] transition-all duration-300 ease-linear" 
+          style={{ width: `${timePct}%` }} 
+        />
       </div>
 
-      <div className="gpfBoardWrap">
-        <div className="gpfBoard" aria-label="Playfield">
-          <svg className="gpfSvg" viewBox={`0 0 ${layoutW} ${layoutH}`} preserveAspectRatio="xMidYMid meet">
-            <defs>
-              <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
-                <feGaussianBlur stdDeviation="2.2" result="blur" />
-                <feColorMatrix
-                  in="blur"
-                  type="matrix"
-                  values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.9 0"
-                  result="glow"
+      {/* Playfield: Responsive SVG Container */}
+      <div className="flex-1 flex items-center justify-center min-h-0 bg-bg1/20 rounded-2xl border border-border shadow-inner relative overflow-hidden animate-in zoom-in-95 duration-500">
+        <svg 
+          className="w-full h-full max-w-full max-h-full" 
+          viewBox={`0 0 ${layoutW} ${layoutH}`} 
+          preserveAspectRatio="xMidYMid meet"
+        >
+          <defs>
+            <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="2.2" result="blur" />
+              <feColorMatrix in="blur" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.9 0" result="glow" />
+              <feMerge><feMergeNode in="glow" /><feMergeNode in="SourceGraphic" /></feMerge>
+            </filter>
+            <linearGradient id="edgeGrad" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="rgba(99,102,241,0.4)" />
+              <stop offset="50%" stopColor="rgba(129,140,248,0.8)" />
+              <stop offset="100%" stopColor="rgba(99,102,241,0.4)" />
+            </linearGradient>
+          </defs>
+
+          {/* Edges */}
+          {edges.map((e) => {
+            const a = nodes[e.u], b = nodes[e.v], k = edgeKey(e.u, e.v);
+            const onUser = pathEdges.has(k), onOptimal = status === "won" && optimalEdges.has(k);
+            return (
+              <g key={k}>
+                <line
+                  x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+                  stroke={onOptimal ? "#10b981" : onUser ? "url(#edgeGrad)" : "rgba(255,255,255,0.08)"}
+                  filter={onOptimal || onUser ? "url(#softGlow)" : undefined}
+                  strokeWidth={onOptimal ? 6 : onUser ? 5 : 2.5}
+                  strokeLinecap="round"
+                  className="transition-all duration-500"
                 />
-                <feMerge>
-                  <feMergeNode in="glow" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
-              <linearGradient id="edgeGrad" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stopColor="rgba(255,255,255,0.22)" />
-                <stop offset="50%" stopColor="rgba(255,255,255,0.42)" />
-                <stop offset="100%" stopColor="rgba(255,255,255,0.22)" />
-              </linearGradient>
-            </defs>
-
-            {/* edges */}
-            {edges.map((e) => {
-              const a = nodes[e.u];
-              const b = nodes[e.v];
-              const k = edgeKey(e.u, e.v);
-              const onUser = pathEdges.has(k);
-              const onOptimal = status === "won" && optimalEdges.has(k);
-
-              return (
-                <g key={k}>
-                  <line
-                    x1={a.x}
-                    y1={a.y}
-                    x2={b.x}
-                    y2={b.y}
-                    stroke={
-                      onOptimal
-                        ? "rgba(16,185,129,0.95)"
-                        : onUser
-                          ? "url(#edgeGrad)"
-                          : "rgba(148,163,184,0.35)"
-                    }
-                    filter={onOptimal || onUser ? "url(#softGlow)" : undefined}
-                    strokeWidth={onOptimal ? 5 : onUser ? 4 : 2.5}
-                    strokeLinecap="round"
-                  />
-                  {(() => {
-                    const mx = (a.x + b.x) / 2;
-                    const my = (a.y + b.y) / 2;
-                    const label = String(e.w);
-                    const w = 10 + label.length * 8;
-                    const h = 18;
-                    return (
-                      <g>
-                        <rect
-                          x={mx - w / 2}
-                          y={my - h / 2 - 1}
-                          width={w}
-                          height={h}
-                          rx={8}
-                          fill="rgba(2,6,23,0.55)"
-                          stroke="rgba(148,163,184,0.35)"
-                        />
-                        <text
-                          x={mx}
-                          y={my + 4}
-                          textAnchor="middle"
-                          fill="rgba(226,232,240,0.92)"
-                          fontSize="12"
-                          fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
-                        >
-                          {label}
-                        </text>
-                      </g>
-                    );
-                  })()}
+                <g transform={`translate(${(a.x + b.x) / 2}, ${(a.y + b.y) / 2})`}>
+                  <rect x="-14" y="-10" width="28" height="20" rx="6" fill="#0f172a" stroke="rgba(255,255,255,0.1)" />
+                  <text y="4" textAnchor="middle" fill={onUser ? "#fff" : "#94a3b8"} fontSize="12" fontWeight="bold" className="pointer-events-none">{e.w}</text>
                 </g>
-              );
-            })}
+              </g>
+            );
+          })}
 
-            {/* nodes */}
-            {nodes.map((n) => {
-              const isStart = n.id === start;
-              const isGoal = n.id === goal;
-              const inPath = path.includes(n.id);
-              const isCursor = n.id === cursor;
-              const isNext = status === "playing" && neighborSet.has(n.id) && !inPath;
-
-              const fill = isStart
-                ? "rgba(99,102,241,0.35)"
-                : isGoal
-                  ? "rgba(16,185,129,0.28)"
-                  : inPath
-                    ? "rgba(245,158,11,0.18)"
-                    : "rgba(15,23,42,0.35)";
-
-              const stroke = isStart
-                ? "rgba(129,140,248,0.55)"
-                : isGoal
-                  ? "rgba(52,211,153,0.55)"
-                  : inPath
-                    ? "rgba(252,211,77,0.45)"
-                    : "rgba(51,65,85,0.5)";
-
-              return (
-                <g
-                  key={n.id}
-                  onClick={() => onNodeClick(n.id)}
-                  style={{ cursor: status === "playing" ? "pointer" : "default" }}
-                >
-                  {/* bigger hit area */}
-                  <circle cx={n.x} cy={n.y} r="36" fill="transparent" />
-                  {isNext && (
-                    <circle
-                      cx={n.x}
-                      cy={n.y}
-                      r="28"
-                      fill="transparent"
-                      stroke="rgba(252,211,77,0.65)"
-                      strokeWidth="3"
-                      strokeDasharray="6 6"
-                    />
-                  )}
-                  {isCursor && (
-                    <circle
-                      cx={n.x}
-                      cy={n.y}
-                      r="28"
-                      fill="transparent"
-                      stroke="rgba(255,255,255,0.55)"
-                      strokeWidth="3"
-                    />
-                  )}
-                  <circle cx={n.x} cy={n.y} r="20" fill={fill} stroke={stroke} strokeWidth="2" />
-
-                  {isStart && (
-                    <text x={n.x} y={n.y - 26} textAnchor="middle" fill="rgba(199,210,254,0.95)" fontSize="11">
-                      START
-                    </text>
-                  )}
-                  {isGoal && (
-                    <text x={n.x} y={n.y - 26} textAnchor="middle" fill="rgba(167,243,208,0.95)" fontSize="11">
-                      GOAL
-                    </text>
-                  )}
-                  {isCursor && !isStart && !isGoal && (
-                    <text x={n.x} y={n.y - 26} textAnchor="middle" fill="rgba(248,250,252,0.9)" fontSize="11">
-                      YOU
-                    </text>
-                  )}
-                </g>
-              );
-            })}
-          </svg>
-        </div>
+          {/* Nodes */}
+          {nodes.map((n) => {
+            const isStart = n.id === start, isGoal = n.id === goal, inPath = path.includes(n.id);
+            const isCursor = n.id === cursor, isNext = status === "playing" && neighborSet.has(n.id) && !inPath;
+            return (
+              <g key={n.id} onClick={() => onNodeClick(n.id)} className="cursor-pointer group">
+                <circle cx={n.x} cy={n.y} r="32" fill="transparent" />
+                {isNext && <circle cx={n.x} cy={n.y} r="26" fill="transparent" stroke="#fbbf24" strokeWidth="2" strokeDasharray="4 4" className="animate-spin-slow" />}
+                {isCursor && <circle cx={n.x} cy={n.y} r="26" fill="transparent" stroke="#fff" strokeWidth="2" className="animate-pulse" />}
+                <circle 
+                  cx={n.x} cy={n.y} r="20" 
+                  fill={isStart ? "#4f46e5" : isGoal ? "#065f46" : inPath ? "#312e81" : "#1e293b"} 
+                  stroke={isStart ? "#818cf8" : isGoal ? "#10b981" : inPath ? "#4f46e5" : "rgba(255,255,255,0.1)"} 
+                  strokeWidth="2" 
+                  className="transition-all duration-300 group-hover:scale-110" 
+                />
+                <text x={n.x} y={n.y - 28} textAnchor="middle" fill={isStart ? "#818cf8" : isGoal ? "#10b981" : "#94a3b8"} fontSize="10" fontWeight="black" className="uppercase tracking-tighter">
+                  {isStart ? "Start" : isGoal ? "Goal" : ""}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
       </div>
 
-      <div className="gpfBottom">
-        <div className="gpfPanel" aria-label="Controls">
-          <div className="gpfPath" aria-label="Current path">
+      {/* Footer Controls */}
+      <div className="mt-s4 space-y-s3 animate-in slide-in-from-bottom-2 duration-300">
+        <div className="flex items-center justify-between gap-s3 p-s3 rounded-2xl bg-surface border border-border overflow-hidden">
+          <div className="flex gap-2 overflow-x-auto no-scrollbar py-1 flex-1">
             {path.map((p, i) => (
-              <div key={`${p}-${i}`} className="gpfChip" aria-hidden="true">
+              <div key={`${p}-${i}`} className="flex-none w-8 h-8 rounded-lg bg-bg2 border border-border flex items-center justify-center text-xs font-black text-indigo-200 shadow-sm">
                 {p}
               </div>
             ))}
           </div>
+          <Button variant="ghost" size="sm" onClick={undo} disabled={path.length <= 1 || status !== "playing"} className="h-8 px-3 uppercase text-[10px] font-bold opacity-60">Undo</Button>
+        </div>
 
-          {message ? (
-            <div className={`gpfMsg ${status === "won" ? "gpfMsgWin" : status === "lost" ? "gpfMsgLose" : ""}`}>{message}</div>
-          ) : null}
-
-          <div className="gpfControls">
-            <Button
-              className="gpfBtn gpfBtnConfirm"
-              variant="secondary"
-              onClick={() => check(false)}
-              disabled={status !== "playing"}
-              aria-label="Confirm selection"
-            >
-              ✓
-            </Button>
+        {message && (
+          <div className={cn(
+            "p-s3 rounded-xl text-center font-bold text-sm animate-in fade-in zoom-in duration-200", 
+            status === "won" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+          )}>
+            {message}
           </div>
+        )}
+
+        <div className="flex gap-3">
+          <Button variant="ghost" onClick={newGraph} disabled={status === "playing"} className="flex-1 h-14 uppercase tracking-widest text-xs opacity-70">New Graph</Button>
+          <Button variant="primary" disabled={status !== "playing"} onClick={() => check(false)} className="flex-[2] h-14 rounded-2xl font-black text-xl shadow-xl">
+            SUBMIT PATH
+          </Button>
         </div>
       </div>
 
       {(status === "won" || status === "lost") && (
         <ResultSubmitPanel
-          category="GRAPH_PATH"
-          difficulty={difficulty}
-          timeMs={timeMs}
-          errors={errors}
-          won={status === "won"}
-          explanation={
-            status === "won"
-              ? `Correct: your path cost ${currentWeight} which matches the shortest possible cost (${budget}).`
-              : message
-              ? message
-              : `Wrong: your path cost ${currentWeight}. Shortest possible cost is ${budget}.`
-          }
-          challengeId={challenge?.challengeInstanceId}
+          category="GRAPH_PATH" difficulty={difficulty} timeMs={timeMs} errors={errors}
+          won={status === "won"} challengeId={challenge?.challengeInstanceId}
+          explanation={status === "won" ? `Optimal path found! Total cost: ${currentWeight}.` : message || "The path is not optimal."}
         />
       )}
 
       <TutorialModal
-        open={tutorialOpen}
-        tutorial={tutorial}
+        open={tutorialOpen} tutorial={tutorial}
         onConfirm={() => {
-          try {
-            localStorage.setItem(tutKey, "1");
-          } catch {}
-          setTutorialOpen(false);
-          setStarted(true);
-          startRef.current = Date.now();
-          setTimeMs(0);
-          setErrors(0);
-          setTimeLeftMs(diffCfg.timeLimitSec * 1000);
-          setPath([start]);
-          setStatus("playing");
-          setMessage("");
+          try { localStorage.setItem(tutKey, "1"); } catch {}
+          setTutorialOpen(false); setStarted(true); setStatus("playing"); startRef.current = Date.now();
         }}
       />
     </div>

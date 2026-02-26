@@ -1,5 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
+import { Badge } from "../components/ui/badge";
+import { cn } from "../lib/utils";
 import ResultSubmitPanel from "../components/ResultSubmitPanel";
 import TutorialModal from "../components/TutorialModal";
 import { getPlayer } from "../lib/player";
@@ -51,256 +53,119 @@ function buildBalancedBST(sorted, lo = 0, hi = sorted.length - 1) {
   };
 }
 
-function cloneTree(t) {
-  if (!t) return null;
-  return { value: t.value, left: cloneTree(t.left), right: cloneTree(t.right) };
-}
-
 function findInsertionSlot(root, value, eqGoesLeft = false) {
-  // Returns { parentValue, side: "L"|"R" } where the new node should be inserted as null child
   let cur = root;
   let parent = null;
   let side = null;
-
   while (cur) {
     parent = cur;
-    if (value < cur.value) {
-      side = "L";
-      cur = cur.left;
-    } else if (value > cur.value) {
-      side = "R";
-      cur = cur.right;
-    } else {
-      // equal
-      side = eqGoesLeft ? "L" : "R";
-      cur = eqGoesLeft ? cur.left : cur.right;
-    }
+    if (value < cur.value) { side = "L"; cur = cur.left; }
+    else if (value > cur.value) { side = "R"; cur = cur.right; }
+    else { side = eqGoesLeft ? "L" : "R"; cur = eqGoesLeft ? cur.left : cur.right; }
   }
-
   return { parentValue: parent ? parent.value : null, side };
 }
 
 function buildLayout(root) {
-  // Assign x/y using inorder traversal (simple, stable, readable)
-  const nodes = [];
-  const edges = [];
-  const slots = []; // empty child slots as drop targets
-
+  const nodes = [], edges = [], slots = [];
   let xIndex = 0;
-  // Tuned for readability; the SVG uses viewBox to fit any resulting bounds.
-  const X_STEP = 78;
-  const Y_STEP = 98;
+  const X_STEP = 78, Y_STEP = 98;
 
   function walk(node, depth) {
     if (!node) return;
-
     walk(node.left, depth + 1);
-
-    const x = 70 + xIndex * X_STEP;
-    const y = 80 + depth * Y_STEP;
+    const x = 70 + xIndex * X_STEP, y = 80 + depth * Y_STEP;
     nodes.push({ value: node.value, x, y, depth });
     xIndex++;
-
     if (node.left) edges.push({ from: node.value, to: node.left.value });
     if (node.right) edges.push({ from: node.value, to: node.right.value });
-
-    // create visible "empty slots" if child is missing
     if (!node.left) slots.push({ parent: node.value, side: "L", x: x - 38, y: y + 64 });
     if (!node.right) slots.push({ parent: node.value, side: "R", x: x + 38, y: y + 64 });
-
     walk(node.right, depth + 1);
   }
-
   walk(root, 0);
-
   const map = new Map(nodes.map((n) => [n.value, n]));
-
-  // Compute bounds (include empty slots) for responsive viewBox.
-  const allPoints = [
-    ...nodes.map((n) => ({ x: n.x, y: n.y })),
-    ...slots.map((s) => ({ x: s.x, y: s.y })),
-  ];
-  const minX = Math.min(...allPoints.map((p) => p.x));
-  const maxX = Math.max(...allPoints.map((p) => p.x));
-  const minY = Math.min(...allPoints.map((p) => p.y));
-  const maxY = Math.max(...allPoints.map((p) => p.y));
+  const allPoints = [...nodes.map(n=>({x:n.x,y:n.y})), ...slots.map(s=>({x:s.x,y:s.y}))];
+  const minX = Math.min(...allPoints.map(p=>p.x)), maxX = Math.max(...allPoints.map(p=>p.x));
+  const minY = Math.min(...allPoints.map(p=>p.y)), maxY = Math.max(...allPoints.map(p=>p.y));
   const pad = 70;
-  const bounds = {
-    x: minX - pad,
-    y: minY - pad,
-    w: (maxX - minX) + pad * 2,
-    h: (maxY - minY) + pad * 2,
-  };
-
-  return { nodes, edges, slots, map, bounds };
+  return { nodes, edges, slots, map, bounds: { x: minX-pad, y: minY-pad, w: (maxX-minX)+pad*2, h: (maxY-minY)+pad*2 } };
 }
 
 function makePuzzle(difficulty) {
-  // Difficulty impacts tree size + shape (balanced vs random vs skewed).
-  const cfg = {
-    [DIFFICULTY.EASY]: { n: 7, maxH: 4, shape: "balanced" },
-    [DIFFICULTY.MEDIUM]: { n: 11, maxH: 6, shape: "random" },
-    [DIFFICULTY.HARD]: { n: 15, maxH: 9, shape: "skew" },
-  }[difficulty] || { n: 11, maxH: 6, shape: "random" };
-
+  const cfg = { [DIFFICULTY.EASY]: { n: 7, maxH: 4, shape: "balanced" }, [DIFFICULTY.MEDIUM]: { n: 11, maxH: 6, shape: "random" }, [DIFFICULTY.HARD]: { n: 15, maxH: 9, shape: "skew" } }[difficulty] || { n: 11, maxH: 6, shape: "random" };
   const poolMax = 60;
-  const eqGoesLeft = (difficulty || DIFFICULTY.EASY).toUpperCase() === DIFFICULTY.HARD;
-  const duplicateChance = (difficulty || DIFFICULTY.EASY).toUpperCase() === DIFFICULTY.MEDIUM ? 0.25 : ((difficulty || DIFFICULTY.EASY).toUpperCase() === DIFFICULTY.HARD ? 0.45 : 0);
+  const eqGoesLeft = difficulty === DIFFICULTY.HARD;
+  const duplicateChance = difficulty === DIFFICULTY.MEDIUM ? 0.25 : (difficulty === DIFFICULTY.HARD ? 0.45 : 0);
   let attempt = 0;
   while (attempt++ < 80) {
     const values = shuffle(Array.from({ length: poolMax }, (_, i) => i + 1));
     const base = values.slice(0, cfg.n);
     const newValue = Math.random() < duplicateChance ? base[randInt(0, base.length - 1)] : values[cfg.n];
-
     let root = null;
-    if (cfg.shape === "balanced") {
-      const sorted = base.slice().sort((a, b) => a - b);
-      root = buildBalancedBST(sorted);
-    } else if (cfg.shape === "skew") {
-      // Intentionally skew: mostly sorted inserts with tiny randomness.
-      const sorted = base.slice().sort((a, b) => a - b);
-      const noisy = sorted.slice();
-      // swap a few entries to avoid a perfectly trivial line
-      for (let i = 0; i < Math.min(3, noisy.length - 1); i++) {
-        const a = randInt(0, noisy.length - 1);
-        const b = randInt(0, noisy.length - 1);
-        [noisy[a], noisy[b]] = [noisy[b], noisy[a]];
-      }
-      for (const v of noisy) root = bstInsert(root, v);
-    } else {
-      // random
-      for (const v of base) root = bstInsert(root, v);
-    }
-
-    if (height(root) <= cfg.maxH) {
-      const answer = findInsertionSlot(root, newValue, eqGoesLeft);
-      return { root, base, newValue, answer, cfg, eqGoesLeft };
-    }
+    if (cfg.shape === "balanced") root = buildBalancedBST(base.slice().sort((a,b)=>a-b));
+    else if (cfg.shape === "skew") {
+      const sorted = base.slice().sort((a,b)=>a-b);
+      for (const v of sorted) root = bstInsert(root, v);
+    } else { for (const v of base) root = bstInsert(root, v); }
+    if (height(root) <= cfg.maxH) return { root, base, newValue, answer: findInsertionSlot(root, newValue, eqGoesLeft), cfg, eqGoesLeft };
   }
-
-  // Fallback (should be rare)
-  const values = shuffle(Array.from({ length: 50 }, (_, i) => i + 1));
-  const base = values.slice(0, 11);
-  const newValue = values[11];
-  let root = null;
-  for (const v of base) root = bstInsert(root, v);
-  const eqGoesLeftFallback = (difficulty || DIFFICULTY.EASY).toUpperCase() === DIFFICULTY.HARD;
-  const answer = findInsertionSlot(root, newValue, eqGoesLeftFallback);
-  return { root, base, newValue, answer, cfg: { n: 11, maxH: 6, shape: "random" }, eqGoesLeft: eqGoesLeftFallback };
+  return { root: null, base: [], newValue: 0, answer: null, cfg: {}, eqGoesLeft: false };
 }
 
-// ------------------------
-// Page
-// ------------------------
 export default function BSTInsertPage() {
   const loc = useLocation();
   const challenge = loc.state?.challenge;
   const difficulty = (challenge?.difficulty || DIFFICULTY.EASY).toUpperCase();
-
-  // First-time tutorial gate (per minigame + per player on this device)
   const player = useMemo(() => getPlayer(), []);
   const tutorial = useMemo(() => getTutorial("BST_INSERT"), []);
-  const tutKey = useMemo(
-    () => tutorialKey({ playerId: player?.playerId, category: "BST_INSERT" }),
-    [player?.playerId]
-  );
+  const tutKey = useMemo(() => tutorialKey({ playerId: player?.playerId, category: "BST_INSERT" }), [player?.playerId]);
 
-  // Determine tutorial visibility synchronously so the minigame truly doesn't start in the background.
   const [tutorialOpen, setTutorialOpen] = useState(() => {
-    if (!challenge) return false; // if opened directly, don't block
-    try {
-      return localStorage.getItem(tutKey) !== "1";
-    } catch {
-      return false;
-    }
+    if (!challenge) return false;
+    try { return localStorage.getItem(tutKey) !== "1"; } catch { return false; }
   });
 
   const [started, setStarted] = useState(() => !tutorialOpen);
-
-
-  // Prevent vertical page scrolling on mobile during the minigame.
   useEffect(() => {
     const prev = document.body.style.overflowY;
     document.body.style.overflowY = "hidden";
-    return () => {
-      document.body.style.overflowY = prev;
-    };
+    return () => { document.body.style.overflowY = prev; };
   }, []);
 
   const [seed, setSeed] = useState(0);
   const puzzle = useMemo(() => makePuzzle(difficulty), [seed, difficulty]);
-
-  const [dropped, setDropped] = useState(null); // { parent, side }
-  const [status, setStatus] = useState(() => (tutorialOpen ? "waiting" : "playing")); // waiting | playing | won | lost
-  // Minimal mobile HUD feedback (short, non-intrusive).
-  const [toast, setToast] = useState(null); // { text, kind }
-
-  const maxStrikes = useMemo(() => {
-    if (difficulty === DIFFICULTY.EASY) return Number.POSITIVE_INFINITY;
-    if (difficulty === DIFFICULTY.HARD) return 2;
-    return 3; // MEDIUM
-  }, [difficulty]);
-
-  // We intentionally removed hints for the mobile-game feel: tap-to-play, no side panels.
+  const [dropped, setDropped] = useState(null);
+  const [status, setStatus] = useState(() => (tutorialOpen ? "waiting" : "playing"));
+  const [toast, setToast] = useState(null);
+  const maxStrikes = difficulty === DIFFICULTY.EASY ? Infinity : (difficulty === DIFFICULTY.HARD ? 2 : 3);
 
   const startRef = useRef(Date.now());
   const [timeMs, setTimeMs] = useState(0);
   const [errors, setErrors] = useState(0);
+  const timeLimitMs = difficulty === DIFFICULTY.HARD ? 30000 : (difficulty === DIFFICULTY.MEDIUM ? 40000 : 55000);
 
-  const timeLimitMs = useMemo(() => {
-    if (difficulty === DIFFICULTY.HARD) return 30_000;
-    if (difficulty === DIFFICULTY.MEDIUM) return 40_000;
-    return 55_000; // EASY
-  }, [difficulty]);
-
-  // Live timer + timeout
   useEffect(() => {
     if (!started || status !== "playing") return;
     const id = setInterval(() => {
       const elapsed = Date.now() - startRef.current;
       setTimeMs(elapsed);
-      if (timeLimitMs && elapsed >= timeLimitMs) {
-        setStatus("lost");
-        // Minimal feedback; full result panel will appear.
-        setToast({ text: "⏱️", kind: "lose" });
-      }
+      if (timeLimitMs && elapsed >= timeLimitMs) { setStatus("lost"); setToast({ text: "⏱️", kind: "lose" }); }
     }, 100);
     return () => clearInterval(id);
   }, [started, status, timeLimitMs]);
 
   const rootRef = useRef(null);
   const hudRef = useRef(null);
-  const treeCardRef = useRef(null);
   const [svgHeight, setSvgHeight] = useState(420);
-
-  const layout = useMemo(() => buildLayout(puzzle.root), [puzzle.root]);
-  function buzz(ms = 12) {
-    try {
-      if (getHapticsEnabled() && navigator.vibrate) navigator.vibrate(ms);
-    } catch {
-      // ignore
-    }
-  }
-
-  function sfx(fn) {
-    try {
-      if (getSoundEnabled()) fn();
-    } catch {
-      // ignore
-    }
-  }
+  const layout = useMemo(() => puzzle.root ? buildLayout(puzzle.root) : null, [puzzle.root]);
 
   useLayoutEffect(() => {
     function recompute() {
-      const hudH = hudRef.current ? hudRef.current.getBoundingClientRect().height : 0;
-      // Keep the whole tree visible without scrolling on phones.
-      // Reserve a small buffer for paddings + safe areas.
-      const safeTop = 8;
-      const safeBottom = 18;
-      const avail = Math.max(240, (window.innerHeight || 700) - hudH - safeTop - safeBottom);
+      const hudH = hudRef.current?.offsetHeight || 0;
+      const avail = Math.max(240, window.innerHeight - hudH - 80);
       setSvgHeight(avail);
     }
-
     recompute();
     window.addEventListener("resize", recompute);
     return () => window.removeEventListener("resize", recompute);
@@ -317,301 +182,123 @@ export default function BSTInsertPage() {
     if (status !== "playing") return;
     const pick = { parent: slot.parent, side: slot.side };
     setDropped(pick);
-    buzz(10);
-    sfx(playUiTapSfx);
+    if (getHapticsEnabled() && navigator.vibrate) navigator.vibrate(10);
+    if (getSoundEnabled()) playUiTapSfx();
 
-    const ok = pick.parent === puzzle.answer.parentValue && pick.side === puzzle.answer.side;
-    if (ok) {
+    if (pick.parent === puzzle.answer.parentValue && pick.side === puzzle.answer.side) {
       setStatus("won");
       setTimeMs(Date.now() - startRef.current);
       flashToast("✅", "win", 900);
-      buzz(26);
-      sfx(playWinSfx);
+      if (getHapticsEnabled() && navigator.vibrate) navigator.vibrate(26);
+      if (getSoundEnabled()) playWinSfx();
       return;
     }
 
     setErrors((e) => {
       const next = e + 1;
-      if (next >= maxStrikes) {
-        setStatus("lost");
-        setTimeMs(Date.now() - startRef.current);
-        flashToast("💥", "lose", 1200);
-      } else {
-        flashToast("❌", "lose", 700);
-      }
+      if (next >= maxStrikes) { setStatus("lost"); setTimeMs(Date.now() - startRef.current); flashToast("💥", "lose", 1200); }
+      else { flashToast("❌", "lose", 700); }
       return next;
     });
-    buzz(18);
-    sfx(playFailSfx);
+    if (getHapticsEnabled() && navigator.vibrate) navigator.vibrate(18);
+    if (getSoundEnabled()) playFailSfx();
   }
 
+  if (!layout) return null;
   const viewBox = `${layout.bounds.x} ${layout.bounds.y} ${layout.bounds.w} ${layout.bounds.h}`;
-  // We intentionally do not highlight the path/answer as a hint (too strong).
-
-  const selectedSlot = useMemo(() => {
-    if (!dropped) return null;
-    return layout.slots.find((s) => s.parent === dropped.parent && s.side === dropped.side) || null;
-  }, [dropped, layout.slots]);
+  const selectedSlot = dropped ? layout.slots.find((s) => s.parent === dropped.parent && s.side === dropped.side) : null;
 
   return (
-    <div className="bstGameRoot" ref={rootRef}>
-      <style>{`
-        .bstGameRoot{
-          position:fixed;inset:0;z-index:20;
-          background:radial-gradient(1200px 700px at 50% 0%, rgba(99,102,241,0.18), transparent 60%),
-            radial-gradient(900px 600px at 10% 100%, rgba(16,185,129,0.10), transparent 55%),
-            rgba(2,6,23,1);
-          color:rgba(248,250,252,0.98);
-          display:flex;flex-direction:column;
-          padding-top:calc(env(safe-area-inset-top) + 8px);
-          padding-left:12px;padding-right:12px;
-          padding-bottom:calc(env(safe-area-inset-bottom) + 10px);
-          overflow:hidden;
-          touch-action:manipulation;
-          -webkit-user-select:none;user-select:none;
-        }
-        .bstHud{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:center;}
-        .bstPill{
-          display:flex;align-items:center;gap:8px;
-          padding:10px 12px;border-radius:999px;
-          border:1px solid rgba(148,163,184,0.18);
-          background:rgba(15,23,42,0.55);
-          backdrop-filter:blur(10px);
-          font-size:13px;font-weight:700;
-        }
-        .bstBoardWrap{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;}
-        .bstBoardCard{
-          width:100%;height:100%;
-          border-radius:24px;
-          border:1px solid rgba(148,163,184,0.16);
-          background:rgba(2,6,23,0.20);
-          overflow:hidden;
-          display:flex;align-items:center;justify-content:center;
-        }
-        .bstToastOverlay{
-          position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);
-          display:flex;justify-content:center;pointer-events:none;
-        }
-        .bstToastBubble{
-          padding:14px 18px;border-radius:999px;
-          border:1px solid rgba(148,163,184,0.20);
-          background:rgba(2,6,23,0.72);
-          backdrop-filter:blur(10px);
-          font-size:22px;font-weight:900;
-          box-shadow:0 14px 40px rgba(0,0,0,0.35);
-        }
-        .bstResultOverlay{
-          position:absolute;inset:0;
-          padding:12px;
-          padding-top:calc(env(safe-area-inset-top) + 12px);
-          padding-bottom:calc(env(safe-area-inset-bottom) + 12px);
-          display:flex;align-items:flex-end;justify-content:center;
-          pointer-events:auto;
-        }
-      `}</style>
-
-      <div className="bstHud" ref={hudRef}>
-        <div className="bstPill" aria-label="Time left">
-          ⏱️ {Math.max(0, Math.ceil((timeLimitMs - timeMs) / 1000))}
+    <div className="h-full flex flex-col bg-bg0 text-text overflow-hidden p-s3 sm:p-s4" ref={rootRef}>
+      {/* HUD */}
+      <div className="flex justify-between items-center mb-s3 animate-in fade-in slide-in-from-top-2 duration-300" ref={hudRef}>
+        <div className="flex gap-2">
+          <Badge variant="secondary" className="px-3 py-1 font-bold">⏱️ {Math.max(0, Math.ceil((timeLimitMs - timeMs) / 1000))}s</Badge>
+          <Badge variant="outline" className="px-3 py-1 font-bold bg-indigo-500/10 border-indigo-500/30 text-indigo-200">
+            ➕ Value: {puzzle.newValue}
+          </Badge>
         </div>
-        <div className="bstPill" aria-label="Mistakes">
-          💥 {errors}/{maxStrikes === Number.POSITIVE_INFINITY ? "∞" : maxStrikes}
-        </div>
-        <div className="bstPill" aria-label="New value">
-          ➕ {puzzle.newValue}
-        </div>
-        <div className="bstPill" aria-label="Equal direction">
-          = {puzzle.eqGoesLeft ? "←" : "→"}
+        <div className="flex gap-2">
+          <Badge variant="secondary" className="px-3 py-1 font-bold">{puzzle.eqGoesLeft ? "Equal: ←" : "Equal: →"}</Badge>
+          <Badge variant="outline" className={cn("px-3 py-1 font-bold opacity-70", errors > 0 && "text-rose-400 border-rose-500/40")}>
+            💥 {errors}/{maxStrikes === Infinity ? "∞" : maxStrikes}
+          </Badge>
         </div>
       </div>
 
-      <div className="bstBoardWrap" ref={treeCardRef}>
-        <div className="bstBoardCard">
-          <svg
-            viewBox={viewBox}
-            preserveAspectRatio="xMidYMid meet"
-            style={{ width: "100%", height: svgHeight, display: "block" }}
-          >
-            <defs>
-              <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
-                <feGaussianBlur stdDeviation="3" result="blur" />
-                <feMerge>
-                  <feMergeNode in="blur" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
+      {/* Tree Visualization */}
+      <div className="flex-1 flex items-center justify-center min-h-0 bg-bg1/20 rounded-2xl border border-border shadow-inner relative overflow-hidden animate-in zoom-in-95 duration-500">
+        <svg
+          viewBox={viewBox}
+          preserveAspectRatio="xMidYMid meet"
+          style={{ width: "100%", height: svgHeight, display: "block" }}
+          className="transition-all duration-300"
+        >
+          <defs>
+            <filter id="nodeGlow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="2.5" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+            </filter>
+            <linearGradient id="nodeGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#1e293b" /><stop offset="100%" stopColor="#0f172a" /></linearGradient>
+          </defs>
 
-              <linearGradient id="nodeFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="rgba(15,23,42,0.78)" />
-                <stop offset="100%" stopColor="rgba(2,6,23,0.58)" />
-              </linearGradient>
-            </defs>
+          {/* Edges */}
+          {layout.edges.map((e) => {
+            const a = layout.map.get(e.from), b = layout.map.get(e.to);
+            if (!a || !b) return null;
+            const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+            const curve = `M ${a.x} ${a.y} Q ${mx} ${my - 10} ${b.x} ${b.y}`;
+            return <path key={`${e.from}-${e.to}`} d={curve} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="2.5" strokeLinecap="round" className="transition-all duration-500" />;
+          })}
 
-            {/* edges */}
-            {layout.edges.map((e) => {
-              const a = layout.map.get(e.from);
-              const b = layout.map.get(e.to);
-              if (!a || !b) return null;
-              const mx = (a.x + b.x) / 2;
-              const my = (a.y + b.y) / 2;
-              const curve = `M ${a.x} ${a.y} Q ${mx} ${my - 18} ${b.x} ${b.y}`;
-
-              const inHint = false;
-              return (
-                <path
-                  key={`${e.from}-${e.to}`}
-                  d={curve}
-                  fill="none"
-                  stroke={inHint ? "rgba(250,204,21,0.70)" : "rgba(148,163,184,0.30)"}
-                  strokeWidth={inHint ? 3.5 : 2.6}
-                  strokeLinecap="round"
-                  filter={inHint ? "url(#softGlow)" : undefined}
-                />
-              );
-            })}
-
-            {/* empty slots (tap targets) */}
-            {layout.slots.map((s) => {
-              const isSelected = dropped && dropped.parent === s.parent && dropped.side === s.side;
-              return (
-                <g
-                  key={`${s.parent}-${s.side}`}
-                  onClick={() => onSelectSlot(s)}
-                  role="button"
-                  aria-label={`Slot ${s.side} of ${s.parent}`}
-                  style={{ cursor: status === "playing" ? "pointer" : "default" }}
-                >
-                  <circle cx={s.x} cy={s.y} r="26" fill="transparent" />
-                  <circle
-                    cx={s.x}
-                    cy={s.y}
-                    r="17"
-                    fill={isSelected ? "rgba(245,158,11,0.22)" : "rgba(2,6,23,0.14)"}
-                    stroke={
-                      isSelected
-                        ? "rgba(252,211,77,0.75)"
-                        : "rgba(129,140,248,0.45)"
-                    }
-                    strokeWidth={isSelected ? 2.8 : 2}
-                    strokeDasharray="5 4"
-                    filter={(isSelected) ? "url(#softGlow)" : undefined}
-                  />
-                  <text
-                    x={s.x}
-                    y={s.y + 4}
-                    textAnchor="middle"
-                    fill="rgba(226,232,240,0.78)"
-                    fontSize="11"
-                    fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
-                  >
-                    {s.side}
-                  </text>
-                </g>
-              );
-            })}
-
-            {/* ghost new node at selected slot */}
-            {selectedSlot ? (
-              <g>
-                <circle
-                  cx={selectedSlot.x}
-                  cy={selectedSlot.y}
-                  r="22"
-                  fill="rgba(99,102,241,0.22)"
-                  stroke="rgba(129,140,248,0.72)"
-                  strokeWidth="2.8"
-                  filter="url(#softGlow)"
-                />
-                <text
-                  x={selectedSlot.x}
-                  y={selectedSlot.y + 5}
-                  textAnchor="middle"
-                  fill="rgba(248,250,252,0.98)"
-                  fontSize="14"
-                  fontWeight="800"
-                  fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
-                >
-                  {puzzle.newValue}
-                </text>
+          {/* Empty Slots */}
+          {layout.slots.map((s) => {
+            const isSelected = dropped && dropped.parent === s.parent && dropped.side === s.side;
+            return (
+              <g key={`${s.parent}-${s.side}`} onClick={() => onSelectSlot(s)} className="cursor-pointer group">
+                <circle cx={s.x} cy={s.y} r="28" fill="transparent" />
+                <circle cx={s.x} cy={s.y} r="16" fill={isSelected ? "rgba(99,102,241,0.2)" : "transparent"} stroke={isSelected ? "#818cf8" : "rgba(255,255,255,0.15)"} strokeWidth="2" strokeDasharray="4 4" className={cn("transition-all duration-300", isSelected ? "animate-pulse" : "group-hover:stroke-indigo-400")} />
+                <text x={s.x} y={s.y + 4} textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="9" fontWeight="bold" className="pointer-events-none uppercase">{s.side}</text>
               </g>
-            ) : null}
+            );
+          })}
 
-            {/* nodes */}
-            {layout.nodes.map((n) => {
-              const inHint = false;
-              return (
-                <g key={n.value}>
-                  <circle
-                    cx={n.x}
-                    cy={n.y}
-                    r="19"
-                    fill="url(#nodeFill)"
-                    stroke={
-                      status === "won"
-                        ? "rgba(52,211,153,0.55)"
-                        : inHint
-                        ? "rgba(250,204,21,0.75)"
-                        : "rgba(148,163,184,0.33)"
-                    }
-                    strokeWidth={inHint ? 3.0 : 2.6}
-                    filter={inHint ? "url(#softGlow)" : undefined}
-                  />
-                  <text
-                    x={n.x}
-                    y={n.y + 5}
-                    textAnchor="middle"
-                    fill="rgba(248,250,252,0.96)"
-                    fontSize="12"
-                    fontWeight={inHint ? 800 : 700}
-                    fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
-                  >
-                    {n.value}
-                  </text>
-                </g>
-              );
-            })}
-          </svg>
-        </div>
+          {/* Nodes */}
+          {layout.nodes.map((n) => (
+            <g key={n.value} className="transition-all duration-300">
+              <circle cx={n.x} cy={n.y} r="18" fill="url(#nodeGrad)" stroke={status === "won" ? "#10b981" : "rgba(255,255,255,0.12)"} strokeWidth="2" filter={status === "won" ? "url(#nodeGlow)" : undefined} />
+              <text x={n.x} y={n.y + 4} textAnchor="middle" fill="#f8fafc" fontSize="11" fontWeight="bold">{n.value}</text>
+            </g>
+          ))}
+
+          {/* Ghost Inserted Node */}
+          {selectedSlot && (
+            <g className="animate-in zoom-in duration-300">
+              <circle cx={selectedSlot.x} cy={selectedSlot.y} r="20" fill="#4f46e5" stroke="#818cf8" strokeWidth="2" filter="url(#nodeGlow)" />
+              <text x={selectedSlot.x} y={selectedSlot.y + 4} textAnchor="middle" fill="#fff" fontSize="12" fontWeight="black">{puzzle.newValue}</text>
+            </g>
+          )}
+        </svg>
+
+        {toast && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-50 animate-in fade-in zoom-in duration-200">
+            <div className="px-6 py-4 rounded-full bg-bg0/80 backdrop-blur-xl border border-white/10 text-4xl shadow-2xl">{toast.text}</div>
+          </div>
+        )}
       </div>
 
-      {toast ? (
-        <div className="bstToastOverlay" aria-live="polite">
-          <div className="bstToastBubble">{toast.text}</div>
-        </div>
-      ) : null}
-
-      {(status === "won" || status === "lost") ? (
-        <div className="bstResultOverlay">
-          <ResultSubmitPanel
-            category="BST_INSERT"
-            difficulty={difficulty}
-            timeMs={timeMs}
-            errors={errors}
-            won={status === "won"}
-            explanation={
-              status === "won"
-                ? `Correct: insert ${puzzle.newValue} ${puzzle.answer.side === "L" ? "to the LEFT" : "to the RIGHT"} of ${puzzle.answer.parentValue}.`
-                : (timeLimitMs && timeMs >= timeLimitMs)
-                ? `Time ran out. Correct slot was ${puzzle.answer.side === "L" ? "left" : "right"} of ${puzzle.answer.parentValue}.`
-                : `Wrong slot. Correct slot was ${puzzle.answer.side === "L" ? "left" : "right"} of ${puzzle.answer.parentValue}.`
-            }
-            challengeId={challenge?.challengeInstanceId}
-          />
-        </div>
-      ) : null}
+      {(status === "won" || status === "lost") && (
+        <ResultSubmitPanel
+          category="BST_INSERT" difficulty={difficulty} timeMs={timeMs} errors={errors}
+          won={status === "won"} challengeId={challenge?.challengeInstanceId}
+          explanation={status === "won" ? `Great! ${puzzle.newValue} belongs to the ${puzzle.answer.side === "L" ? "left" : "right"} of ${puzzle.answer.parentValue}.` : `Incorrect. The target slot was to the ${puzzle.answer.side === "L" ? "left" : "right"} of ${puzzle.answer.parentValue}.`}
+        />
+      )}
 
       <TutorialModal
-        open={tutorialOpen}
-        tutorial={tutorial}
+        open={tutorialOpen} tutorial={tutorial}
         onConfirm={() => {
-          try {
-            localStorage.setItem(tutKey, "1");
-          } catch {}
-          setTutorialOpen(false);
-          setStarted(true);
-          startRef.current = Date.now();
-          setTimeMs(0);
-          setStatus("playing");
+          try { localStorage.setItem(tutKey, "1"); } catch {}
+          setTutorialOpen(false); setStarted(true); setStatus("playing"); startRef.current = Date.now();
         }}
       />
     </div>
