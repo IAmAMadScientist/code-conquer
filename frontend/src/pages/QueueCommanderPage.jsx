@@ -8,6 +8,14 @@ import TutorialModal from "../components/TutorialModal";
 import { getPlayer } from "../lib/player";
 import { getTutorial, tutorialKey } from "../lib/tutorials";
 import { DIFFICULTY } from "../lib/constants";
+import {
+  getHapticsEnabled,
+  getSoundEnabled,
+  playFailSfx,
+  playMoveSfx,
+  playUiTapSfx,
+  playWinSfx,
+} from "../lib/diceSound";
 
 function vibrate(pattern) {
   try { if (navigator.vibrate) navigator.vibrate(pattern); } catch {}
@@ -100,7 +108,8 @@ export default function QueueCommanderPage() {
     setStatus(nextStatus);
     setTimeMs(Math.max(0, Math.round(performance.now() - startTsRef.current)));
     setHint(msg);
-    vibrate(nextStatus === "won" ? [18, 30, 18] : [20, 45, 20]);
+    if (getHapticsEnabled()) vibrate(nextStatus === "won" ? [18, 30, 18] : [20, 45, 20]);
+    if (getSoundEnabled()) (nextStatus === "won" ? playWinSfx : playFailSfx)();
   }
 
   const incoming = status === "playing" ? incomingValue({ seed, maxDigit: cfg.maxDigit, target, idx, outIdx, queueLen: queue.length, queueCap: cfg.queueCap }) : null;
@@ -110,17 +119,34 @@ export default function QueueCommanderPage() {
   const canRemove = status === "playing" && selectedIdx >= 0 && selectedIdx < queue.length && removeCharges > 0;
   const canRotate = status === "playing" && queue.length >= 2;
 
-  const enqueue = () => { if (!canEnqueue) return; setQueue(q => [...q, incoming]); setIdx(v => v + 1); setHint(""); };
-  const discard = () => { if (status !== "playing") return; setIdx(v => v + 1); setHint(""); };
+  const enqueue = () => { 
+    if (!canEnqueue) return; 
+    if (getHapticsEnabled()) vibrate(8); if (getSoundEnabled()) playUiTapSfx();
+    setQueue(q => [...q, incoming]); setIdx(v => v + 1); setHint(""); 
+  };
+  const discard = () => { 
+    if (status !== "playing") return; 
+    if (getHapticsEnabled()) vibrate(6); if (getSoundEnabled()) playUiTapSfx();
+    setIdx(v => v + 1); setHint(""); 
+  };
   const dequeue = () => {
     if (!canDequeue) return;
     const front = queue[0];
     if (front !== nextTarget) { setErrors(1); end("lost", `Wrong output: expected ${nextTarget}, got ${front}`); return; }
+    if (getHapticsEnabled()) vibrate(12); if (getSoundEnabled()) playMoveSfx();
     setQueue(q => q.slice(1)); setHint("");
     setOutIdx(prev => { const next = prev + 1; if (next >= target.length) end("won", "Perfect FIFO!"); return next; });
   };
-  const removeSelected = () => { if (!canRemove) return; setQueue(q => q.filter((_, i) => i !== selectedIdx)); setRemoveCharges(c => c - 1); setSelectedIdx(-1); setHint("Removed from queue"); vibrate(12); };
-  const rotateQueue = () => { if (!canRotate) return; setQueue(q => [...q.slice(1), q[0]]); setSelectedIdx(cur => cur === 0 ? q.length - 1 : (cur > 0 ? cur - 1 : -1)); setHint("Rotated queue"); vibrate(10); };
+  const removeSelected = () => { 
+    if (!canRemove) return; 
+    if (getHapticsEnabled()) vibrate(12); if (getSoundEnabled()) playFailSfx();
+    setQueue(q => q.filter((_, i) => i !== selectedIdx)); setRemoveCharges(c => c - 1); setSelectedIdx(-1); setHint("Removed from queue"); 
+  };
+  const rotateQueue = () => { 
+    if (!canRotate) return; 
+    if (getHapticsEnabled()) vibrate(10); if (getSoundEnabled()) playUiTapSfx();
+    setQueue(q => [...q.slice(1), q[0]]); setSelectedIdx(cur => cur === 0 ? q.length - 1 : (cur > 0 ? cur - 1 : -1)); setHint("Rotated queue"); 
+  };
 
   const timeLeftS = Math.max(0, Math.ceil(remainingMs / 1000));
   const targetWindow = target.slice(outIdx, outIdx + 5);
@@ -210,7 +236,7 @@ export default function QueueCommanderPage() {
       )}
 
       <TutorialModal
-        open={tutorialOpen} tutorial={tutorial}
+        open={tutorialOpen} tutorial={tutorial} difficulty={difficulty}
         onConfirm={() => {
           try { localStorage.setItem(tutKey, "1"); } catch {}
           setTutorialOpen(false); setStarted(true); setStatus("playing");

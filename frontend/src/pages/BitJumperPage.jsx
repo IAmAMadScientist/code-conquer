@@ -7,6 +7,14 @@ import TutorialModal from "../components/TutorialModal";
 import { getPlayer } from "../lib/player";
 import { getTutorial, tutorialKey } from "../lib/tutorials";
 import { DIFFICULTY } from "../lib/constants";
+import {
+  getHapticsEnabled,
+  getSoundEnabled,
+  playFailSfx,
+  playMoveSfx,
+  playUiTapSfx,
+  playWinSfx,
+} from "../lib/diceSound";
 
 const DIFF_CFG = {
   [DIFFICULTY.EASY]: { bitsLen: 3, gap: 148, moveW: 0.14, breakW: 0.12, bouncyW: 0.12, bitEvery: 8, coinP: 0.16, collectibleMatchP: 0.72 },
@@ -144,6 +152,7 @@ export default function BitJumperPage() {
           if ((prevY + s.PLAYER_R <= pl.y && p.y + s.PLAYER_R >= pl.y) && (p.x + s.PLAYER_R >= pl.x && p.x - s.PLAYER_R <= pl.x + pl.w)) {
             p.y = pl.y - s.PLAYER_R; p.vy = pl.type === "BOUNCY" ? s.JUMP_VY * s.BOUNCY_MULT : s.JUMP_VY;
             if (pl.type === "BREAKING" && !pl.breakAt) pl.breakAt = now + s.BREAK_DELAY_MS;
+            if (getSoundEnabled()) playUiTapSfx();
             s.score += 2; break;
           }
         }
@@ -153,11 +162,23 @@ export default function BitJumperPage() {
       for (const c of s.collectibles) {
         if (c.collected) continue;
         if (Math.hypot(p.x - c.x, p.y - c.y) < s.PLAYER_R + 10) {
-          c.collected = true; haptic(c.kind === "coin" ? 6 : 12);
-          if (c.kind === "coin") { s.score += 10; continue; }
-          if (c.bit !== s.pattern[s.patternIndex]) { s.errors++; endGame(s, now, false); return; }
+          c.collected = true; 
+          haptic(c.kind === "coin" ? 6 : 12);
+          if (c.kind === "coin") { 
+            if (getSoundEnabled()) playMoveSfx();
+            s.score += 10; continue; 
+          }
+          if (c.bit !== s.pattern[s.patternIndex]) { 
+            s.errors++; 
+            if (getSoundEnabled()) playFailSfx();
+            endGame(s, now, false); return; 
+          }
           s.patternIndex++; s.combo++; s.score += 100 * s.combo;
-          if (s.patternIndex >= s.pattern.length) { endGame(s, now, true); return; }
+          if (getSoundEnabled()) playUiTapSfx();
+          if (s.patternIndex >= s.pattern.length) { 
+            if (getSoundEnabled()) playWinSfx();
+            endGame(s, now, true); return; 
+          }
         }
       }
       s.platforms = s.platforms.filter(pl => pl.y < s.H + 200); s.collectibles = s.collectibles.filter(c => !c.collected && c.y < s.H + 200);
@@ -253,7 +274,7 @@ export default function BitJumperPage() {
         </div>
       )}
 
-      <TutorialModal open={tutorialOpen} tutorial={tutorial} onConfirm={() => { try { localStorage.setItem(tutKey, "1"); } catch {} setTutorialOpen(false); setStarted(true); }} />
+      <TutorialModal open={tutorialOpen} tutorial={tutorial} difficulty={diff} onConfirm={() => { try { localStorage.setItem(tutKey, "1"); } catch {} setTutorialOpen(false); setStarted(true); }} />
     </div>
   );
 }

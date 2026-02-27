@@ -137,6 +137,13 @@ export function playDiceLandSfx() {
 // --- Generic UI / minigame SFX (no assets) ---
 // These are intentionally subtle and "gamey" for mobile.
 
+export function playUiTap() {
+  try {
+    if (getHapticsEnabled() && navigator.vibrate) navigator.vibrate(10);
+    if (getSoundEnabled()) playUiTapSfx();
+  } catch {}
+}
+
 export function playUiTapSfx() {
   // crisp tiny tap
   playTone({ freq: 360, durationMs: 26, type: "square", gain: 0.018, detune: 0, ramp: true });

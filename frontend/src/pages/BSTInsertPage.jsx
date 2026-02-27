@@ -295,7 +295,7 @@ export default function BSTInsertPage() {
       )}
 
       <TutorialModal
-        open={tutorialOpen} tutorial={tutorial}
+        open={tutorialOpen} tutorial={tutorial} difficulty={difficulty}
         onConfirm={() => {
           try { localStorage.setItem(tutKey, "1"); } catch {}
           setTutorialOpen(false); setStarted(true); setStatus("playing"); startRef.current = Date.now();

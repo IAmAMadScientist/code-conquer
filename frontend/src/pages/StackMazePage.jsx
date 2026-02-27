@@ -361,7 +361,7 @@ export default function StackMazePage() {
         />
       )}
 
-      <TutorialModal open={tutorialOpen} tutorial={tutorial} onConfirm={() => {
+      <TutorialModal open={tutorialOpen} tutorial={tutorial} difficulty={difficulty} onConfirm={() => {
         try { localStorage.setItem(tutKey, "1"); } catch {}
         setTutorialOpen(false); setStarted(true); setStatus("playing");
         startRef.current = Date.now(); setTimeMs(0);

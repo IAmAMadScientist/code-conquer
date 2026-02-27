@@ -1,5 +1,5 @@
 import { UI_STRINGS } from "../lib/constants";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AppShell from "../components/AppShell";
 import { Button } from "../components/ui/button";
@@ -10,10 +10,13 @@ import { useToast } from "../components/ui/use-toast";
 import { toastError, toastSuccess } from "../lib/toast-helpers";
 import { createSession, joinSessionByCode, getSession, clearSession } from "../lib/session";
 import { getPlayer, registerPlayer, clearPlayer } from "../lib/player";
+import { cn } from "../lib/utils";
+import { playUiTap } from "../lib/diceSound";
 
 const EMOJIS = ["🦊","🐱","🐶","🐸","🐼","🦁","🐙","🦄","🐝","🐧","🐢","🦖","👾","🤖","🧠","🔥","⭐","🍀","🍕","🎲"];
 
 export default function Home() {
+
   const nav = useNavigate();
   const { toast } = useToast();
 
@@ -23,11 +26,9 @@ export default function Home() {
   const [joinCode, setJoinCode] = useState("");
   const [playerName, setPlayerName] = useState("");
   const [icon, setIcon] = useState(player?.playerIcon || "🦊");
-
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    // Keep local state in sync if storage changes (rare, but helps).
     setSession(getSession());
     setPlayer(getPlayer());
   }, []);
@@ -35,17 +36,14 @@ export default function Home() {
   async function onCreate() {
     setBusy(true);
     try {
-      // New match => clear previous player identity
       clearPlayer();
       const s = await createSession();
       setSession(s);
       setPlayer(getPlayer());
-      setJoinCode("");
-      setPlayerName("");
-      setIcon("🦊");
-      toastSuccess(toast, UI_STRINGS.MATCH_CREATED, `Code: ${s?.sessionCode || ""}`.trim());
+      setJoinCode(""); setPlayerName(""); setIcon("🦊");
+      toastSuccess(toast, "MATCH CREATED", `SEQUENCE: ${s?.sessionCode || ""}`);
     } catch (e) {
-      toastError(toast, e, UI_STRINGS.CREATE_MATCH_FAILED);
+      toastError(toast, e, "MISSION INITIALIZATION FAILED");
     } finally {
       setBusy(false);
     }
@@ -59,160 +57,167 @@ export default function Home() {
       const s = await joinSessionByCode(joinCode.trim().toUpperCase());
       setSession(s);
       setPlayer(getPlayer());
-      toastSuccess(toast, UI_STRINGS.MATCH_JOINED, `Code: ${s?.sessionCode || joinCode.trim().toUpperCase()}`);
+      toastSuccess(toast, "UPLINK ESTABLISHED", `NODE: ${s?.sessionCode || joinCode.trim().toUpperCase()}`);
     } catch (e) {
-      toastError(toast, e, UI_STRINGS.JOIN_MATCH_FAILED);
+      toastError(toast, e, "JOIN SEQUENCE FAILED");
     } finally {
       setBusy(false);
     }
   }
 
   async function onSaveProfileAndGoLobby() {
-    if (!session?.sessionId) return;
-    if (!playerName.trim()) return;
-
+    if (!session?.sessionId || !playerName.trim()) return;
     setBusy(true);
     try {
       const p = await registerPlayer(session.sessionId, playerName.trim(), icon);
       setPlayer(p);
-      toastSuccess(toast, UI_STRINGS.PROFILE_SAVED, `${icon} ${playerName.trim()}`);
       nav("/lobby");
     } catch (e) {
-      toastError(toast, e, UI_STRINGS.SAVE_PROFILE_FAILED);
+      toastError(toast, e, "PROFILE SYNC FAILED");
     } finally {
       setBusy(false);
     }
   }
 
   function onLeave() {
-    clearSession();
-    clearPlayer();
-    setSession(getSession());
-    setPlayer(getPlayer());
-    setJoinCode("");
-    setPlayerName("");
-    setIcon("🦊");
+    clearSession(); clearPlayer();
+    setSession(getSession()); setPlayer(getPlayer());
+    setJoinCode(""); setPlayerName(""); setIcon("🦊");
   }
 
   return (
-    <AppShell
-      title="Code & Conquer"
-      backTo={false}
-      headerBadges={
-        <>
-          {session?.sessionCode ? <Badge variant="secondary">#{session.sessionCode}</Badge> : null}
-        </>
-      }
-      rightPanel={
-        <Card>
-          <CardContent className="space-y-s3">
-            <div>
-              <div className="text-muted text-fs0 font-semibold">{UI_STRINGS.QUICK_START}</div>
-              <div className="mt-s1 text-fs3 font-extrabold">Get a match running in under a minute</div>
-            </div>
-            <div className="space-y-s1 text-muted leading-relaxed">
-              <div>1) Create a match (host) or join with a 6‑digit code</div>
-              <div>2) Pick a name + emoji</div>
-              <div>3) Head to the lobby and press Ready</div>
-            </div>
-          </CardContent>
-        </Card>
-      }
-    >
-      <Card>
-        <CardContent className="space-y-s4 text-center">
-        {/* Errors are shown via toast */}
-
+    <AppShell title="Code & Conquer" showBrand backTo={false}>
+      <div className="w-full max-w-md mx-auto space-y-s4 pb-8 animate-in fade-in duration-700">
+        
         {!session?.sessionId ? (
-          <>
-            <div>
-              <div className="text-fs3 font-extrabold">{UI_STRINGS.START_NEW_MATCH}</div>
-              <div className="mt-s1 text-muted">Host the game and share the code with your friends.</div>
+          <div className="space-y-s4">
+            {/* Header Area */}
+            <div className="text-center space-y-2 py-4">
+              <div className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em]">Command Center</div>
+              <div className="text-3xl font-black text-white tracking-tight uppercase">System Entry</div>
             </div>
 
-            <div className="flex justify-center">
-              <Button variant="primary" onClick={onCreate} disabled={busy} className="w-full max-w-xs">
-                Create match
-              </Button>
-            </div>
-
-            <div className="h-px w-full bg-border/60" />
-
-            <div className="space-y-s2">
-              <div className="text-muted text-fs0 font-semibold">{UI_STRINGS.OR_JOIN_BY_CODE}</div>
-              <div className="flex flex-wrap gap-s2 justify-center">
-                <Input
-                  className="min-w-[140px] flex-1 uppercase text-center max-w-xs"
-                  value={joinCode}
-                  onChange={(e) => setJoinCode(e.target.value)}
-                  placeholder="6-digit code"
-                  inputMode="numeric"
-                />
-                <Button variant="secondary" onClick={onJoinByCode} disabled={busy || !joinCode.trim()}>
-                  Join
+            {/* Create Section */}
+            <Card className="border-indigo-500/20 bg-indigo-500/5 shadow-xl shadow-indigo-500/10">
+              <CardContent className="p-6 text-center space-y-4">
+                <div className="space-y-1">
+                  <div className="text-[10px] font-black text-muted uppercase tracking-widest">New Match</div>
+                  <div className="text-sm font-medium text-muted/80 leading-relaxed">Initialize a new mission sequence and host other users.</div>
+                </div>
+                <Button variant="primary" onClick={() => { playUiTap(); onCreate(); }} disabled={busy} className="w-full h-14 rounded-2xl font-black text-lg shadow-lg uppercase tracking-widest transition-all active:scale-95">
+                  Initialize Mission
                 </Button>
-              </div>
+              </CardContent>
+            </Card>
+
+            <div className="flex items-center gap-4 px-2">
+              <div className="h-px flex-1 bg-white/5" />
+              <div className="text-[9px] font-black text-muted/40 uppercase tracking-widest">or Join Node</div>
+              <div className="h-px flex-1 bg-white/5" />
             </div>
-          </>
+
+            {/* Join Section */}
+            <Card className="bg-transparent border-white/5">
+              <CardContent className="p-6 space-y-4 text-center">
+                <div className="flex gap-2">
+                  <Input
+                    className="h-14 rounded-xl border-white/10 bg-white/5 text-center uppercase font-black text-xl tracking-[0.2em] placeholder:text-muted/20 placeholder:tracking-normal placeholder:font-bold placeholder:text-sm"
+                    value={joinCode}
+                    onChange={(e) => setJoinCode(e.target.value)}
+                    placeholder="ENTER 6-CHAR CODE"
+                    maxLength={6}
+                  />
+                  <Button variant="secondary" onClick={() => { playUiTap(); onJoinByCode(); }} disabled={busy || joinCode.trim().length < 6} className="h-14 px-6 rounded-xl font-black uppercase">
+                    Connect
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         ) : (
-          <>
-            <div className="flex flex-wrap items-center justify-between gap-s2">
-              <Badge>Active: {session.sessionCode}</Badge>
-              <Button variant="secondary" onClick={onLeave} disabled={busy}>Leave</Button>
+          <div className="space-y-s4">
+            {/* Active Session Info */}
+            <div className="flex items-center justify-between px-1">
+              <Badge variant="secondary" className="px-3 py-1 font-black bg-indigo-500/20 border-indigo-500/30 text-indigo-300">
+                ACTIVE SEQUENCE: #{session.sessionCode}
+              </Badge>
+              <button onClick={onLeave} className="text-[10px] font-black text-muted uppercase tracking-widest hover:text-rose-400 transition-colors">Terminate</button>
             </div>
 
             {!player?.playerId ? (
-              <div className="mx-auto w-full max-w-[560px] space-y-s4">
-                <div>
-                  <div className="text-fs3 font-extrabold">{UI_STRINGS.CREATE_PLAYER}</div>
-                  <div className="mt-s1 text-muted">This name + emoji will show up in the lobby and on the board.</div>
-                </div>
+              <div className="space-y-s4 animate-in slide-in-from-bottom-4 duration-500">
+                <Card className="border-indigo-500/30 bg-indigo-500/10 shadow-2xl shadow-indigo-500/20">
+                  <CardContent className="p-6 space-y-6">
+                    <div className="text-center space-y-1">
+                      <div className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Protocol Delta</div>
+                      <div className="text-2xl font-black text-white uppercase">Create Profile</div>
+                    </div>
 
-                <div className="flex flex-wrap gap-s2 justify-center">
-                  <Input
-                    className="min-w-0 flex-1 text-center"
-                    value={playerName}
-                    onChange={(e) => setPlayerName(e.target.value)}
-                    placeholder="e.g. Alex"
-                  />
-                  <Button variant="primary" onClick={onSaveProfileAndGoLobby} disabled={busy || !playerName.trim()}>
-                    Continue
-                  </Button>
-                </div>
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <div className="text-[10px] font-black text-muted uppercase tracking-widest px-1">Identity Tag</div>
+                        <Input
+                          className="h-14 rounded-2xl border-white/10 bg-white/5 text-center font-black text-lg placeholder:text-muted/30"
+                          value={playerName}
+                          onChange={(e) => setPlayerName(e.target.value)}
+                          placeholder="ENTER YOUR NAME"
+                          maxLength={12}
+                        />
+                      </div>
 
-                <div className="space-y-s2">
-                  <div className="text-muted text-fs0 font-semibold">{UI_STRINGS.PICK_EMOJI}</div>
-                  <div className="flex flex-wrap justify-center gap-s2">
-                    {EMOJIS.map((e) => (
-                      <button
-                        key={e}
-                        onClick={() => setIcon(e)}
-                        className={
-                          e === icon
-                            ? "grid h-11 w-11 place-items-center rounded-full border border-border bg-surface2 text-[20px] shadow-panel"
-                            : "grid h-11 w-11 place-items-center rounded-full border border-border bg-surface text-[20px]"
-                        }
-                        aria-label={`Pick ${e}`}
-                        type="button"
-                      >
-                        {e}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="text-muted text-fs0">Selected: {icon}</div>
-                </div>
+                      <div className="space-y-3">
+                        <div className="text-[10px] font-black text-muted uppercase tracking-widest px-1">Avatar Selection</div>
+                        <div className="grid grid-cols-5 gap-2">
+                          {EMOJIS.map((e) => (
+                            <button
+                              key={e}
+                              onClick={() => { playUiTap(); setIcon(e); }}
+                              className={cn(
+                                "aspect-square rounded-xl border flex items-center justify-center text-xl transition-all active:scale-90",
+                                e === icon ? "bg-indigo-500 border-indigo-300 shadow-[0_0_15px_rgba(99,102,241,0.4)] scale-110 z-10" : "bg-white/5 border-white/5 grayscale opacity-40 hover:grayscale-0 hover:opacity-100"
+                              )}
+                            >
+                              {e}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <Button variant="primary" onClick={() => { playUiTap(); onSaveProfileAndGoLobby(); }} disabled={busy || !playerName.trim()} className="w-full h-14 rounded-2xl font-black text-lg shadow-xl uppercase tracking-widest mt-2">
+                      Establish Uplink
+                    </Button>
+                  </CardContent>
+                </Card>
               </div>
             ) : (
-              <div className="flex flex-wrap gap-s2">
-                <Button variant="primary" onClick={() => nav("/lobby")}>Lobby</Button>
-                <Button variant="secondary" onClick={() => nav("/play")}>Play</Button>
-                <Button variant="ghost" onClick={() => nav("/leaderboard")}>Scores</Button>
-              </div>
+              <Card className="border-indigo-500/20 bg-indigo-500/5">
+                <CardContent className="p-8 text-center space-y-6">
+                  <div className="w-20 h-20 rounded-full bg-indigo-500/20 border border-indigo-500/30 mx-auto flex items-center justify-center text-4xl shadow-inner">
+                    {player.playerIcon || "🙂"}
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Welcome back, Agent</div>
+                    <div className="text-2xl font-black text-white uppercase tracking-tight">{player.playerName}</div>
+                  </div>
+                  <div className="grid gap-3 pt-2">
+                    <Button variant="primary" onClick={() => nav("/lobby")} className="h-14 rounded-2xl font-black uppercase tracking-widest shadow-lg">Enter Lobby</Button>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Button variant="secondary" onClick={() => nav("/play")} className="h-12 rounded-xl font-black text-xs uppercase tracking-widest">Mission Map</Button>
+                      <Button variant="outline" onClick={() => nav("/leaderboard")} className="h-12 rounded-xl font-black text-xs uppercase tracking-widest border-white/10">Standings</Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             )}
-          </>
+          </div>
         )}
-        </CardContent>
-      </Card>
+
+        {/* Footer Info */}
+        <div className="text-center pt-4">
+          <p className="text-[10px] font-bold text-muted/30 uppercase tracking-[0.2em]">Hybrid Boardgame Interface v4.0.0</p>
+        </div>
+      </div>
     </AppShell>
   );
 }

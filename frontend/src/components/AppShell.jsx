@@ -1,7 +1,7 @@
 import React, { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "./ui/button";
-import { useHapticsSetting, useSoundSetting } from "../lib/diceSound";
+import { playUiTap, useHapticsSetting, useSoundSetting } from "../lib/diceSound";
 import InfoCenter from "./InfoCenter";
 import { getSession, isSessionStarted } from "../lib/session";
 
@@ -74,7 +74,7 @@ export default function AppShell({
               <button
                 type="button"
                 aria-label="Back"
-                onClick={goBack}
+                onClick={() => { playUiTap(); goBack(); }}
                 className="h-8 w-8 rounded-lg bg-surface border border-border flex items-center justify-center text-fs2 active:scale-95 transition-transform"
               >
                 ‹
@@ -143,6 +143,7 @@ export default function AppShell({
                     key={t.key}
                     className="group relative h-14 flex flex-col items-center justify-center gap-1"
                     onClick={() => {
+                      playUiTap();
                       if (t.key === "info") {
                         setSheetOpen(true);
                         return;
@@ -172,7 +173,7 @@ export default function AppShell({
       {/* Info Sheet Overlay */}
       <div
         className={
-          "fixed inset-0 z-50 flex items-end sm:items-center sm:justify-center p-4 transition-all duration-300 " +
+          "fixed inset-0 z-50 flex items-end sm:items-center sm:justify-center p-0 sm:p-4 transition-all duration-300 " +
           (sheetOpen ? "pointer-events-auto visible" : "pointer-events-none invisible")
         }
       >
@@ -185,19 +186,19 @@ export default function AppShell({
         {/* Sheet Content */}
         <div
           className={
-            "relative w-full max-w-md bg-bg1 border border-border rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[85dvh] transition-transform duration-300 " +
+            "relative w-full max-w-md bg-bg1 border-x border-t sm:border border-border rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[85dvh] transition-transform duration-300 " +
             (sheetOpen ? "translate-y-0 scale-100" : "translate-y-full sm:translate-y-10 sm:scale-95")
           }
         >
           {/* Handle for mobile feel */}
-          <div className="w-12 h-1.5 bg-border rounded-full mx-auto mt-3 mb-1 sm:hidden" />
+          <div className="w-12 h-1.5 bg-border rounded-full mx-auto mt-3 mb-1 sm:hidden shrink-0" />
           
-          <div className="px-5 py-3 flex items-center justify-between border-b border-border/50">
-            <div className="font-extrabold text-lg">Information</div>
-            <Button variant="ghost" size="sm" onClick={() => setSheetOpen(false)}>Close</Button>
+          <div className="px-5 py-3 flex items-center justify-between border-b border-white/5 shrink-0">
+            <div className="font-black text-lg tracking-tight">Mission Data</div>
+            <Button variant="ghost" size="sm" onClick={() => setSheetOpen(false)} className="h-8 w-8 p-0 rounded-full">✕</Button>
           </div>
           
-          <div className="p-0 overflow-y-auto overscroll-contain">
+          <div className="flex-1 overflow-y-auto overscroll-contain min-h-0">
             <InfoCenter onRequestClose={() => setSheetOpen(false)} />
           </div>
         </div>
@@ -242,7 +243,7 @@ function OptionsDropdown({ soundEnabled, setSoundEnabled, hapticsEnabled, setHap
           <div className="px-2 py-1.5 text-xs font-bold text-muted uppercase tracking-wider">Settings</div>
           
           <button
-            onClick={() => setSoundEnabled(!soundEnabled)}
+            onClick={() => { playUiTap(); setSoundEnabled(!soundEnabled); }}
             className="flex items-center justify-between w-full px-3 py-2.5 rounded-lg hover:bg-white/5 transition-colors text-left"
           >
             <span className="text-fs1 font-medium">Sound</span>
@@ -250,11 +251,11 @@ function OptionsDropdown({ soundEnabled, setSoundEnabled, hapticsEnabled, setHap
           </button>
 
           <button
-            onClick={() => setHapticsEnabled(!hapticsEnabled)}
+            onClick={() => { playUiTap(); setHapticsEnabled(!hapticsEnabled); }}
             className="flex items-center justify-between w-full px-3 py-2.5 rounded-lg hover:bg-white/5 transition-colors text-left"
           >
             <span className="text-fs1 font-medium">Haptics</span>
-            <span className="text-lg">{hapticsEnabled ? "📳" : "🚫"}</span>
+            <span className="text-lg">{hapticsEnabled ? "📓" : "🚫"}</span>
           </button>
         </div>
       )}

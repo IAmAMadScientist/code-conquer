@@ -1,70 +1,95 @@
-// Lightweight tutorial content for first-time minigame players.
-// Stored client-side (localStorage). This keeps the backend simple and works well for “your phone = your player”.
+// src/lib/tutorials.js
+// Enhanced tutorial content with visual cues and structured sections.
 
 export const TUTORIALS = {
   STACK_MAZE: {
     title: "Stack Maze",
     summary: "Program the robot by stacking moves, then run them.",
+    icon: "🤖",
+    goal: "Reach the 🏁 goal tile without crashing into walls.",
     howTo: [
-      "Tap the D-pad to add moves (↑ ↓ ← →) to your stack.",
-      "Use ↩ to remove the last move.",
-      "Press ▶ to run your stack. Press ⏹ to stop.",
+      { action: "Tap", detail: "the D-pad buttons (↑ ↓ ← →) to build your move stack." },
+      { action: "Undo", detail: "with ↩ to remove the last programmed move." },
+      { action: "Execute", detail: "with ▶ to run your program. Use ⏹ to stop and edit." },
     ],
-    win: "Reach the goal tile without crashing into walls.",
-    lose: "Crashing, running out of time, or failing to reach the goal.",
-    tips: ["Keep the stack short and test often.", "When in doubt: stop, edit, run again."],
+    difficultyNotes: {
+      EASY: "Small grid, plenty of energy.",
+      MEDIUM: "Larger grid, tighter energy constraints.",
+      HARD: "Complex maze with minimal energy and a shorter time limit.",
+    },
+    proTip: "Keep your stacks short and test small segments of the path!",
   },
 
   GRAPH_PATH: {
     title: "Graph Pathfinder",
-    summary: "Pick the correct path through a graph.",
+    summary: "Calculate and select the most efficient route through the network.",
+    icon: "🎯",
+    goal: "Find the path from START to GOAL with the lowest total ⚡ cost.",
     howTo: [
-      "Tap nodes to build a route from Start to Goal.",
-      "Some graphs have weights—aim for the best route, not just the shortest by steps.",
-      "Submit when you are confident.",
+      { action: "Select", detail: "nodes by tapping them to build your route." },
+      { action: "Check", detail: "the numbers on edges—these are the weights (costs)." },
+      { action: "Submit", detail: "when your current path matches the target budget." },
     ],
-    win: "Your submitted path matches the required condition (correct / optimal).",
-    lose: "Wrong path, disconnected route, or not optimal (if required).",
-    tips: ["Check every edge you selected.", "If weights exist: compare total cost."],
+    difficultyNotes: {
+      EASY: "Fewer nodes and simple connections.",
+      MEDIUM: "More nodes and multiple possible routes.",
+      HARD: "Dense network requiring careful Dijkstra-style calculation.",
+    },
+    proTip: "The target budget is always the shortest possible path. If you exceed it, rethink your route!",
   },
 
   BST_INSERT: {
     title: "BST Insert",
-    summary: "Insert values into a Binary Search Tree in the correct order.",
+    summary: "Place the new value into the Binary Search Tree following logic rules.",
+    icon: "🌳",
+    goal: "Correctly identify the unique empty slot for the new value.",
     howTo: [
-      "Drag/tap values into the tree following BST rules.",
-      "Left child < parent, right child > parent.",
-      "Complete all inserts before time runs out.",
+      { action: "Compare", detail: "the ➕ new value with the root node." },
+      { action: "Logic", detail: "Go LEFT if smaller, RIGHT if larger (check the 'Equal' rule!)." },
+      { action: "Place", detail: "by tapping the dashed circle slot once you reach the end." },
     ],
-    win: "All values are placed in the correct BST positions.",
-    lose: "A value is placed incorrectly or the tree is incomplete.",
-    tips: ["Compare with the current node, then go left/right.", "Slow is smooth—accuracy beats speed."],
+    difficultyNotes: {
+      EASY: "Balanced trees with distinct values.",
+      MEDIUM: "Randomly shaped trees with some duplicate values.",
+      HARD: "Deep, skewed trees with complex duplicate logic (Equal = Left).",
+    },
+    proTip: "Follow the path node-by-node from the top down. Don't rush the placement!",
   },
 
   QUEUE_COMMANDER: {
     title: "Queue Commander",
-    summary: "Execute enqueue/dequeue operations correctly.",
+    summary: "Simulate a FIFO memory buffer to match the target output.",
+    icon: "📥",
+    goal: "Emit numbers from the queue in the exact sequence shown.",
     howTo: [
-      "Follow the operation list in order.",
-      "Track the queue state after each operation.",
-      "Submit your final output/state when done.",
+      { action: "Enqueue", detail: "the 'Incoming' number to the back of your queue." },
+      { action: "Dequeue", detail: "the front of your queue if it matches the current target." },
+      { action: "Discard", detail: "incoming numbers you don't need right now." },
     ],
-    win: "Final state/output matches the correct queue simulation.",
-    lose: "Any step leads to an incorrect final state/output.",
-    tips: ["Write it down mentally: front → back.", "Be careful with empty-queue operations."],
+    difficultyNotes: {
+      EASY: "Short target sequence and large queue capacity.",
+      MEDIUM: "Limited queue slots—manage your discard 'charges' wisely.",
+      HARD: "Long sequence, tiny buffer, and fast-paced incoming stream.",
+    },
+    proTip: "Look ahead at the 'Output Target' list to plan which numbers to save and which to trash.",
   },
 
   BIT_JUMPER: {
     title: "Bit Jumper",
-    summary: "Platformer-style minigame—survive and reach the goal.",
+    summary: "Solve the bitwise operation by collecting the correct bits while climbing.",
+    icon: "🚀",
+    goal: "Collect the correct 0 or 1 bits to solve the logic gate puzzle.",
     howTo: [
-      "Use the on-screen controls to move and jump.",
-      "Avoid hazards and time your jumps.",
-      "Finish the level to win.",
+      { action: "Move", detail: "by sliding your finger or mouse across the screen." },
+      { action: "Jump", detail: "automatically by landing on platforms." },
+      { action: "Sync", detail: "Collect only the bits that match the result of the logic gate." },
     ],
-    win: "Reach the finish.",
-    lose: "Falling, hitting hazards, or failing before time ends.",
-    tips: ["Short hops give you more control.", "Pause for timing instead of rushing."],
+    difficultyNotes: {
+      EASY: "Simple 3-bit operations and stable platforms.",
+      MEDIUM: "Moving platforms and 4-bit AND/OR gates.",
+      HARD: "Fast climb, breaking platforms, and complex 6-bit operations.",
+    },
+    proTip: "Coins give bonus points, but missing a required bit is a system crash!",
   },
 };
 
@@ -78,9 +103,9 @@ export function getTutorial(category) {
   return TUTORIALS[key] || {
     title: "Minigame",
     summary: "Read the rules, then start.",
-    howTo: ["Complete the objective shown on screen."],
-    win: "Meet the objective.",
-    lose: "Fail the objective.",
+    icon: "🕹️",
+    goal: "Complete the objective shown on screen.",
+    howTo: [{ action: "Play", detail: "Follow the on-screen instructions to win." }],
     tips: ["Take a second to read the UI before acting."],
   };
 }

@@ -8,6 +8,14 @@ import TutorialModal from "../components/TutorialModal";
 import { getPlayer } from "../lib/player";
 import { getTutorial, tutorialKey } from "../lib/tutorials";
 import { DIFFICULTY, UI_STRINGS } from "../lib/constants";
+import {
+  getHapticsEnabled,
+  getSoundEnabled,
+  playFailSfx,
+  playMoveSfx,
+  playUiTapSfx,
+  playWinSfx,
+} from "../lib/diceSound";
 
 function clamp(n, a, b) {
   return Math.max(a, Math.min(b, n));
@@ -502,6 +510,9 @@ export default function GraphPathfinderPage() {
     setPath((p) => p.slice(0, -1));
   }
 
+  function buzz(ms = 12) { if (getHapticsEnabled() && navigator.vibrate) navigator.vibrate(ms); }
+  function sfx(fn) { if (getSoundEnabled()) fn(); }
+
   function onNodeClick(id) {
     if (status !== "playing") return;
 
@@ -511,13 +522,14 @@ export default function GraphPathfinderPage() {
     // backtrack by clicking existing node in path
     const idx = path.lastIndexOf(id);
     if (idx !== -1) {
+      buzz(8); sfx(playUiTapSfx);
       setPath((p) => p.slice(0, idx + 1));
       return;
     }
 
     if (!isNeighbor(last, id)) {
       setMessage("Not connected — you can only move along a visible edge.");
-      try { if (navigator.vibrate) navigator.vibrate(18); } catch {}
+      buzz(18); sfx(playFailSfx);
       setErrors((e) => e + 1);
       return;
     }
@@ -528,11 +540,12 @@ export default function GraphPathfinderPage() {
     if (budget != null && nextW > budget) {
       setErrors((e) => e + 1);
       setMessage(`Over budget! (${nextW} > ${budget})`);
-      try { if (navigator.vibrate) navigator.vibrate([16, 30, 16]); } catch {}
+      buzz([16, 30, 16]); sfx(playFailSfx);
       setStatus("lost");
       return;
     }
 
+    buzz(10); sfx(playMoveSfx);
     setMessage("");
     setPath((p) => p.concat(id));
   }
@@ -548,6 +561,7 @@ export default function GraphPathfinderPage() {
     if (last !== goal) {
       setErrors((e) => e + 1);
       setMessage(fromAuto ? "" : "You must end on the Goal node.");
+      buzz(12); sfx(playFailSfx);
       return;
     }
 
@@ -555,6 +569,7 @@ export default function GraphPathfinderPage() {
       if (!isNeighbor(path[i], path[i + 1])) {
         setErrors((e) => e + 1);
         setMessage("Invalid path: contains a non-edge step.");
+        buzz(12); sfx(playFailSfx);
         return;
       }
     }
@@ -563,6 +578,7 @@ export default function GraphPathfinderPage() {
     if (!Number.isFinite(w)) {
       setErrors((e) => e + 1);
       setMessage("Invalid path (missing edge weight).");
+      buzz(12); sfx(playFailSfx);
       return;
     }
 
@@ -572,14 +588,14 @@ export default function GraphPathfinderPage() {
       setErrors((e) => e + 1);
       setStatus("lost");
       setMessage(`Not optimal! Cost ${w} (shortest ${budget}).`);
-      try { if (navigator.vibrate) navigator.vibrate([18, 40, 18]); } catch {}
+      buzz([18, 40, 18]); sfx(playFailSfx);
       return;
     }
 
     setStatus("won");
     const left = Math.ceil(timeLeftMs / 1000);
     setMessage(`Perfect! Shortest cost ${w}. +${left}s left.`);
-    try { if (navigator.vibrate) navigator.vibrate([20, 30, 20]); } catch {}
+    buzz([20, 30, 20]); sfx(playWinSfx);
   }
 
   const currentWeight = pathWeight(path);
@@ -745,7 +761,7 @@ export default function GraphPathfinderPage() {
       )}
 
       <TutorialModal
-        open={tutorialOpen} tutorial={tutorial}
+        open={tutorialOpen} tutorial={tutorial} difficulty={difficulty}
         onConfirm={() => {
           try { localStorage.setItem(tutKey, "1"); } catch {}
           setTutorialOpen(false); setStarted(true); setStatus("playing"); startRef.current = Date.now();
