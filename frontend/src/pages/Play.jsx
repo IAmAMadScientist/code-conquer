@@ -56,7 +56,7 @@ export default function Play() {
   }, [session?.sessionId, me?.playerId, nav, toast]);
 
   useEffect(() => { if (canView) load(); }, [canView, load]);
-  useGameSocket(session?.sessionId, load);
+  const socketStatus = useGameSocket(session?.sessionId, load);
 
   useEffect(() => {
     const awaiting = state?.turnStatus === TURN_STATUS.AWAITING_SPECIAL_CARD;
@@ -130,6 +130,7 @@ export default function Play() {
   return (
     <AppShell
       title="Play" showTabs activeTab="play" backTo={false} showBrand
+      socketStatus={socketStatus}
       headerBadges={<Badge variant={isMyTurn ? "secondary" : "outline"} className="px-2 py-0 text-[10px] font-black uppercase tracking-tight">{turnLabel}</Badge>}
       actions={
         <div className="grid grid-cols-3 gap-3 w-full max-w-md mx-auto">

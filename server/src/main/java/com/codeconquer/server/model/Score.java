@@ -4,6 +4,9 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PositiveOrZero;
 import lombok.Data;
 
 import java.time.Instant;
@@ -16,27 +19,34 @@ public class Score {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @NotBlank(message = "Session ID is required")
     private String sessionId;
+    
     private String sessionCode;
 
-    // Challenge instance token to prevent double-starts / double-submits
+    @NotBlank(message = "Challenge ID is required")
     private String challengeId;
 
-    // New: stable identity within a session. Frontend should send playerId.
+    @NotBlank(message = "Player ID is required")
     private String playerId;
 
-    // Denormalized for easy leaderboard queries / history. Backend sets this from playerId.
     private String playerName;
 
-    // For minigames: category is your minigame identifier (STACK_MAZE, GRAPH_PATH, ...)
+    @NotBlank(message = "Category is required")
     private String category;
 
+    @NotBlank(message = "Difficulty is required")
     private String difficulty;
 
+    @PositiveOrZero(message = "Points must be zero or positive")
     private int points;
 
-    // Analytics inputs (used by scoring formula)
+    @NotNull(message = "Time is required")
+    @PositiveOrZero(message = "Time must be zero or positive")
     private Long timeMs;
+
+    @NotNull(message = "Errors count is required")
+    @PositiveOrZero(message = "Errors must be zero or positive")
     private Integer errors;
 
     private Instant createdAt;

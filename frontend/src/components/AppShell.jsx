@@ -4,6 +4,7 @@ import { Button } from "./ui/button";
 import { playUiTap, useHapticsSetting, useSoundSetting } from "../lib/diceSound";
 import InfoCenter from "./InfoCenter";
 import { getSession, isSessionStarted } from "../lib/session";
+import { cn } from "../lib/utils";
 
 /**
  * Viewport App Shell.
@@ -26,6 +27,8 @@ export default function AppShell({
   /** Optional action bar content (typically buttons). Renders in the bottom action bar on mobile. */
   actions = null,
   showBrand = false,
+  /** WebSocket connection status from useGameSocket */
+  socketStatus = null,
   children,
 }) {
   const nav = useNavigate();
@@ -69,25 +72,40 @@ export default function AppShell({
       {/* HEADER: Rigid, non-scrolling */}
       <header className="flex-none z-30 bg-bg0 backdrop-blur border-b border-border">
         <div className="px-s3 py-s2 flex items-center justify-between gap-s2">
-          <div className="flex items-center gap-s2 min-w-0">
+          <div className="flex items-center gap-s2 min-w-0 flex-1">
             {showBack ? (
               <button
                 type="button"
                 aria-label="Back"
                 onClick={() => { playUiTap(); goBack(); }}
-                className="h-8 w-8 rounded-lg bg-surface border border-border flex items-center justify-center text-fs2 active:scale-95 transition-transform"
+                className="h-8 w-8 rounded-lg bg-surface border border-border flex items-center justify-center text-fs2 active:scale-95 transition-transform shrink-0"
               >
                 ‹
               </button>
             ) : null}
 
-            <div className="text-fs1 font-bold truncate shrink-0">{title}</div>
+            <div className="flex flex-col min-w-0">
+              <div className="flex items-center gap-2">
+                <div className="text-fs1 font-black truncate uppercase tracking-tighter shrink-0">{title}</div>
+                {socketStatus && (
+                  <div 
+                    title={`Uplink: ${socketStatus}`}
+                    className={cn(
+                      "w-1.5 h-1.5 rounded-full transition-colors",
+                      socketStatus === 'connected' ? "bg-emerald-500 shadow-[0_0_8px_#10b981] animate-pulse" : 
+                      socketStatus === 'connecting' ? "bg-amber-500 animate-bounce" : "bg-rose-500"
+                    )}
+                  />
+                )}
+              </div>
+              {subtitle && <div className="text-[10px] font-bold text-muted truncate uppercase tracking-widest leading-none mt-0.5">{subtitle}</div>}
+            </div>
             
-            {headerBadges ? (
-              <div className="flex items-center gap-s1 min-w-0 overflow-hidden">
+            {headerBadges && (
+              <div className="flex items-center gap-s1 min-w-0 overflow-hidden ml-auto pr-2">
                 {headerBadges}
               </div>
-            ) : null}
+            )}
           </div>
 
           <OptionsDropdown

@@ -46,7 +46,7 @@ export default function Lobby() {
   }, [session?.sessionId, nav, toast]);
 
   useEffect(() => { if (canView) load(); }, [canView, load]);
-  useGameSocket(session?.sessionId, load);
+  const socketStatus = useGameSocket(session?.sessionId, load);
 
   async function toggleReady() {
     if (!session?.sessionId || !me?.playerId) return;
@@ -88,6 +88,7 @@ export default function Lobby() {
       title="Lobby"
       subtitle={state?.turnOrderLocked ? "SEQUENCE ESTABLISHED" : "ROLL FOR MISSION ORDER"}
       showTabs activeTab="play" backTo={false}
+      socketStatus={socketStatus}
       headerBadges={<Badge variant="secondary" className="px-2 py-0 text-[10px] font-black tracking-tight uppercase">#{session?.sessionCode}</Badge>}
       rightPanel={
         <Card className="border-indigo-500/20 bg-indigo-500/5">

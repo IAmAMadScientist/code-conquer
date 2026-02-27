@@ -5,11 +5,11 @@ import com.codeconquer.server.dto.PlayerResponse;
 import com.codeconquer.server.dto.ReadyRequest;
 import com.codeconquer.server.model.Player;
 import com.codeconquer.server.service.PlayerService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
-
 import java.util.List;
 
 @RestController
@@ -23,10 +23,7 @@ public class PlayerController {
     }
 
     @PostMapping("/{sessionId}/players")
-    public ResponseEntity<PlayerResponse> register(@PathVariable String sessionId, @RequestBody PlayerRequest body) {
-        if (body == null || body.getName() == null || body.getName().isBlank()) {
-            return ResponseEntity.badRequest().build();
-        }
+    public ResponseEntity<PlayerResponse> register(@PathVariable String sessionId, @Valid @RequestBody PlayerRequest body) {
         try {
             Player p = playerService.registerPlayer(sessionId, body.getName(), body.getIcon());
             return ResponseEntity.ok(new PlayerResponse(p.getId(), p.getName(), p.getIcon(), p.getColor(), p.isReady(), p.getTurnOrder()));
@@ -42,8 +39,7 @@ public class PlayerController {
     }
 
     @PostMapping("/{sessionId}/players/{playerId}/ready")
-    public ResponseEntity<Object> setReady(@PathVariable String sessionId, @PathVariable String playerId, @RequestBody ReadyRequest body) {
-        if (body == null) return ResponseEntity.badRequest().build();
+    public ResponseEntity<Object> setReady(@PathVariable String sessionId, @PathVariable String playerId, @Valid @RequestBody ReadyRequest body) {
         try {
             Player p = playerService.setReady(sessionId, playerId, body.isReady());
             return ResponseEntity.ok(new PlayerResponse(p.getId(), p.getName(), p.getIcon(), p.getColor(), p.isReady(), p.getTurnOrder()));

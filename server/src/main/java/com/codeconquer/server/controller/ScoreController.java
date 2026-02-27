@@ -2,6 +2,7 @@ package com.codeconquer.server.controller;
 
 import com.codeconquer.server.model.Score;
 import com.codeconquer.server.service.ScoreService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,13 +19,7 @@ public class ScoreController {
     }
 
     @PostMapping
-    public ResponseEntity<Score> submitScore(@RequestBody Score score) {
-        if (score.getSessionId() == null || score.getSessionId().isBlank()) {
-            return ResponseEntity.badRequest().build();
-        }
-        if (score.getPlayerId() == null || score.getPlayerId().isBlank()) {
-            return ResponseEntity.badRequest().build();
-        }
+    public ResponseEntity<Score> submitScore(@Valid @RequestBody Score score) {
         // Ignore any client-provided playerName; it will be set server-side from playerId.
         score.setPlayerName(null);
         return ResponseEntity.ok(scoreService.saveScore(score));
