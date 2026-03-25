@@ -1,7 +1,7 @@
 # 🎲 Code & Conquer  
 ### A Hybrid Board Game with Real-Time Digital Minigames
 
-🌐 **Live Demo / Deployment**  
+🌐 **Live Demo / Deployment (not available right now)**  
 👉 **https://code-and-conquer.com**
 
 ---
